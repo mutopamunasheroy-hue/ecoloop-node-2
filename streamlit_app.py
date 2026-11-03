@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import qrcode
@@ -13,7 +14,7 @@ from supabase import create_client
 # =====================================================
 
 st.set_page_config(
-    page_title="EcoLoop Node 2.0",
+    page_title="EcoLoop Node",
     page_icon="♻️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -21,249 +22,10 @@ st.set_page_config(
 
 
 # =====================================================
-# SUPABASE CONNECTION
-# =====================================================
-
-@st.cache_resource
-def get_supabase_client():
-    return create_client(
-        st.secrets["SUPABASE_URL"],
-        st.secrets["SUPABASE_KEY"]
-    )
-
-
-try:
-    supabase = get_supabase_client()
-    st.sidebar.success("Supabase client initialised")
-
-except Exception as e:
-    supabase = None
-
-    st.sidebar.error(
-        f"Supabase connection setup error: "
-        f"{type(e).__name__}: {e}"
-    )
-
-
-# =====================================================
-# SESSION STATE
-# =====================================================
-
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-if "current_page" not in st.session_state:
-    st.session_state.current_page = "Home"# =====================================================
-# ECOLOOP NODE 2.0 — VISUAL DESIGN
-# =====================================================
-
-st.markdown("""
-<style>
-
-/* MAIN APPLICATION */
-
-.stApp {
-    background-color: #F4F8F3;
-    color: #173B2B;
-    font-family: 'DM Sans', sans-serif;
-}
-
-/* MAIN CONTENT */
-
-.block-container {
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-    max-width: 1250px;
-}
-
-/* SIDEBAR */
-
-section[data-testid="stSidebar"] {
-    background-color: #123D2A;
-    border-right: 2px solid #A5D65E;
-}
-
-section[data-testid="stSidebar"] * {
-    color: #FFFFFF !important;
-}
-
-/* SIDEBAR HEADER */
-
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3 {
-    color: #B9E769 !important;
-}
-
-/* SIDEBAR BUTTONS */
-
-section[data-testid="stSidebar"] button {
-    background-color: #20543B;
-    border: 1px solid #6C9F55;
-    border-radius: 10px;
-    min-height: 42px;
-    font-weight: 600;
-}
-
-section[data-testid="stSidebar"] button:hover {
-    background-color: #367B4D;
-    border-color: #C3F078;
-}
-
-/* MAIN HEADINGS */
-
-h1, h2, h3 {
-    color: #17452F !important;
-    font-weight: 750;
-}
-
-/* HERO SECTION */
-
-.eco-hero {
-    background: linear-gradient(
-        120deg,
-        #123D2A,
-        #176044,
-        #27836A
-    );
-    padding: 35px;
-    border-radius: 20px;
-    color: white;
-    margin-bottom: 25px;
-    box-shadow: 0 5px 18px rgba(18, 61, 42, 0.12);
-}
-
-.eco-hero h1 {
-    color: #FFFFFF !important;
-    font-size: 2.4rem;
-    margin-bottom: 10px;
-}
-
-.eco-hero p {
-    color: #E6F5E8;
-    font-size: 1.05rem;
-}
-
-/* CARDS */
-
-.eco-card {
-    background-color: #FFFFFF;
-    border: 1px solid #DCE9DC;
-    border-radius: 16px;
-    padding: 22px;
-    margin-bottom: 16px;
-    box-shadow: 0 3px 12px rgba(20, 65, 43, 0.06);
-}
-
-.eco-card h3 {
-    color: #176044 !important;
-}
-
-/* METRIC CARDS */
-
-.metric-card {
-    background-color: #E8F3E7;
-    border-left: 5px solid #83B94B;
-    border-radius: 12px;
-    padding: 18px;
-    margin-bottom: 12px;
-}
-
-.metric-value {
-    font-size: 1.8rem;
-    font-weight: 800;
-    color: #17452F;
-}
-
-.metric-label {
-    font-size: 0.9rem;
-    color: #55745F;
-}
-
-/* BUTTONS */
-
-.stButton > button {
-    background-color: #176044;
-    color: white;
-    border: none;
-    border-radius: 10px;
-    min-height: 42px;
-    font-weight: 650;
-}
-
-.stButton > button:hover {
-    background-color: #27836A;
-    color: white;
-    border: none;
-}
-
-/* INPUT FIELDS */
-
-.stTextInput input,
-.stNumberInput input,
-.stTextArea textarea,
-.stSelectbox div[data-baseweb="select"] {
-    border-radius: 9px;
-}
-
-/* DIVIDERS */
-
-hr {
-    border-color: #D8E6D8;
-}
-
-/* FOOTER */
-
-.eco-footer {
-    text-align: center;
-    color: #65816D;
-    padding: 25px 10px;
-    font-size: 0.85rem;
-}
-
-/* DARK MODE SUPPORT */
-
-@media (prefers-color-scheme: dark) {
-
-    .stApp {
-        background-color: #101C16;
-        color: #E6F2E8;
-    }
-
-    h1, h2, h3 {
-        color: #B9E769 !important;
-    }
-
-    .eco-card {
-        background-color: #1B2D22;
-        border-color: #34533D;
-    }
-
-    .metric-card {
-        background-color: #243B2B;
-    }
-
-    .metric-value {
-        color: #D5F2A5;
-    }
-
-    .metric-label {
-        color: #B5CBB8;
-    }
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-
-# =====================================================
 # ECOLOOP BRANDING
 # =====================================================
 
-APP_NAME = "EcoLoop Node 2.0"
+APP_NAME = "EcoLoop Node"
 
 APP_TAGLINE = (
     "Turning everyday environmental action "
@@ -271,8 +33,296 @@ APP_TAGLINE = (
 )
 
 NGIH_NAME = "Next Gen Impact Hub"
+
+
 # =====================================================
-# ECOLOOP NODE 2.0 — FOUR MAIN NAVIGATION CATEGORIES
+# SUPABASE CONNECTION
+# =====================================================
+
+def get_supabase_client():
+
+    return create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_KEY"]
+    )
+
+
+try:
+
+    supabase = get_supabase_client()
+
+    st.sidebar.success(
+        "Supabase client initialised"
+    )
+
+except Exception as e:
+
+    supabase = None
+
+    st.sidebar.error(
+        f"Supabase connection error: {type(e).__name__}"
+    )
+
+
+# =====================================================
+# INITIAL SESSION STATE
+# =====================================================
+
+DEFAULT_SESSION = {
+    "logged_in": False,
+    "user": None,
+    "user_id": None,
+    "access_token": None,
+    "refresh_token": None,
+    "current_page": "Home",
+    "main_category": "Home",
+    "active_quiz_attempt": None,
+    "active_quiz_questions": [],
+    "active_quiz_index": 0,
+    "active_quiz_results": [],
+    "active_quiz_id": None
+}
+
+for key, value in DEFAULT_SESSION.items():
+
+    if key not in st.session_state:
+        st.session_state[key] = value
+# =====================================================
+# ECOLOOP VISUAL DESIGN
+# =====================================================
+
+st.markdown("""
+<style>
+
+/* Main application */
+.stApp {
+    font-family: 'DM Sans', sans-serif;
+}
+
+/* Main content spacing */
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+    max-width: 1200px;
+}
+
+/* Headings */
+h1, h2, h3 {
+    font-weight: 700;
+}
+
+/* Buttons */
+.stButton > button {
+    border-radius: 12px;
+    border: none;
+    background: #176B45;
+    color: white;
+    font-weight: 600;
+    padding: 0.55rem 1rem;
+    transition: 0.2s ease;
+}
+
+.stButton > button:hover {
+    background: #218653;
+    color: white;
+    border: none;
+}
+
+/* Form inputs */
+.stTextInput input,
+.stTextArea textarea,
+.stNumberInput input,
+.stSelectbox div[data-baseweb="select"] {
+    border-radius: 10px;
+}
+
+/* Cards */
+.eco-card {
+    background: var(--secondary-background-color);
+    border: 1px solid rgba(128, 128, 128, 0.18);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+/* Metric cards */
+[data-testid="stMetric"] {
+    background: var(--secondary-background-color);
+    border: 1px solid rgba(128, 128, 128, 0.18);
+    border-radius: 14px;
+    padding: 16px;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    border-right: 1px solid rgba(128, 128, 128, 0.18);
+}
+
+/* Sidebar navigation buttons */
+section[data-testid="stSidebar"] .stButton > button {
+    width: 100%;
+    text-align: left;
+    justify-content: flex-start;
+    border-radius: 10px;
+    margin-bottom: 4px;
+}
+
+/* EcoLoop accent colours */
+.eco-green {
+    color: #176B45;
+}
+
+.eco-lime {
+    color: #A8D94F;
+}
+
+.eco-teal {
+    color: #159B91;
+}
+
+.eco-amber {
+    color: #E6A23C;
+}
+
+/* App branding */
+.eco-brand {
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: -0.7px;
+}
+
+.eco-tagline {
+    font-size: 0.9rem;
+    opacity: 0.75;
+}
+
+/* Images */
+img {
+    border-radius: 12px;
+}
+
+/* Mobile layout */
+@media (max-width: 768px) {
+    .block-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .eco-brand {
+        font-size: 1.5rem;
+    }
+}
+
+</style>
+""")
+
+# =====================================================
+# SESSION MANAGEMENT
+# =====================================================
+
+def set_user_session(auth_response):
+
+    auth_user = auth_response.user
+    auth_session = auth_response.session
+
+    st.session_state.logged_in = True
+    st.session_state.user_id = str(auth_user.id)
+    st.session_state.access_token = auth_session.access_token
+    st.session_state.refresh_token = auth_session.refresh_token
+
+    load_user_profile()
+
+
+def load_user_profile():
+
+    if not supabase or not st.session_state.user_id:
+        st.session_state.user = None
+        return
+
+    try:
+
+        response = (
+            supabase.table("profiles")
+            .select("*")
+            .eq("id", st.session_state.user_id)
+            .single()
+            .execute()
+        )
+
+        st.session_state.user = response.data
+
+    except Exception:
+        st.session_state.user = None
+
+
+def restore_auth_session():
+
+    if not supabase:
+        return
+
+    access_token = st.session_state.get("access_token")
+    refresh_token = st.session_state.get("refresh_token")
+
+    if not access_token or not refresh_token:
+        return
+
+    try:
+
+        supabase.auth.set_session(
+            access_token,
+            refresh_token
+        )
+
+        auth_user = supabase.auth.get_user()
+
+        if auth_user and auth_user.user:
+
+            st.session_state.logged_in = True
+            st.session_state.user_id = str(auth_user.user.id)
+
+            load_user_profile()
+
+        else:
+            clear_user_session()
+
+    except Exception:
+        clear_user_session()
+
+
+def clear_user_session():
+
+    st.session_state.logged_in = False
+    st.session_state.user = None
+    st.session_state.user_id = None
+    st.session_state.access_token = None
+    st.session_state.refresh_token = None
+
+
+def is_logged_in():
+
+    return (
+        st.session_state.get("logged_in", False)
+        and st.session_state.get("user_id") is not None
+    )
+
+
+def is_admin():
+
+    profile = st.session_state.get("user")
+
+    if not profile:
+        return False
+
+    return profile.get("role") == "admin"
+
+
+# Restore an existing login when the app reruns
+if supabase and not st.session_state.logged_in:
+
+    restore_auth_session()
+
+# =====================================================
+# ECOLOOP MAIN NAVIGATION
 # =====================================================
 
 NAVIGATION = {
@@ -301,62 +351,121 @@ NAVIGATION = {
 
     "Account": [
         "My Profile",
-        "Login / Register"
-    ],
-
-    "Administration": [
-        "Verify Contributions",
-        "Admin Studio",
-        "System Diagnostics"
+        "About NGIH"
     ]
 }
 
-st.sidebar.markdown("## ECOLOOP NODE 2.0")
-st.sidebar.caption("Environmental action. Connected communities.")
 
-# Main category selector
-main_categories = [
-    "Home",
-    "EcoLoop",
-    "Community",
-    "Learn & Grow",
-    "Account"
-]
+def render_navigation():
 
-if is_admin():
-    main_categories.append("Administration")
+    st.sidebar.markdown("---")
 
-if "main_category" not in st.session_state:
-    st.session_state.main_category = "Home"
-
-if st.session_state.main_category not in main_categories:
-    st.session_state.main_category = "Home"
-
-main_category = st.sidebar.radio(
-    "MAIN MENU",
-    main_categories,
-    key="main_category"
-)
-
-# Sub-navigation
-subpages = NAVIGATION[main_category]
-
-if len(subpages) == 1:
-    selected_page = subpages[0]
-else:
-    selected_page = st.sidebar.radio(
-        "EXPLORE",
-        subpages,
-        key=f"submenu_{main_category}"
+    st.sidebar.markdown(
+        "## ♻️ EcoLoop Node"
     )
 
-page = selected_page
-st.session_state.current_page = page
+    st.sidebar.caption(
+        "Turning everyday environmental action into measurable community impact."
+    )
+
+    st.sidebar.markdown("---")
+
+    # Main categories
+    for category in NAVIGATION:
+
+        if st.sidebar.button(
+            category,
+            key=f"nav_category_{category}",
+            use_container_width=True
+        ):
+
+            st.session_state.main_category = category
+            st.session_state.current_page = NAVIGATION[category][0]
+
+            st.rerun()
+
+    st.sidebar.markdown("---")
+
+    # Pages within the selected category
+    selected_category = st.session_state.get(
+        "main_category",
+        "Home"
+    )
+
+    st.sidebar.markdown(
+        f"### {selected_category}"
+    )
+
+    for page in NAVIGATION[selected_category]:
+
+        if st.sidebar.button(
+            page,
+            key=f"nav_page_{page}",
+            use_container_width=True
+        ):
+
+            st.session_state.current_page = page
+            st.rerun()
+
+    # Administration is only visible to admins
+    if is_admin():
+
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### Administration")
+
+        admin_pages = [
+            "Verify Contributions",
+            "Admin Studio",
+            "System Diagnostics"
+        ]
+
+        for page in admin_pages:
+
+            if st.sidebar.button(
+                page,
+                key=f"nav_admin_{page}",
+                use_container_width=True
+            ):
+
+                st.session_state.main_category = "Administration"
+                st.session_state.current_page = page
+                st.rerun()
+
+    st.sidebar.markdown("---")
+
+    if is_logged_in():
+
+        profile = st.session_state.get("user") or {}
+
+        st.sidebar.caption(
+            f"Logged in as {profile.get('full_name', 'User')}"
+        )
+
+    else:
+
+        st.sidebar.caption("You are browsing as a guest.")
+
+selected_category = st.session_state.get(
+    "main_category",
+    "Home"
+)
+
+if selected_category not in NAVIGATION:
+    selected_category = "Home"
+
 # =====================================================
-# REUSABLE DISPLAY FUNCTIONS
+# REUSABLE DISPLAY COMPONENTS
 # =====================================================
 
-def eco_card(title, description, icon="🌱"):
+def section_heading(title, description=None):
+
+    st.markdown(f"## {title}")
+
+    if description:
+        st.caption(description)
+
+
+def eco_card(title, description, icon="♻️"):
 
     st.markdown(
         f"""
@@ -369,24 +478,32 @@ def eco_card(title, description, icon="🌱"):
     )
 
 
-def metric_card(label, value, icon="🌍"):
+def show_empty_state(message):
 
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-label">{icon} {label}</div>
-            <div class="metric-value">{value}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.info(message)
 
 
-def show_page_header(title, subtitle):
+def get_table_count(table_name, user_id=None):
 
-    st.title(title)
-    st.caption(subtitle)
-    st.divider()
+    if not supabase:
+        return 0
+
+    try:
+
+        query = supabase.table(table_name).select(
+            "id",
+            count="exact"
+        )
+
+        if user_id:
+            query = query.eq("user_id", user_id)
+
+        response = query.execute()
+
+        return response.count or 0
+
+    except Exception:
+        return 0
 
 
 # =====================================================
@@ -397,675 +514,391 @@ def home_page():
 
     st.markdown(
         f"""
-        <div class="eco-hero">
-            <h1>Welcome to EcoLoop ♻️</h1>
-            <p>{APP_TAGLINE}</p>
-            <p>
-                Learn. Participate. Connect.
-                Build a cleaner, more sustainable community.
-            </p>
-        </div>
+        <div class="eco-brand">{APP_NAME} ♻️</div>
+        <p class="eco-tagline">{APP_TAGLINE}</p>
         """,
         unsafe_allow_html=True
     )
 
-    st.subheader("Your environmental action starts here")
+    st.markdown("---")
 
-    col1, col2, col3 = st.columns(3)
+    if is_logged_in():
 
-    with col1:
-        metric_card("Waste contributions", "0", "♻️")
+        profile = st.session_state.get("user") or {}
 
-    with col2:
-        metric_card("Community actions", "0", "🌱")
+        full_name = profile.get("full_name", "EcoLoop Member")
 
-    with col3:
-        metric_card("Points earned", "0", "⭐")
+        st.subheader(f"Welcome back, {full_name}!")
 
-    
-    st.caption(
-        "These are starter dashboard values. "
-        "They will be replaced with verified database records "
-        "as the relevant features are connected."
+        st.write(
+            "Your environmental actions contribute to a cleaner "
+            "and more sustainable community."
+        )
+
+        user_id = st.session_state.user_id
+
+        contributions = get_table_count(
+            "waste_contributions",
+            user_id
+        )
+
+        actions = get_table_count(
+            "user_actions",
+            user_id
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.metric(
+                "Waste Contributions",
+                contributions
+            )
+
+        with col2:
+            st.metric(
+                "Environmental Actions",
+                actions
+            )
+
+    else:
+
+        st.subheader("Welcome to EcoLoop Node!")
+
+        st.write(
+            "A community-driven environmental platform that "
+            "connects everyday action with measurable impact."
+        )
+
+        st.info(
+            "Create an account or log in to record contributions, "
+            "participate in community activities and track your impact."
+        )
+
+    st.markdown("---")
+
+    section_heading(
+        "Explore EcoLoop",
+        "Discover the different ways to participate."
     )
-
-
-    st.divider()
-
-    st.subheader("Explore EcoLoop")
 
     col1, col2 = st.columns(2)
 
     with col1:
 
         eco_card(
+            "EcoLoop Nodes",
+            "Discover environmental collection points.",
+            "📍"
+        )
+
+        eco_card(
             "Record Waste",
-            "Submit recyclable waste contributions "
-            "and track their verification status.",
+            "Submit details of your recyclable waste contributions.",
             "♻️"
-        )
-
-        eco_card(
-            "Eco Quiz",
-            "Test your environmental knowledge "
-            "and learn through interactive quizzes.",
-            "🧠"
-        )
-
-        eco_card(
-            "Community Groups",
-            "Connect with people working towards "
-            "environmental change.",
-            "👥"
         )
 
     with col2:
 
         eco_card(
-            "EcoLoop Nodes",
-            "Explore community collection points "
-            "and their available information.",
-            "📍"
-        )
-
-        eco_card(
-            "Action Gallery",
-            "Discover and share environmental "
-            "activities and community projects.",
-            "📸"
-        )
-
-        eco_card(
-            "Environmental Impact",
-            "Explore recorded contributions and "
-            "community environmental progress.",
+            "Community",
+            "Connect with others and participate in environmental activities.",
             "🌍"
         )
 
-    st.divider()
+        eco_card(
+            "Learn & Grow",
+            "Build environmental knowledge through learning and quizzes.",
+            "📚"
+        )
 
-    st.subheader("Our purpose")
+    st.markdown("---")
 
-    st.markdown(
-        """
-        EcoLoop is a community-centred environmental platform
-        designed to make sustainable action more accessible,
-        measurable and collaborative.
-
-        It connects environmental learning, waste management,
-        youth participation and community initiatives in one place.
-        """
+    section_heading(
+        "Our Purpose",
+        "Small actions can create measurable community impact."
     )
 
-    st.markdown(
-        f"""
-        <div class="eco-footer">
-            EcoLoop Node 2.0 | {NGIH_NAME}<br>
-            Climate Action & Environment
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-# =====================================================
-# DISPLAY HOME PAGE
-# =====================================================
-if page == "Home":
-    home_page()
-
-
-def get_supabase_client():
-    return create_client(
-        st.secrets["SUPABASE_URL"],
-        st.secrets["SUPABASE_KEY"]
-    )
-
-# =====================================================
-# SUPABASE AUTHENTICATION
-# =====================================================
-
-def save_auth_session(auth_response):
-
-    if not auth_response.session or not auth_response.user:
-        return False
-
-    st.session_state.access_token = (
-        auth_response.session.access_token
-    )
-
-    st.session_state.refresh_token = (
-        auth_response.session.refresh_token
-    )
-
-    st.session_state.user_id = auth_response.user.id
-    st.session_state.logged_in = True
-
-    return True
-
-
-def restore_auth_session():
-
-    access_token = st.session_state.get("access_token")
-    refresh_token = st.session_state.get("refresh_token")
-
-    if not access_token or not refresh_token:
-        st.session_state.logged_in = False
-        st.session_state.user = None
-        return
-
-    try:
-        supabase.auth.set_session(
-            access_token,
-            refresh_token
+    st.write(
+        "EcoLoop Node is an environmental technology initiative "
+        "under the Climate Action & Environment pillar of "
+        "Next Gen Impact Hub (NGIH)."
         )
 
-        user_id = st.session_state.get("user_id")
-
-        if user_id:
-            result = (
-                supabase.table("profiles")
-                .select("*")
-                .eq("id", user_id)
-                .limit(1)
-                .execute()
-            )
-
-            profile = result.data[0] if result.data else None
-
-            st.session_state.user = profile
-            st.session_state.logged_in = True
-
-    except Exception:
-        st.session_state.logged_in = False
-        st.session_state.user = None
-        st.session_state.access_token = None
-        st.session_state.refresh_token = None
-        st.session_state.user_id = None
-
-
-def register_user(email, password, full_name):
-
-    try:
-        response = supabase.auth.sign_up({
-            "email": email,
-            "password": password,
-            "options": {
-                "data": {
-                    "full_name": full_name
-                }
-            }
-        })
-
-        if save_auth_session(response):
-            st.success("Account created successfully!")
-            st.rerun()
-
-        else:
-            st.info(
-                "Registration submitted. Check your email "
-                "if email confirmation is enabled, then log in."
-            )
-
-    except Exception as e:
-        st.error(f"Registration failed: {e}")
-
-
-def login_user(email, password):
-
-    try:
-        response = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
-
-        if save_auth_session(response):
-            st.success("Login successful!")
-            st.rerun()
-
-        else:
-            st.error("Login did not return an active session.")
-
-    except Exception as e:
-        st.error(f"Login failed: {e}")
-
-
-def logout_user():
-
-    try:
-        supabase.auth.sign_out()
-    except Exception:
-        pass
-
-    st.session_state.logged_in = False
-    st.session_state.user = None
-    st.session_state.access_token = None
-    st.session_state.refresh_token = None
-    st.session_state.user_id = None
-
-    st.rerun()
-
-
-# Restore the user's session on each app run.
-if supabase is not None:
-    restore_auth_session()
-
-
 # =====================================================
-# ACCOUNT PAGE
+# ACCOUNT: LOGIN, REGISTRATION AND PROFILE
 # =====================================================
 
-def account_page():
+def login_form():
 
-    show_page_header(
-        "My Profile",
-        "Manage your EcoLoop account and personal information."
-    )
+    st.subheader("Login")
 
-    if supabase is None:
-        st.error("Supabase is not connected.")
-        return
+    with st.form("ecoloop_login_form"):
 
-    if st.session_state.logged_in:
+        email = st.text_input("Email address")
 
-        profile = st.session_state.user or {}
-
-        st.success("You are logged in.")
-
-        st.subheader(
-            profile.get("full_name", "EcoLoop Member")
-        )
-
-        st.write(
-            "**Email:**",
-            profile.get("email", "Not available")
-        )
-
-        st.write(
-            "**Account role:**",
-            profile.get("role", "user")
-        )
-
-        st.write(
-            "**User ID:**",
-            st.session_state.user_id
-        )
-
-        st.divider()
-
-        if st.button("Log out", use_container_width=True):
-            logout_user()
-
-        return
-
-    login_tab, register_tab = st.tabs([
-        "Log in",
-        "Create account"
-    ])
-
-    with login_tab:
-
-        st.subheader("Welcome back")
-
-        with st.form("ecoloop_login_form"):
-
-            email = st.text_input("Email address")
-
-            password = st.text_input(
-                "Password",
-                type="password"
-            )
-
-            submitted = st.form_submit_button(
-                "Log in",
-                use_container_width=True
-            )
-
-            if submitted:
-
-                if email.strip() and password:
-                    login_user(email.strip(), password)
-                else:
-                    st.warning("Enter your email and password.")
-
-    with register_tab:
-
-        st.subheader("Join EcoLoop")
-
-        with st.form("ecoloop_register_form"):
-
-            full_name = st.text_input("Full name")
-
-            email = st.text_input(
-                "Email address",
-                key="register_email"
-            )
-
-            password = st.text_input(
-                "Create password",
-                type="password",
-                key="register_password"
-            )
-
-            confirm_password = st.text_input(
-                "Confirm password",
-                type="password"
-            )
-
-            submitted = st.form_submit_button(
-                "Create account",
-                use_container_width=True
-            )
-
-            if submitted:
-
-                if not full_name.strip() or not email.strip():
-                    st.warning("Complete all required fields.")
-
-                elif len(password) < 8:
-                    st.warning(
-                        "Your password must be at least 8 characters."
-                    )
-
-                elif password != confirm_password:
-                    st.error("Your passwords do not match.")
-
-                else:
-                    register_user(
-                        email.strip(),
-                        password,
-                        full_name.strip()
-                    )
-
-
-# =====================================================
-# ACCOUNT PAGE ROUTING
-# =====================================================
-
-if page == "My Profile":
-    account_page()
-
-# =====================================================
-# RECORD WASTE — SUPABASE INTEGRATION
-# =====================================================
-
-def record_waste_page():
-
-    show_page_header(
-        "Record Waste",
-        "Record recyclable materials and track your contributions."
-    )
-
-    if supabase is None:
-        st.error("Supabase is not connected.")
-        return
-
-    if not st.session_state.logged_in:
-        st.warning("Please log in before recording waste.")
-        st.info("Open My Profile to access your account.")
-        return
-
-    user_id = st.session_state.user_id
-
-    # -------------------------------------------------
-    # FETCH REGISTERED COLLECTION STATIONS
-    # -------------------------------------------------
-
-    try:
-        station_response = (
-            supabase.table("collection_stations")
-            .select("station_code, station_name")
-            .execute()
-        )
-
-        stations = station_response.data or []
-
-    except Exception as e:
-        st.error("Could not retrieve collection stations.")
-        st.caption(str(e))
-        return
-
-    if not stations:
-        st.warning(
-            "No collection stations are currently available."
-        )
-        return
-
-    station_options = {
-        f"{station['station_name']} ({station['station_code']})":
-        station["station_code"]
-        for station in stations
-    }
-
-    # -------------------------------------------------
-    # WASTE SUBMISSION FORM
-    # -------------------------------------------------
-
-    st.subheader("Submit a waste contribution")
-
-    with st.form("waste_submission_form"):
-
-        station_label = st.selectbox(
-            "Select collection station",
-            list(station_options.keys())
-        )
-
-        material_type = st.selectbox(
-            "Material type",
-            [
-                "Plastic",
-                "Paper",
-                "Cardboard",
-                "Glass",
-                "Metal",
-                "Electronic waste",
-                "Other recyclable material"
-            ]
-        )
-
-        weight = st.number_input(
-            "Weight (kg)",
-            min_value=0.01,
-            max_value=10000.0,
-            value=1.0,
-            step=0.5
+        password = st.text_input(
+            "Password",
+            type="password"
         )
 
         submitted = st.form_submit_button(
-            "Submit contribution",
+            "Login",
             use_container_width=True
         )
 
-        if submitted:
+    if submitted:
+
+        if not email or not password:
+
+            st.warning("Please enter your email and password.")
+
+        elif not supabase:
+
+            st.error("Database connection is unavailable.")
+
+        else:
 
             try:
-                contribution = {
-                    "user_id": user_id,
-                    "station_code": station_options[station_label],
-                    "material_type": material_type,
-                    "weight": float(weight)
-                }
 
-                response = (
-                    supabase.table("waste_contributions")
-                    .insert(contribution)
-                    .execute()
-                )
+                response = supabase.auth.sign_in_with_password({
+                    "email": email,
+                    "password": password
+                })
 
-                if response.data:
+                if response.session:
 
-                    st.success(
-                        "Your waste contribution was submitted!"
-                    )
+                    set_user_session(response)
 
-                    st.info(
-                        "Status: Pending verification. "
-                        "Points will be awarded after verification."
-                    )
-
+                    st.success("Login successful!")
                     st.rerun()
 
                 else:
-                    st.error(
-                        "The submission could not be confirmed."
-                    )
 
-            except Exception as e:
+                    st.error("Login could not be completed.")
 
-                st.error("Waste submission failed.")
-                st.caption(str(e))
+            except Exception:
 
-    # -------------------------------------------------
-    # USER CONTRIBUTION HISTORY
-    # -------------------------------------------------
+                st.error(
+                    "Login failed. Please check your details and try again."
+                )
 
-    st.divider()
 
-    st.subheader("My contribution history")
+def registration_form():
 
-    try:
+    st.subheader("Create an Account")
 
-        history = (
-            supabase.table("waste_contributions")
-            .select(
-                "id, station_code, material_type, "
-                "weight, submitted_at, "
-                "verification_status, points"
-            )
-            .eq("user_id", user_id)
-            .order("submitted_at", desc=True)
-            .execute()
+    with st.form("ecoloop_registration_form"):
+
+        full_name = st.text_input("Full name")
+
+        email = st.text_input("Email address")
+
+        password = st.text_input(
+            "Create password",
+            type="password"
         )
 
-        records = history.data or []
+        confirm_password = st.text_input(
+            "Confirm password",
+            type="password"
+        )
 
-        if records:
+        submitted = st.form_submit_button(
+            "Register",
+            use_container_width=True
+        )
 
-            history_df = pd.DataFrame(records)
+    if submitted:
 
-            history_df = history_df.rename(
-                columns={
-                    "station_code": "Station",
-                    "material_type": "Material",
-                    "weight": "Weight (kg)",
-                    "submitted_at": "Date submitted",
-                    "verification_status": "Status",
-                    "points": "Points"
-                }
-            )
+        if not full_name or not email or not password:
 
-            display_columns = [
-                "Station",
-                "Material",
-                "Weight (kg)",
-                "Date submitted",
-                "Status",
-                "Points"
-            ]
+            st.warning("Please complete all fields.")
 
-            st.dataframe(
-                history_df[display_columns],
-                use_container_width=True,
-                hide_index=True
-            )
+        elif password != confirm_password:
 
-            pending = sum(
-                1 for record in records
-                if record.get("verification_status") == "pending"
-            )
+            st.warning("Your passwords do not match.")
 
-            verified = sum(
-                1 for record in records
-                if record.get("verification_status") == "verified"
-            )
+        elif len(password) < 8:
 
-            col1, col2 = st.columns(2)
+            st.warning("Your password must have at least 8 characters.")
 
-            with col1:
-                metric_card(
-                    "Pending contributions",
-                    pending,
-                    "⏳"
-                )
+        elif not supabase:
 
-            with col2:
-                metric_card(
-                    "Verified contributions",
-                    verified,
-                    "✅"
-                )
+            st.error("Database connection is unavailable.")
 
         else:
-            st.info(
-                "You have not submitted any waste contributions yet."
+
+            try:
+
+                response = supabase.auth.sign_up({
+                    "email": email,
+                    "password": password,
+                    "options": {
+                        "data": {
+                            "full_name": full_name
+                        }
+                    }
+                })
+
+                if response.session:
+
+                    set_user_session(response)
+
+                    supabase.table("profiles").update({
+                        "full_name": full_name
+                    }).eq(
+                        "id",
+                        str(response.user.id)
+                    ).execute()
+
+                    st.success("Your account has been created!")
+                    st.rerun()
+
+                else:
+
+                    st.success(
+                        "Registration submitted. Check your email "
+                        "if email confirmation is required."
+                    )
+
+            except Exception:
+
+                st.error(
+                    "Registration failed. Please check your details "
+                    "or try another email address."
+                )
+
+
+def account_page():
+
+    st.title("My Account")
+
+    if not is_logged_in():
+
+        st.write(
+            "Join EcoLoop Node or log in to access your account."
+        )
+
+        tab1, tab2 = st.tabs([
+            "Login",
+            "Register"
+        ])
+
+        with tab1:
+            login_form()
+
+        with tab2:
+            registration_form()
+
+    else:
+
+        profile = st.session_state.get("user") or {}
+
+        st.subheader("My Profile")
+
+        st.write(
+            f"**Full name:** {profile.get('full_name', 'Not provided')}"
+        )
+
+        st.write(
+            f"**Email:** {profile.get('email', 'Not provided')}"
+        )
+
+        st.write(
+            f"**Account role:** {profile.get('role', 'user')}"
+        )
+
+        st.markdown("---")
+
+        st.subheader("Update Profile")
+
+        with st.form("ecoloop_profile_form"):
+
+            new_name = st.text_input(
+                "Full name",
+                value=profile.get("full_name") or ""
             )
 
-    except Exception as e:
+            submitted = st.form_submit_button(
+                "Save Changes"
+            )
 
-        st.error("Could not load your contribution history.")
-        st.caption(str(e))
+        if submitted:
+
+            if not new_name.strip():
+
+                st.warning("Your name cannot be empty.")
+
+            else:
+
+                try:
+
+                    supabase.table("profiles").update({
+                        "full_name": new_name.strip()
+                    }).eq(
+                        "id",
+                        st.session_state.user_id
+                    ).execute()
+
+                    load_user_profile()
+
+                    st.success("Your profile has been updated.")
+                    st.rerun()
+
+                except Exception:
+
+                    st.error("Unable to update your profile.")
+
+        st.markdown("---")
+
+        if st.button(
+            "Logout",
+            use_container_width=True
+        ):
+
+            try:
+                supabase.auth.sign_out()
+            except Exception:
+                pass
+
+            clear_user_session()
+            st.rerun()
 
 
 # =====================================================
-# RECORD WASTE PAGE ROUTING
-# =====================================================
-
-if page == "Record Waste":
-    record_waste_page()
-
-# =====================================================
-# ECOLOOP NODES — COLLECTION POINT DIRECTORY
+# ECOLOOP NODES
 # =====================================================
 
 def generate_station_qr(station_code):
 
-    station_url = (
-        "https://ecoloop-node-2-g2jtmgyszhvgynvmnzuo7d."
-        "streamlit.app/?station="
-        + str(station_code)
+    app_url = (
+        "https://ecoloop-node-2-g2jtmgyszhvgynvmnzuo7d.streamlit.app/"
+        f"?station={station_code}"
     )
 
-    qr = qrcode.QRCode(
-        version=1,
-        box_size=8,
-        border=4
+    qr = qrcode.make(app_url)
+
+    image_buffer = io.BytesIO()
+    qr.save(image_buffer, format="PNG")
+    image_buffer.seek(0)
+
+    return image_buffer
+
+
+def ecoloop_nodes_page():
+
+    st.title("📍 EcoLoop Nodes")
+
+    st.write(
+        "Explore registered environmental collection stations "
+        "and use their QR codes to access station information."
     )
 
-    qr.add_data(station_url)
-    qr.make(fit=True)
+    if not supabase:
 
-    qr_image = qr.make_image(
-        fill_color="#17452F",
-        back_color="white"
-    )
-
-    buffer = io.BytesIO()
-    qr_image.save(buffer, format="PNG")
-    buffer.seek(0)
-
-    return buffer
-
-
-def eco_nodes_page():
-
-    show_page_header(
-        "EcoLoop Nodes",
-        "Discover community collection points and access their information."
-    )
-
-    if supabase is None:
-        st.error("Supabase is not connected.")
+        st.error("Database connection is unavailable.")
         return
-
-    if not st.session_state.logged_in:
-        st.warning(
-            "Please log in to view registered collection stations."
-        )
-        return
-
-    # -------------------------------------------------
-    # FETCH STATIONS
-    # -------------------------------------------------
 
     try:
 
@@ -1078,155 +911,224 @@ def eco_nodes_page():
 
         stations = response.data or []
 
-    except Exception as e:
+    except Exception:
 
-        st.error("Could not load EcoLoop Nodes.")
-        st.caption(str(e))
+        st.error(
+            "Unable to load EcoLoop Nodes. "
+            "Please check your database connection and permissions."
+        )
         return
 
     if not stations:
 
-        st.info("No collection stations have been registered.")
+        show_empty_state(
+            "No collection stations have been registered yet."
+        )
         return
 
-    # -------------------------------------------------
-    # STATION DIRECTORY
-    # -------------------------------------------------
+    st.markdown("---")
 
-    st.subheader("Registered collection points")
-
-    st.caption(
-        f"{len(stations)} registered station(s) found."
+    st.subheader(
+        f"Registered Collection Stations: {len(stations)}"
     )
 
     for station in stations:
 
-        station_code = station.get(
-            "station_code",
-            "Unknown"
-        )
-
         station_name = station.get(
             "station_name",
-            "Unnamed collection station"
+            "Unnamed Station"
+        )
+
+        station_code = station.get(
+            "station_code",
+            "No code"
         )
 
         with st.container(border=True):
 
-            col1, col2 = st.columns([3, 1])
+            col1, col2 = st.columns([2, 1])
 
             with col1:
 
-                st.markdown(
-                    f"### 📍 {station_name}"
-                )
+                st.subheader(f"📍 {station_name}")
 
                 st.write(
                     f"**Station code:** {station_code}"
                 )
 
                 st.caption(
-                    "Registered EcoLoop collection point"
+                    "EcoLoop Node collection point"
                 )
 
             with col2:
 
-                st.markdown(
-                    "<h2 style='text-align:center;'>♻️</h2>",
-                    unsafe_allow_html=True
-                )
+                if station_code != "No code":
 
-            with st.expander("View station QR code"):
+                    qr_image = generate_station_qr(
+                        station_code
+                    )
 
-                qr_buffer = generate_station_qr(
-                    station_code
-                )
+                    st.image(
+                        qr_image,
+                        caption=f"QR code: {station_code}",
+                        width=150
+                    )
 
-                st.image(
-                    qr_buffer,
-                    caption=f"EcoLoop Node: {station_code}",
-                    width=220
-                )
-
-                st.download_button(
-                    label="Download station QR",
-                    data=qr_buffer.getvalue(),
-                    file_name=f"{station_code}_QR.png",
-                    mime="image/png",
-                    key=f"qr_{station_code}"
-                )
-
-    # -------------------------------------------------
-    # NODE INFORMATION
-    # -------------------------------------------------
-
-    st.divider()
-
-    st.subheader("Understanding EcoLoop Nodes")
-
-    eco_card(
-        "Community collection points",
-        "Designated locations where community members "
-        "can submit recyclable materials.",
-        "📍"
-    )
-
-    eco_card(
-        "Digital identification",
-        "Each registered station has a unique station "
-        "code and a QR code for identification.",
-        "🔳"
-    )
-
-    eco_card(
-        "Future smart monitoring",
-        "Future development can introduce connected "
-        "sensors to monitor collection capacity and "
-        "station activity.",
-        "📡"
-    )
-
-    st.info(
-        "Current station information comes from the "
-        "Supabase collection_stations table. "
-        "Live fill-level monitoring is not yet connected."
-    )
+                    st.download_button(
+                        label="Download QR Code",
+                        data=qr_image.getvalue(),
+                        file_name=f"{station_code}_QR.png",
+                        mime="image/png",
+                        key=f"download_qr_{station_code}"
+                    )
 
 
 # =====================================================
-# ECOLOOP NODES PAGE ROUTING
+# RECORD WASTE CONTRIBUTIONS
 # =====================================================
 
-if page == "EcoLoop Nodes":
-    eco_nodes_page()
+def record_waste_page():
 
-# =====================================================
-# LEADERBOARD
-# =====================================================
+    st.title("♻️ Record Waste")
 
-def leaderboard_page():
-
-    show_page_header(
-        "Leaderboard",
-        "Recognising verified environmental contributions."
+    st.write(
+        "Record your recyclable waste contribution "
+        "and help track environmental action."
     )
 
-    if supabase is None:
-        st.error("Supabase is not connected.")
+    if not is_logged_in():
+
+        st.warning(
+            "Please log in to record a waste contribution."
+        )
         return
 
-    if not st.session_state.logged_in:
-        st.warning("Please log in to access the leaderboard.")
+    if not supabase:
+
+        st.error("Database connection is unavailable.")
         return
 
-    st.subheader("Your contribution standing")
+    # Load registered collection stations
+    try:
 
-    st.info(
-        "Your personal verified contribution points are "
-        "available below. A public community leaderboard "
-        "will require a secure database view that only "
-        "exposes approved leaderboard information."
+        station_response = (
+            supabase.table("collection_stations")
+            .select("station_code, station_name")
+            .order("station_code")
+            .execute()
+        )
+
+        stations = station_response.data or []
+
+    except Exception:
+
+        st.error("Unable to load collection stations.")
+        return
+
+    if not stations:
+
+        st.info(
+            "There are currently no registered collection stations."
+        )
+        return
+
+    station_options = {
+        f"{station['station_name']} ({station['station_code']})":
+        station["station_code"]
+        for station in stations
+    }
+
+    with st.form("record_waste_form"):
+
+        st.subheader("Contribution Details")
+
+        station_label = st.selectbox(
+            "Select EcoLoop Node",
+            list(station_options.keys())
+        )
+
+        material_type = st.selectbox(
+            "Material Type",
+            [
+                "Plastic",
+                "Paper",
+                "Cardboard",
+                "Glass",
+                "Metal",
+                "Organic Waste",
+                "Electronic Waste",
+                "Other"
+            ]
+        )
+
+        weight = st.number_input(
+            "Weight (kg)",
+            min_value=0.1,
+            max_value=10000.0,
+            value=1.0,
+            step=0.1
+        )
+
+        submitted = st.form_submit_button(
+            "Submit Contribution",
+            use_container_width=True
+        )
+
+    if submitted:
+
+        station_code = station_options[station_label]
+
+        try:
+
+            supabase.table("waste_contributions").insert({
+                "user_id": st.session_state.user_id,
+                "station_code": station_code,
+                "material_type": material_type,
+                "weight": weight,
+                "verification_status": "pending",
+                "points": 0
+            }).execute()
+
+            st.success(
+                "Your contribution has been submitted successfully!"
+            )
+
+            st.info(
+                "Your contribution is pending verification. "
+                "Points will only be awarded after approval."
+            )
+
+            st.rerun()
+
+        except Exception:
+
+            st.error(
+                "Unable to submit your contribution. "
+                "Please check your details and try again."
+        )
+
+
+# =====================================================
+# ENVIRONMENTAL IMPACT
+# =====================================================
+
+def environmental_impact_page():
+
+    st.title("🌍 Environmental Impact")
+
+    st.write(
+        "Track the measurable impact of your environmental contributions."
     )
+
+    if not is_logged_in():
+
+        st.warning("Please log in to view your environmental impact.")
+        return
+
+    if not supabase:
+
+        st.error("Database connection is unavailable.")
+        return
 
     try:
 
@@ -1238,251 +1140,180 @@ def leaderboard_page():
             .execute()
         )
 
-        records = response.data or []
+        contributions = response.data or []
 
-        total_weight = sum(
-            float(record.get("weight") or 0)
-            for record in records
-        )
+    except Exception:
 
-        total_points = sum(
-            int(record.get("points") or 0)
-            for record in records
-        )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            metric_card(
-                "Verified waste (kg)",
-                f"{total_weight:.2f}",
-                "♻️"
-            )
-
-        with col2:
-            metric_card(
-                "Verified points",
-                total_points,
-                "⭐"
-            )
-
-        st.divider()
-
-        st.subheader("Your achievements")
-
-        if total_points >= 500:
-            st.success("🌳 Eco Champion — 500+ points")
-
-        elif total_points >= 200:
-            st.success("🌱 Eco Contributor — 200+ points")
-
-        elif total_points >= 50:
-            st.success("♻️ Eco Starter — 50+ points")
-
-        else:
-            st.info(
-                "Keep participating to unlock your first "
-                "EcoLoop achievement."
-            )
-
-    except Exception as e:
-
-        st.error("Could not retrieve your verified points.")
-        st.caption(str(e))
-
-
-# =====================================================
-# ENVIRONMENTAL IMPACT
-# =====================================================
-
-def environmental_impact_page():
-
-    show_page_header(
-        "Environmental Impact",
-        "Understand the impact of your verified contributions."
-    )
-
-    if supabase is None:
-        st.error("Supabase is not connected.")
+        st.error("Unable to retrieve your environmental impact data.")
         return
 
-    if not st.session_state.logged_in:
-        st.warning(
-            "Please log in to view your environmental impact."
+    total_weight = sum(
+        float(item.get("weight") or 0)
+        for item in contributions
+    )
+
+    total_points = sum(
+        int(item.get("points") or 0)
+        for item in contributions
+    )
+
+    total_contributions = len(contributions)
+
+    st.markdown("---")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric(
+            "Verified Contributions",
+            total_contributions
         )
+
+    with col2:
+        st.metric(
+            "Waste Recovered",
+            f"{total_weight:,.2f} kg"
+        )
+
+    with col3:
+        st.metric(
+            "Points Earned",
+            total_points
+        )
+
+    st.markdown("---")
+
+    st.subheader("Your Contribution History")
+
+    if contributions:
+
+        history = pd.DataFrame(contributions)
+
+        st.dataframe(
+            history,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    else:
+
+        show_empty_state(
+            "You do not have any verified waste contributions yet. "
+            "Record a contribution to start tracking your impact."
+        )
+
+
+# =====================================================
+# LEADERBOARD
+# =====================================================
+
+def leaderboard_page():
+
+    st.title("🏆 Community Leaderboard")
+
+    st.write(
+        "Recognising members contributing to environmental action "
+        "through verified waste recovery."
+    )
+
+    if not supabase:
+
+        st.error("Database connection is unavailable.")
         return
 
     try:
 
-        response = (
+        contribution_response = (
             supabase.table("waste_contributions")
-            .select(
-                "material_type, weight, points, "
-                "verification_status, submitted_at"
-            )
-            .eq("user_id", st.session_state.user_id)
+            .select("user_id, weight, points")
+            .eq("verification_status", "verified")
             .execute()
         )
 
-        records = response.data or []
-
-        verified_records = [
-            record for record in records
-            if record.get("verification_status") == "verified"
-        ]
-
-        pending_records = [
-            record for record in records
-            if record.get("verification_status") == "pending"
-        ]
-
-        rejected_records = [
-            record for record in records
-            if record.get("verification_status") == "rejected"
-        ]
-
-        total_weight = sum(
-            float(record.get("weight") or 0)
-            for record in verified_records
+        profile_response = (
+            supabase.table("profiles")
+            .select("id, full_name")
+            .execute()
         )
 
-        total_points = sum(
-            int(record.get("points") or 0)
-            for record in verified_records
+        contributions = contribution_response.data or []
+        profiles = profile_response.data or []
+
+    except Exception:
+
+        st.error(
+            "Unable to load the leaderboard. "
+            "Please check database permissions."
+        )
+        return
+
+    if not contributions:
+
+        show_empty_state(
+            "The leaderboard will appear when members have verified "
+            "waste contributions."
+        )
+        return
+
+    contributions_df = pd.DataFrame(contributions)
+    profiles_df = pd.DataFrame(profiles)
+
+    leaderboard = (
+        contributions_df
+        .groupby("user_id", as_index=False)
+        .agg(
+            contributions=("user_id", "count"),
+            total_weight=("weight", "sum"),
+            total_points=("points", "sum")
+        )
+    )
+
+    if not profiles_df.empty:
+
+        leaderboard = leaderboard.merge(
+            profiles_df,
+            left_on="user_id",
+            right_on="id",
+            how="left"
         )
 
-        # ---------------------------------------------
-        # IMPACT METRICS
-        # ---------------------------------------------
+    else:
 
-        col1, col2 = st.columns(2)
+        leaderboard["full_name"] = "EcoLoop Member"
 
-        with col1:
-            metric_card(
-                "Verified recyclable waste",
-                f"{total_weight:.2f} kg",
-                "♻️"
-            )
+    leaderboard["full_name"] = (
+        leaderboard["full_name"]
+        .fillna("EcoLoop Member")
+    )
 
-        with col2:
-            metric_card(
-                "Points earned",
-                total_points,
-                "⭐"
-            )
+    leaderboard = leaderboard.sort_values(
+        by=["total_points", "total_weight"],
+        ascending=[False, False]
+    ).reset_index(drop=True)
 
-        col3, col4 = st.columns(2)
+    leaderboard.index = leaderboard.index + 1
 
-        with col3:
-            metric_card(
-                "Pending submissions",
-                len(pending_records),
-                "⏳"
-            )
+    leaderboard = leaderboard.rename(
+        columns={
+            "full_name": "Member",
+            "contributions": "Verified Contributions",
+            "total_weight": "Waste Recovered (kg)",
+            "total_points": "Points"
+        }
+    )
 
-        with col4:
-            metric_card(
-                "Verified submissions",
-                len(verified_records),
-                "✅"
-            )
+    st.dataframe(
+        leaderboard[
+            [
+                "Member",
+                "Verified Contributions",
+                "Waste Recovered (kg)",
+                "Points"
+            ]
+        ],
+        use_container_width=True
+    )
 
-        st.divider()
-
-        # ---------------------------------------------
-        # MATERIAL BREAKDOWN
-        # ---------------------------------------------
-
-        st.subheader("Verified material breakdown")
-
-        if verified_records:
-
-            material_data = {}
-
-            for record in verified_records:
-
-                material = record.get(
-                    "material_type",
-                    "Other"
-                )
-
-                weight = float(
-                    record.get("weight") or 0
-                )
-
-                material_data[material] = (
-                    material_data.get(material, 0) + weight
-                )
-
-            material_df = pd.DataFrame(
-                [
-                    {
-                        "Material": material,
-                        "Weight (kg)": round(weight, 2)
-                    }
-                    for material, weight in material_data.items()
-                ]
-            )
-
-            st.bar_chart(
-                material_df.set_index("Material")
-            )
-
-            st.dataframe(
-                material_df,
-                use_container_width=True,
-                hide_index=True
-            )
-
-        else:
-
-            st.info(
-                "Your verified material breakdown will "
-                "appear after your first approved contribution."
-            )
-
-        st.divider()
-
-        st.subheader("Your contribution journey")
-
-        st.write(
-            f"You have submitted **{len(records)}** "
-            "waste contribution(s) in total."
-        )
-
-        st.write(
-            f"**Verified:** {len(verified_records)}"
-        )
-
-        st.write(
-            f"**Pending:** {len(pending_records)}"
-        )
-
-        st.write(
-            f"**Rejected:** {len(rejected_records)}"
-        )
-
-        st.caption(
-            "Impact figures are based on verified records "
-            "in your account. They are not estimates of "
-            "carbon savings or total community impact."
-        )
-
-    except Exception as e:
-
-        st.error("Could not calculate environmental impact.")
-        st.caption(str(e))
-
-
-# =====================================================
-# PAGE ROUTING
-# =====================================================
-
-if page == "Leaderboard":
-    leaderboard_page()
-
-if page == "Environmental Impact":
-    environmental_impact_page()
 
 # =====================================================
 # EXPLORE & LEARN
@@ -1490,9 +1321,11 @@ if page == "Environmental Impact":
 
 def explore_learn_page():
 
-    show_page_header(
-        "Explore & Learn",
-        "Build your environmental knowledge and discover practical ways to make a difference."
+    st.title("📚 Explore & Learn")
+
+    st.write(
+        "Build your environmental knowledge and discover "
+        "how everyday choices can support a sustainable future."
     )
 
     learning_topics = [
@@ -1500,170 +1333,68 @@ def explore_learn_page():
             "title": "Waste Management",
             "icon": "♻️",
             "description": (
-                "Understand waste separation, recycling, "
+                "Learn about waste separation, recycling, "
                 "reuse and responsible disposal."
-            ),
-            "content": (
-                "Waste management involves collecting, "
-                "sorting, treating and disposing of waste "
-                "responsibly. Separating recyclable materials "
-                "helps reduce pressure on landfills and "
-                "supports a circular economy."
             )
         },
         {
-            "title": "Climate Change",
+            "title": "Climate Action",
             "icon": "🌍",
             "description": (
-                "Learn about climate change, its causes "
-                "and its effects on communities."
-            ),
-            "content": (
-                "Climate change refers to long-term changes "
-                "in temperatures and weather patterns. "
-                "Human activities, particularly the burning "
-                "of fossil fuels, are the main driver of "
-                "recent global warming."
+                "Understand climate change, its effects "
+                "and practical community responses."
             )
         },
         {
-            "title": "Biodiversity",
-            "icon": "🌳",
+            "title": "Circular Economy",
+            "icon": "🔄",
             "description": (
-                "Discover why plants, animals and ecosystems "
-                "matter."
-            ),
-            "content": (
-                "Biodiversity is the variety of life on Earth. "
-                "Healthy ecosystems support food production, "
-                "clean water, pollination and climate resilience."
+                "Explore how materials can remain in use "
+                "through repair, reuse and recycling."
             )
         },
         {
-            "title": "Sustainable Communities",
-            "icon": "🏘️",
+            "title": "Environmental Conservation",
+            "icon": "🌱",
             "description": (
-                "Explore how communities can create "
-                "healthier and more sustainable environments."
-            ),
-            "content": (
-                "Sustainable communities use resources "
-                "responsibly, encourage public participation "
-                "and develop solutions that consider both "
-                "present and future generations."
+                "Discover ways to protect natural resources "
+                "and local ecosystems."
             )
         },
         {
-            "title": "Water Conservation",
-            "icon": "💧",
+            "title": "Community Participation",
+            "icon": "🤝",
             "description": (
-                "Understand the importance of protecting "
-                "and conserving water."
-            ),
-            "content": (
-                "Water conservation means using water "
-                "efficiently and protecting water sources. "
-                "Reducing unnecessary water use helps "
-                "communities become more resilient to shortages."
+                "Learn how individuals and communities "
+                "can work together for environmental improvement."
             )
         },
         {
-            "title": "Renewable Energy",
-            "icon": "☀️",
+            "title": "Sustainable Living",
+            "icon": "💡",
             "description": (
-                "Learn about solar, wind and other "
-                "renewable energy sources."
-            ),
-            "content": (
-                "Renewable energy comes from sources that "
-                "are naturally replenished, such as sunlight, "
-                "wind and flowing water. These sources can "
-                "help reduce dependence on fossil fuels."
+                "Explore practical habits that can reduce "
+                "waste and environmental pressure."
             )
         }
     ]
 
-    st.subheader("Learning library")
+    for start in range(0, len(learning_topics), 2):
 
-    for topic in learning_topics:
+        col1, col2 = st.columns(2)
 
-        with st.expander(
-            f"{topic['icon']} {topic['title']}"
+        for column, topic in zip(
+            [col1, col2],
+            learning_topics[start:start + 2]
         ):
 
-            st.write(topic["description"])
-            st.write(topic["content"])
+            with column:
 
-    st.divider()
-
-    st.subheader("Put knowledge into action")
-
-    st.markdown(
-        """
-        Learning becomes meaningful when it leads to action.
-
-        - Separate recyclable materials at home.
-        - Participate in local environmental campaigns.
-        - Share reliable environmental information.
-        - Encourage responsible resource use.
-        - Support community-led environmental initiatives.
-        """
-    )
-
-
-# =====================================================
-# ECO QUIZ — HELPER FUNCTIONS
-# =====================================================
-
-def get_quiz_value(row, possible_names, default=None):
-
-    for name in possible_names:
-
-        if row.get(name) is not None:
-            return row.get(name)
-
-    return default
-
-
-def get_question_options(question):
-
-    # Support either individual option columns
-    # or an options array stored in the question row.
-
-    options = question.get("options")
-
-    if isinstance(options, dict):
-        return {
-            str(key): str(value)
-            for key, value in options.items()
-        }
-
-    if isinstance(options, list):
-        return {
-            str(index + 1): str(value)
-            for index, value in enumerate(options)
-        }
-
-    possible_columns = [
-        ("A", ["option_a", "option1", "choice_a"]),
-        ("B", ["option_b", "option2", "choice_b"]),
-        ("C", ["option_c", "option3", "choice_c"]),
-        ("D", ["option_d", "option4", "choice_d"])
-    ]
-
-    result = {}
-
-    for label, column_names in possible_columns:
-
-        value = get_quiz_value(
-            question,
-            column_names
-        )
-
-        if value is not None:
-            result[label] = str(value)
-
-    return result
+                eco_card(
+                    topic["title"],
+                    topic["description"],
+                    topic["icon"]
+                )
 
 
 # =====================================================
@@ -1672,25 +1403,24 @@ def get_question_options(question):
 
 def eco_quiz_page():
 
-    show_page_header(
-        "Eco Quiz",
-        "Test your environmental knowledge and earn points through learning."
+    st.title("🧠 Eco Quiz")
+
+    st.write(
+        "Test your environmental knowledge and earn points "
+        "through completed quizzes."
     )
 
-    if supabase is None:
-        st.error("Supabase is not connected.")
+    if not is_logged_in():
+
+        st.warning("Please log in to participate in Eco Quiz.")
         return
 
-    if not st.session_state.logged_in:
-        st.warning("Please log in to participate in quizzes.")
+    if not supabase:
+
+        st.error("Database connection is unavailable.")
         return
 
-    user_id = st.session_state.user_id
-
-    # -------------------------------------------------
-    # LOAD AVAILABLE QUIZZES
-    # -------------------------------------------------
-
+    # Load available quizzes
     try:
 
         quiz_response = (
@@ -1699,478 +1429,217 @@ def eco_quiz_page():
             .execute()
         )
 
-        all_quizzes = quiz_response.data or []
+        quizzes = quiz_response.data or []
 
-        quizzes = [
-            quiz for quiz in all_quizzes
-            if quiz.get("is_active", quiz.get("active", True))
-        ]
+    except Exception:
 
-    except Exception as e:
-
-        st.error("Could not load available quizzes.")
-        st.caption(str(e))
+        st.error("Unable to load quizzes.")
         return
 
     if not quizzes:
 
-        st.info("There are no active quizzes available yet.")
+        show_empty_state(
+            "There are no quizzes available at the moment."
+        )
         return
 
-    quiz_labels = {}
+    # Only show active quizzes
+    quizzes = [
+        quiz for quiz in quizzes
+        if quiz.get("is_active", True)
+    ]
 
-    for quiz in quizzes:
+    if not quizzes:
 
-        quiz_id = quiz.get("id")
-
-        title = get_quiz_value(
-            quiz,
-            ["title", "quiz_title", "name"],
-            "Environmental Quiz"
+        show_empty_state(
+            "There are currently no active quizzes."
         )
+        return
 
-        description = get_quiz_value(
-            quiz,
-            ["description", "quiz_description"],
-            ""
-        )
+    quiz_options = {
+        quiz.get("title", f"Quiz {index + 1}"): quiz
+        for index, quiz in enumerate(quizzes)
+    }
 
-        quiz_labels[f"{title} — {quiz_id}"] = quiz
-
-    selected_label = st.selectbox(
+    selected_title = st.selectbox(
         "Choose a quiz",
-        list(quiz_labels.keys())
+        list(quiz_options.keys())
     )
 
-    selected_quiz = quiz_labels[selected_label]
+    selected_quiz = quiz_options[selected_title]
     quiz_id = selected_quiz.get("id")
 
     st.write(
-        get_quiz_value(
-            selected_quiz,
-            ["description", "quiz_description"],
-            "Test your environmental knowledge."
+        selected_quiz.get(
+            "description",
+            "Test your knowledge of environmental sustainability."
         )
     )
 
-    # -------------------------------------------------
-    # QUIZ SESSION STATE
-    # -------------------------------------------------
+    if st.button(
+        "Start Quiz",
+        use_container_width=True
+    ):
 
-    if "active_quiz_attempt" not in st.session_state:
-        st.session_state.active_quiz_attempt = None
+        try:
 
-    if "active_quiz_questions" not in st.session_state:
-        st.session_state.active_quiz_questions = []
+            attempt_response = (
+                supabase.table("quiz_attempts")
+                .insert({
+                    "user_id": st.session_state.user_id,
+                    "quiz_id": quiz_id
+                })
+                .execute()
+            )
 
-    if "active_quiz_index" not in st.session_state:
-        st.session_state.active_quiz_index = 0
+            attempt = attempt_response.data[0]
 
-    if "active_quiz_results" not in st.session_state:
-        st.session_state.active_quiz_results = []
+            st.session_state.active_quiz_attempt = attempt["id"]
+            st.session_state.active_quiz_id = quiz_id
+            st.session_state.active_quiz_index = 0
+            st.session_state.active_quiz_results = []
 
-    if "active_quiz_id" not in st.session_state:
-        st.session_state.active_quiz_id = None
+            question_response = (
+                supabase.table("quiz_questions")
+                .select("*")
+                .eq("quiz_id", quiz_id)
+                .execute()
+            )
 
-    attempt = st.session_state.active_quiz_attempt
+            st.session_state.active_quiz_questions = (
+                question_response.data or []
+            )
 
-    # -------------------------------------------------
-    # START QUIZ
-    # -------------------------------------------------
+            st.rerun()
 
-    if attempt is None:
-
-        if st.button(
-            "Start quiz",
-            use_container_width=True
-        ):
-
-            try:
-
-                question_response = (
-                    supabase.table("quiz_questions")
-                    .select("*")
-                    .eq("quiz_id", quiz_id)
-                    .execute()
-                )
-
-                questions = question_response.data or []
-
-                if not questions:
-                    st.warning(
-                        "This quiz does not have any questions yet."
-                    )
-                    return
-
-                attempt_response = (
-                    supabase.table("quiz_attempts")
-                    .insert({
-                        "user_id": user_id,
-                        "quiz_id": quiz_id
-                    })
-                    .execute()
-                )
-
-                if not attempt_response.data:
-                    st.error("Could not start your quiz attempt.")
-                    return
-
-                attempt_id = attempt_response.data[0]["id"]
-
-                st.session_state.active_quiz_attempt = attempt_id
-                st.session_state.active_quiz_questions = questions
-                st.session_state.active_quiz_index = 0
-                st.session_state.active_quiz_results = []
-                st.session_state.active_quiz_id = quiz_id
-
-                st.rerun()
-
-            except Exception as e:
-
-                st.error("Could not start the quiz.")
-                st.caption(str(e))
-
-        return
-
-    # -------------------------------------------------
-    # ENSURE THE ACTIVE QUIZ MATCHES THE SELECTED QUIZ
-    # -------------------------------------------------
-
-    if st.session_state.active_quiz_id != quiz_id:
-
-        st.warning(
-            "You have an unfinished quiz. Finish it before "
-            "starting another quiz."
-        )
-        return
-
-    questions = st.session_state.active_quiz_questions
-    question_index = st.session_state.active_quiz_index
-
-    # -------------------------------------------------
-    # DISPLAY QUESTIONS
-    # -------------------------------------------------
-
-    if question_index < len(questions):
-
-        question = questions[question_index]
-
-        question_text = get_question_value = get_quiz_value(
-            question,
-            ["question_text", "question", "text"],
-            "Question"
-        )
-
-        options = get_question_options(question)
-
-        st.progress(
-            (question_index + 1) / len(questions)
-        )
-
-        st.caption(
-            f"Question {question_index + 1} of {len(questions)}"
-        )
-
-        st.subheader(str(question_text))
-
-        if not options:
+        except Exception:
 
             st.error(
-                "This question has no recognised answer options. "
-                "Please check its database structure."
+                "Unable to start this quiz. "
+                "Please try again or contact the administrator."
             )
-            return
 
-        option_labels = [
-            f"{key}. {value}"
-            for key, value in options.items()
-        ]
+    # Display an active quiz attempt
+    attempt_id = st.session_state.get(
+        "active_quiz_attempt"
+    )
 
-        selected_option = st.radio(
-            "Choose your answer",
-            option_labels,
-            key=f"quiz_question_{question['id']}"
-        )
+    questions = st.session_state.get(
+        "active_quiz_questions",
+        []
+    )
 
-        if st.button(
-            "Submit answer",
-            use_container_width=True,
-            key=f"submit_quiz_{question['id']}"
-        ):
+    if not attempt_id:
+        return
 
-            selected_key = selected_option.split(".", 1)[0]
+    if not questions:
 
-            try:
+        st.warning("This quiz does not contain any questions.")
+        return
 
-                result_response = supabase.rpc(
-                    "submit_quiz_answer",
-                    {
-                        "p_attempt_id": st.session_state.active_quiz_attempt,
-                        "p_question_id": question["id"],
-                        "p_selected_option": selected_key
-                    }
-                ).execute()
+    question_index = st.session_state.active_quiz_index
 
-                result = result_response.data
-
-                if isinstance(result, list) and result:
-                    result = result[0]
-
-                if not isinstance(result, dict):
-                    st.error("The quiz returned an unexpected response.")
-                    return
-
-                st.session_state.active_quiz_results.append(result)
-
-                st.session_state.active_quiz_index += 1
-
-                st.rerun()
-
-            except Exception as e:
-
-                st.error("Your answer could not be submitted.")
-                st.caption(str(e))
-
-    # -------------------------------------------------
-    # FINISH QUIZ
-    # -------------------------------------------------
-
-    else:
-
-        st.subheader("Quiz completed!")
+    if question_index >= len(questions):
 
         try:
 
             finish_response = supabase.rpc(
                 "finish_quiz_attempt",
                 {
-                    "p_attempt_id": st.session_state.active_quiz_attempt
+                    "p_attempt_id": attempt_id
                 }
             ).execute()
 
-            st.success(
-                "Your quiz has been completed and your result "
-                "has been recorded."
+            st.success("Quiz completed!")
+
+            st.write(
+                "Your answers have been submitted and your score "
+                "has been calculated."
             )
 
-            if finish_response.data is not None:
-                st.write(finish_response.data)
+            st.write(finish_response.data)
 
-            st.caption(
-                "Points are awarded by the database according "
-                "to the configured scoring rules."
+            st.session_state.active_quiz_attempt = None
+            st.session_state.active_quiz_questions = []
+            st.session_state.active_quiz_index = 0
+            st.session_state.active_quiz_results = []
+            st.session_state.active_quiz_id = None
+
+        except Exception:
+
+            st.error(
+                "Unable to finish your quiz. "
+                "Please try again."
             )
 
-            if st.button(
-                "Return to quiz selection",
-                use_container_width=True
-            ):
+        return
 
-                st.session_state.active_quiz_attempt = None
-                st.session_state.active_quiz_questions = []
-                st.session_state.active_quiz_index = 0
-                st.session_state.active_quiz_results = []
-                st.session_state.active_quiz_id = None
+    question = questions[question_index]
 
-                st.rerun()
-
-        except Exception as e:
-
-            st.error("Could not finish the quiz.")
-            st.caption(str(e))
-
-
-# =====================================================
-# PAGE ROUTING
-# =====================================================
-
-if page == "Explore & Learn":
-    explore_learn_page()
-
-if page == "Eco Quiz":
-    eco_quiz_page()
-
-# =====================================================
-# ACTION GALLERY
-# =====================================================
-
-def action_gallery_page():
-
-    show_page_header(
-        "Action Gallery",
-        "Showcase environmental initiatives and community action."
+    question_text = question.get(
+        "question_text",
+        question.get("question", "Question")
     )
 
-    if supabase is None:
-        st.error("Supabase is not connected.")
+    options = question.get("options", [])
+
+    if isinstance(options, dict):
+        options = list(options.values())
+
+    if not isinstance(options, list) or not options:
+
+        st.error(
+            "This question has no readable answer options."
+        )
         return
 
-    if not st.session_state.logged_in:
-        st.warning("Please log in to participate in the Action Gallery.")
-        return
+    st.progress(
+        (question_index + 1) / len(questions)
+    )
 
-    user_id = st.session_state.user_id
+    st.subheader(
+        f"Question {question_index + 1} of {len(questions)}"
+    )
 
-    # -------------------------------------------------
-    # LOAD ENVIRONMENTAL ACTIONS
-    # -------------------------------------------------
+    st.write(question_text)
 
-    st.subheader("Environmental activities")
+    selected_option = st.radio(
+        "Choose your answer",
+        options,
+        key=f"eco_quiz_answer_{attempt_id}_{question_index}"
+    )
 
-    try:
+    if st.button(
+        "Submit Answer",
+        use_container_width=True
+    ):
 
-        actions_response = (
-            supabase.table("environmental_actions")
-            .select("*")
-            .execute()
-        )
+        try:
 
-        actions = actions_response.data or []
+            answer_response = supabase.rpc(
+                "submit_quiz_answer",
+                {
+                    "p_attempt_id": attempt_id,
+                    "p_question_id": question["id"],
+                    "p_selected_option": str(selected_option)
+                }
+            ).execute()
 
-    except Exception as e:
-
-        st.error("Could not load environmental activities.")
-        st.caption(str(e))
-        actions = []
-
-    if actions:
-
-        for action in actions:
-
-            title = get_quiz_value(
-                action,
-                ["title", "action_name", "name"],
-                "Environmental activity"
+            st.session_state.active_quiz_results.append(
+                answer_response.data
             )
 
-            description = get_quiz_value(
-                action,
-                ["description", "details"],
-                "Community environmental initiative."
-            )
+            st.session_state.active_quiz_index += 1
 
-            category = get_quiz_value(
-                action,
-                ["category", "action_type"],
-                "Community action"
-            )
+            st.rerun()
 
-            with st.container(border=True):
+        except Exception:
 
-                st.markdown(f"### 🌱 {title}")
-
-                st.caption(f"Category: {category}")
-
-                st.write(description)
-
-    else:
-
-        st.info(
-            "No environmental activities are currently available."
+            st.error(
+                "Unable to submit your answer. "
+                "Please try again."
         )
 
-    st.divider()
-
-    # -------------------------------------------------
-    # SUBMIT AN ENVIRONMENTAL ACTION
-    # -------------------------------------------------
-
-    st.subheader("Share your environmental action")
-
-    with st.form("environmental_action_submission"):
-
-        action_title = st.text_input(
-            "Activity title"
-        )
-
-        action_description = st.text_area(
-            "Describe the activity",
-            placeholder=(
-                "What did you do? Where did it happen? "
-                "What was the community benefit?"
-            )
-        )
-
-        action_category = st.selectbox(
-            "Activity category",
-            [
-                "Community clean-up",
-                "Tree planting",
-                "Waste recycling",
-                "Environmental education",
-                "Water conservation",
-                "Biodiversity protection",
-                "Other"
-            ]
-        )
-
-        submitted = st.form_submit_button(
-            "Submit activity",
-            use_container_width=True
-        )
-
-        if submitted:
-
-            if not action_title.strip():
-                st.warning("Enter an activity title.")
-
-            elif not action_description.strip():
-                st.warning("Describe your environmental activity.")
-
-            else:
-
-                st.info(
-                    "Your activity is ready for submission. "
-                    "The database column structure must be confirmed "
-                    "before this form can write a record."
-                )
-
-    st.divider()
-
-    # -------------------------------------------------
-    # USER ACTION HISTORY
-    # -------------------------------------------------
-
-    st.subheader("My environmental activities")
-
-    try:
-
-        my_actions = (
-            supabase.table("user_actions")
-            .select("*")
-            .eq("user_id", user_id)
-            .execute()
-        )
-
-        records = my_actions.data or []
-
-        if records:
-
-            st.dataframe(
-                pd.DataFrame(records),
-                use_container_width=True,
-                hide_index=True
-            )
-
-        else:
-
-            st.info(
-                "Your submitted environmental actions "
-                "will appear here."
-            )
-
-    except Exception as e:
-
-        st.warning("Could not load your activity history.")
-        st.caption(str(e))
-
-
-# =====================================================
-# PAGE ROUTING
-# =====================================================
-
-if page == "Action Gallery":
-    action_gallery_page()
 
 # =====================================================
 # COMMUNITY GROUPS
@@ -2178,168 +1647,241 @@ if page == "Action Gallery":
 
 def community_groups_page():
 
-    show_page_header(
-        "Community Groups",
-        "Connect with people creating environmental change."
+    st.title("🤝 Community Groups")
+
+    st.write(
+        "Connect with people working together to create "
+        "cleaner and more sustainable communities."
     )
 
-    if supabase is None:
-        st.error("Supabase is not connected.")
+    if not supabase:
+        st.error("Database connection is unavailable.")
         return
-
-    if not st.session_state.logged_in:
-        st.warning("Please log in to access community groups.")
-        return
-
-    user_id = st.session_state.user_id
-
-    # -------------------------------------------------
-    # LOAD COMMUNITY GROUPS
-    # -------------------------------------------------
-
-    st.subheader("Discover groups")
 
     try:
-
-        groups_response = (
+        response = (
             supabase.table("community_groups")
             .select("*")
             .execute()
         )
 
-        groups = groups_response.data or []
+        groups = response.data or []
 
-    except Exception as e:
-
-        st.error("Could not load community groups.")
-        st.caption(str(e))
+    except Exception:
+        st.error("Unable to load community groups.")
         return
 
     if not groups:
+        show_empty_state(
+            "There are no community groups available yet."
+        )
+        return
 
-        st.info(
-            "No community groups are currently available."
+    for group in groups:
+
+        group_name = (
+            group.get("group_name")
+            or group.get("name")
+            or "Community Group"
         )
 
-    else:
+        description = group.get(
+            "description",
+            "A community working towards environmental improvement."
+        )
 
-        st.caption(f"{len(groups)} group(s) available.")
+        with st.container(border=True):
 
-        for group in groups:
+            st.subheader(f"🌱 {group_name}")
+            st.write(description)
 
-            group_id = group.get("id")
+            if group.get("location"):
+                st.caption(f"Location: {group['location']}")
 
-            group_name = get_quiz_value(
-                group,
-                ["group_name", "name", "title"],
-                "Community Group"
-            )
+            if is_logged_in():
 
-            description = get_quiz_value(
-                group,
-                ["description", "group_description"],
-                "A community environmental initiative."
-            )
+                group_id = group.get("id")
 
-            category = get_quiz_value(
-                group,
-                ["category", "focus_area"],
-                "Environmental action"
-            )
+                if group_id and st.button(
+                    "Request to Join",
+                    key=f"join_group_{group_id}"
+                ):
 
-            with st.container(border=True):
+                    try:
 
-                st.markdown(f"### 👥 {group_name}")
+                        supabase.table("group_memberships").insert({
+                            "group_id": group_id,
+                            "user_id": st.session_state.user_id,
+                            "status": "pending"
+                        }).execute()
 
-                st.write(description)
+                        st.success(
+                            "Your membership request has been submitted."
+                        )
 
-                st.caption(f"Focus: {category}")
+                    except Exception:
 
-                st.caption(f"Group reference: {group_id}")
+                        st.error(
+                            "Unable to submit your request. "
+                            "You may already have a membership request."
+                        )
 
-    st.divider()
+            else:
 
-    # -------------------------------------------------
-    # USER MEMBERSHIPS
-    # -------------------------------------------------
+                st.caption("Log in to request group membership.")
 
-    st.subheader("My group memberships")
+
+# =====================================================
+# COMMUNITY CHALLENGES
+# =====================================================
+
+def challenges_page():
+
+    st.title("🌍 Community Challenges")
+
+    st.write(
+        "Discover activities that encourage individuals "
+        "and communities to take environmental action."
+    )
+
+    if not supabase:
+        st.error("Database connection is unavailable.")
+        return
 
     try:
 
-        membership_response = (
-            supabase.table("group_memberships")
+        response = (
+            supabase.table("community_challenges")
             .select("*")
-            .eq("user_id", user_id)
             .execute()
         )
 
-        memberships = membership_response.data or []
+        challenges = response.data or []
 
-        if memberships:
+    except Exception:
 
-            membership_df = pd.DataFrame(memberships)
+        st.error("Unable to load community challenges.")
+        return
 
-            st.dataframe(
-                membership_df,
-                use_container_width=True,
-                hide_index=True
-            )
+    if not challenges:
 
-        else:
+        show_empty_state(
+            "No community challenges have been published yet."
+        )
+        return
 
-            st.info(
-                "You have not joined or requested to join "
-                "a community group yet."
-            )
+    for challenge in challenges:
 
-    except Exception as e:
+        title = (
+            challenge.get("title")
+            or challenge.get("challenge_name")
+            or "Community Challenge"
+        )
 
-        st.warning("Could not retrieve your memberships.")
-        st.caption(str(e))
+        description = challenge.get(
+            "description",
+            "Take part in a community environmental activity."
+        )
 
-    st.divider()
+        with st.container(border=True):
 
-    # -------------------------------------------------
-    # GROUP PARTICIPATION INFORMATION
-    # -------------------------------------------------
+            st.subheader(f"🌿 {title}")
+            st.write(description)
 
-    st.subheader("How group participation works")
+            if challenge.get("start_date"):
+                st.caption(
+                    f"Starts: {challenge['start_date']}"
+                )
 
-    eco_card(
-        "Discover",
-        "Explore groups and find initiatives that match "
-        "your environmental interests.",
-        "🔎"
-    )
+            if challenge.get("end_date"):
+                st.caption(
+                    f"Ends: {challenge['end_date']}"
+                )
 
-    eco_card(
-        "Request membership",
-        "Members can request to join groups. "
-        "Requests are subject to group approval.",
-        "📝"
-    )
-
-    eco_card(
-        "Lead initiatives",
-        "Approved group leaders can coordinate activities "
-        "and organise community participation.",
-        "🌱"
-    )
-
-    st.info(
-        "Group creation and membership request submission "
-        "will be activated after confirming the exact "
-        "database column names and policies."
-    )
+            if challenge.get("status"):
+                st.caption(
+                    f"Status: {challenge['status']}"
+                )
 
 
 # =====================================================
-# PAGE ROUTING
+# ACTION GALLERY
 # =====================================================
 
-if page == "Community Groups":
-    community_groups_page()
+def action_gallery_page():
+
+    st.title("📸 Environmental Action Gallery")
+
+    st.write(
+        "Explore environmental activities, community initiatives "
+        "and actions that inspire positive change."
+    )
+
+    if not supabase:
+        st.error("Database connection is unavailable.")
+        return
+
+    try:
+
+        response = (
+            supabase.table("environmental_actions")
+            .select("*")
+            .execute()
+        )
+
+        actions = response.data or []
+
+    except Exception:
+
+        st.error("Unable to load environmental activities.")
+        return
+
+    if not actions:
+
+        show_empty_state(
+            "The Action Gallery is waiting for its first "
+            "environmental activities."
+        )
+        return
+
+    st.markdown("---")
+
+    st.subheader("Community Environmental Activities")
+
+    for action in actions:
+
+        title = (
+            action.get("title")
+            or action.get("action_name")
+            or action.get("name")
+            or "Environmental Activity"
+        )
+
+        description = action.get(
+            "description",
+            "A community environmental initiative."
+        )
+
+        status = action.get("status", "Published")
+
+        with st.container(border=True):
+
+            st.subheader(f"🌱 {title}")
+
+            st.write(description)
+
+            if action.get("location"):
+                st.caption(
+                    f"📍 {action['location']}"
+                )
+
+            if action.get("created_at"):
+                st.caption(
+                    f"Added: {str(action['created_at'])[:10]}"
+                )
+
+            st.caption(f"Status: {status}")
+
 
 # =====================================================
 # COLLECTION MANAGEMENT
@@ -2347,24 +1889,29 @@ if page == "Community Groups":
 
 def collection_management_page():
 
-    show_page_header(
-        "Collection Management",
-        "View collection stations and manage collection records."
+    st.title("🚛 Collection Management")
+
+    st.write(
+        "View collection stations and available collection records "
+        "to support organised waste recovery."
     )
 
-    if supabase is None:
-        st.error("Supabase is not connected.")
+    if not is_logged_in():
+
+        st.warning(
+            "Please log in to access collection management."
+        )
         return
 
-    if not st.session_state.logged_in:
-        st.warning("Please log in to access collection management.")
+    if not supabase:
+
+        st.error("Database connection is unavailable.")
         return
 
-    # -------------------------------------------------
-    # COLLECTION STATIONS
-    # -------------------------------------------------
+    st.markdown("---")
 
-    st.subheader("Collection stations")
+    # Collection stations
+    st.subheader("Registered Collection Stations")
 
     try:
 
@@ -2378,30 +1925,26 @@ def collection_management_page():
 
         if stations:
 
-            station_df = pd.DataFrame(stations)
-
             st.dataframe(
-                station_df,
+                pd.DataFrame(stations),
                 use_container_width=True,
                 hide_index=True
             )
 
         else:
 
-            st.info("No registered stations found.")
+            show_empty_state(
+                "No collection stations are currently registered."
+            )
 
-    except Exception as e:
+    except Exception:
 
-        st.error("Could not retrieve collection stations.")
-        st.caption(str(e))
+        st.error("Unable to retrieve collection stations.")
 
-    st.divider()
+    st.markdown("---")
 
-    # -------------------------------------------------
-    # COLLECTION RECORDS
-    # -------------------------------------------------
-
-    st.subheader("Collection records")
+    # Collection records
+    st.subheader("Collection Records")
 
     try:
 
@@ -2415,558 +1958,345 @@ def collection_management_page():
 
         if records:
 
-            records_df = pd.DataFrame(records)
-
             st.dataframe(
-                records_df,
+                pd.DataFrame(records),
                 use_container_width=True,
                 hide_index=True
             )
 
-            st.caption(
-                "Records displayed are subject to the "
-                "access permissions configured in Supabase."
-            )
-
         else:
 
-            st.info(
-                "No collection records are available "
-                "for your account."
+            show_empty_state(
+                "No collection records are available yet."
             )
 
-    except Exception as e:
+    except Exception:
 
-        st.warning("Could not retrieve collection records.")
-        st.caption(str(e))
-
-    st.divider()
-
-    # -------------------------------------------------
-    # COLLECTION RECORD SUBMISSION
-    # -------------------------------------------------
-
-    st.subheader("Record a collection activity")
-
-    st.info(
-        "Collection record submission will be enabled "
-        "after confirming the exact collection_records "
-        "table columns and authorised submission roles."
-    )
-
-    eco_card(
-        "Station monitoring",
-        "Keep track of registered collection locations "
-        "and their recorded activity.",
-        "📍"
-    )
-
-    eco_card(
-        "Collection records",
-        "Maintain a record of collection activities "
-        "for accountability and reporting.",
-        "📋"
-    )
-
-    eco_card(
-        "Community coordination",
-        "Support coordination between collection points "
-        "and participating community members.",
-        "🤝"
-    )
-
-
-# =====================================================
-# PAGE ROUTING
-# =====================================================
-
-if page == "Collection Management":
-    collection_management_page()
-
-# =====================================================
-# ADMIN ACCESS CONTROL
-# =====================================================
-
-def is_admin():
-
-    if not st.session_state.get("logged_in"):
-        return False
-
-    profile = st.session_state.get("user") or {}
-
-    return profile.get("role") == "admin"
-
-
-def admin_access_required():
-
-    if not st.session_state.logged_in:
-        st.warning("Please log in first.")
-        return False
-
-    if not is_admin():
-        st.error(
-            "Access restricted. Administrator permissions "
-            "are required."
+        st.info(
+            "Collection records are not currently available "
+            "to this account."
         )
-        return False
 
-    return True
+    st.markdown("---")
+
+    st.caption(
+        "Collection record creation, assignment and verification "
+        "will be connected after confirming the existing database "
+        "columns and permissions."
+            )
 
 
 # =====================================================
-# VERIFY CONTRIBUTIONS
+# ADMIN: VERIFY CONTRIBUTIONS
 # =====================================================
 
 def verify_contributions_page():
 
-    show_page_header(
-        "Verify Contributions",
-        "Review submitted waste contributions and their verification status."
+    st.title("🛡️ Verify Contributions")
+
+    if not is_admin():
+
+        st.error("You do not have permission to access this page.")
+        return
+
+    if not supabase:
+
+        st.error("Database connection is unavailable.")
+        return
+
+    st.write(
+        "Review waste contributions submitted by EcoLoop members."
     )
-
-    if supabase is None:
-        st.error("Supabase is not connected.")
-        return
-
-    if not admin_access_required():
-        return
-
-    # -------------------------------------------------
-    # PENDING CONTRIBUTIONS
-    # -------------------------------------------------
-
-    st.subheader("Pending contributions")
 
     try:
 
         response = (
             supabase.table("waste_contributions")
-            .select(
-                "id, user_id, station_code, material_type, "
-                "weight, submitted_at, verification_status"
-            )
+            .select("*")
             .eq("verification_status", "pending")
             .order("submitted_at", desc=True)
             .execute()
         )
 
-        pending_records = response.data or []
+        pending = response.data or []
 
-        if pending_records:
+    except Exception:
+
+        st.error("Unable to retrieve pending contributions.")
+        return
+
+    st.metric("Pending Contributions", len(pending))
+
+    if not pending:
+
+        show_empty_state(
+            "There are no pending contributions to review."
+        )
+        return
+
+    for contribution in pending:
+
+        contribution_id = contribution.get("id")
+
+        with st.container(border=True):
+
+            st.subheader(
+                f"Contribution: {str(contribution_id)[:8]}"
+            )
+
+            st.write(
+                f"**Member ID:** {contribution.get('user_id', 'Unknown')}"
+            )
+
+            st.write(
+                f"**Station:** {contribution.get('station_code', 'Unknown')}"
+            )
+
+            st.write(
+                f"**Material:** {contribution.get('material_type', 'Unknown')}"
+            )
+
+            st.write(
+                f"**Weight:** {contribution.get('weight', 0)} kg"
+            )
+
+            st.write(
+                f"**Submitted:** {contribution.get('submitted_at', 'Unknown')}"
+            )
 
             st.caption(
-                f"{len(pending_records)} contribution(s) "
-                "awaiting review."
+                "Review the contribution before making a decision."
             )
 
-            pending_df = pd.DataFrame(pending_records)
+            col1, col2 = st.columns(2)
 
-            st.dataframe(
-                pending_df,
-                use_container_width=True,
-                hide_index=True
-            )
+            with col1:
 
-        else:
+                if st.button(
+                    "Approve",
+                    key=f"approve_{contribution_id}",
+                    use_container_width=True
+                ):
 
-            st.success("There are no pending contributions.")
+                    try:
 
-    except Exception as e:
+                        supabase.table("waste_contributions").update({
+                            "verification_status": "verified"
+                        }).eq(
+                            "id",
+                            contribution_id
+                        ).eq(
+                            "verification_status",
+                            "pending"
+                        ).execute()
 
-        st.error("Could not load pending contributions.")
-        st.caption(str(e))
+                        st.success("Contribution approved.")
+                        st.rerun()
 
-    st.divider()
+                    except Exception:
 
-    # -------------------------------------------------
-    # VERIFICATION WORKFLOW
-    # -------------------------------------------------
+                        st.error(
+                            "Approval failed. Check administrator permissions."
+                        )
 
-    st.subheader("Verification workflow")
+            with col2:
 
-    st.info(
-        "The review interface is available, but approval "
-        "and rejection actions are not enabled yet. "
-        "We must first confirm the database scoring rules "
-        "and point transaction workflow."
-    )
+                if st.button(
+                    "Reject",
+                    key=f"reject_{contribution_id}",
+                    use_container_width=True
+                ):
 
-    eco_card(
-        "Review",
-        "Examine the contribution details and supporting "
-        "information before making a decision.",
-        "🔎"
-    )
+                    try:
 
-    eco_card(
-        "Verify",
-        "Confirm that the contribution meets the platform's "
-        "verification requirements.",
-        "✅"
-    )
+                        supabase.table("waste_contributions").update({
+                            "verification_status": "rejected"
+                        }).eq(
+                            "id",
+                            contribution_id
+                        ).eq(
+                            "verification_status",
+                            "pending"
+                        ).execute()
 
-    eco_card(
-        "Award points",
-        "Award points through the authorised scoring workflow "
-        "after a successful verification.",
-        "⭐"
-    )
+                        st.success("Contribution rejected.")
+                        st.rerun()
+
+                    except Exception:
+
+                        st.error(
+                            "Rejection failed. Check administrator permissions."
+                        )
 
 
 # =====================================================
-# ADMIN STUDIO
+# ADMIN: ADMIN STUDIO
 # =====================================================
 
 def admin_studio_page():
 
-    show_page_header(
-        "Admin Studio",
-        "Administrator workspace for EcoLoop platform oversight."
-    )
+    st.title("⚙️ Admin Studio")
 
-    if supabase is None:
-        st.error("Supabase is not connected.")
+    if not is_admin():
+
+        st.error("You do not have permission to access this page.")
         return
 
-    if not admin_access_required():
+    if not supabase:
+
+        st.error("Database connection is unavailable.")
         return
 
-    st.success("Administrator access confirmed.")
-
-    # -------------------------------------------------
-    # PLATFORM OVERVIEW
-    # -------------------------------------------------
-
-    st.subheader("Platform overview")
-
-    try:
-
-        contributions = (
-            supabase.table("waste_contributions")
-            .select("id, verification_status")
-            .execute()
-        )
-
-        records = contributions.data or []
-
-        total = len(records)
-
-        pending = sum(
-            1 for item in records
-            if item.get("verification_status") == "pending"
-        )
-
-        verified = sum(
-            1 for item in records
-            if item.get("verification_status") == "verified"
-        )
-
-        rejected = sum(
-            1 for item in records
-            if item.get("verification_status") == "rejected"
-        )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            metric_card("Total submissions", total, "📋")
-
-        with col2:
-            metric_card("Pending review", pending, "⏳")
-
-        col3, col4 = st.columns(2)
-
-        with col3:
-            metric_card("Verified", verified, "✅")
-
-        with col4:
-            metric_card("Rejected", rejected, "❌")
-
-    except Exception as e:
-
-        st.warning("Could not load platform statistics.")
-        st.caption(str(e))
-
-    st.divider()
-
-    # -------------------------------------------------
-    # ADMIN MODULES
-    # -------------------------------------------------
-
-    st.subheader("Administration modules")
-
-    eco_card(
-        "Contribution verification",
-        "Review and verify environmental contributions.",
-        "♻️"
+    st.write(
+        "An overview of EcoLoop Node platform activity."
     )
 
-    eco_card(
-        "Community oversight",
-        "Support responsible management of community groups.",
-        "👥"
-    )
+    table_names = [
+        ("Registered Profiles", "profiles"),
+        ("Collection Stations", "collection_stations"),
+        ("Waste Contributions", "waste_contributions"),
+        ("Community Groups", "community_groups"),
+        ("Environmental Actions", "environmental_actions"),
+        ("Community Challenges", "community_challenges")
+    ]
 
-    eco_card(
-        "Quiz management",
-        "Manage environmental learning and quiz content.",
-        "🧠"
-    )
+    columns = st.columns(3)
 
-    eco_card(
-        "Environmental reporting",
-        "Monitor recorded activities and platform progress.",
-        "🌍"
-    )
+    for index, (label, table_name) in enumerate(table_names):
 
-    st.warning(
-        "Administrator-only access is enforced in the app "
-        "interface. Supabase Row Level Security must also "
-        "enforce the same permissions on every database action."
-    )
+        count = get_table_count(table_name)
+
+        with columns[index % 3]:
+
+            st.metric(label, count)
 
 
 # =====================================================
-# PAGE ROUTING
-# =====================================================
-
-if page == "Verify Contributions":
-    verify_contributions_page()
-
-if page == "Admin Studio":
-    admin_studio_page()
-
-# =====================================================
-# ABOUT NGIH
+# ABOUT NEXT GEN IMPACT HUB
 # =====================================================
 
 def about_ngih_page():
 
-    show_page_header(
-        "About NGIH",
-        "The organisation behind EcoLoop Node 2.0."
-    )
-
-    st.markdown(
-        """
-        <div class="eco-hero">
-            <h1>Next Gen Impact Hub</h1>
-            <p>
-                Creating a generation of youth who lead and
-                influence across governance, economy,
-                environment and technology.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.subheader("Who we are")
+    st.title("🌍 About Next Gen Impact Hub")
 
     st.write(
-        """
-        Next Gen Impact Hub (NGIH) is a youth-centred
-        initiative focused on developing young people
-        as active participants in shaping their communities
-        and contributing to sustainable development.
-        """
+        "Next Gen Impact Hub (NGIH) is a youth-focused initiative "
+        "committed to creating opportunities for young people to "
+        "lead, innovate and influence positive change."
     )
+
+    st.markdown("---")
+
+    st.subheader("Our Mission")
 
     st.write(
-        """
-        NGIH seeks to create opportunities for young people
-        to learn, innovate, participate and lead across
-        different areas of society.
-        """
+        "To create a generation of youth who lead and influence "
+        "across governance, economy, environment and technology."
     )
 
-    st.divider()
+    st.markdown("---")
 
-    st.subheader("Our four pillars")
+    st.subheader("Our Four Pillars")
+
+    pillars = [
+        (
+            "Governance & Civic Education",
+            "Promoting informed, active and responsible citizenship."
+        ),
+        (
+            "Climate Action & Environment",
+            "Encouraging environmental responsibility and sustainable communities."
+        ),
+        (
+            "Business & Entrepreneurship",
+            "Supporting innovation, enterprise and economic participation."
+        ),
+        (
+            "Technology, Innovation, Media & Arts",
+            "Using creativity and technology to develop solutions and amplify ideas."
+        )
+    ]
+
+    for title, description in pillars:
+
+        eco_card(
+            title,
+            description,
+            "✦"
+        )
+
+    st.markdown("---")
+
+    st.subheader("EcoLoop Node")
+
+    st.write(
+        "EcoLoop Node is an environmental technology initiative "
+        "under NGIH's Climate Action & Environment pillar. "
+        "It connects environmental action, community participation, "
+        "learning and measurable impact."
+    )
+
+
+# =====================================================
+# SYSTEM DIAGNOSTICS
+# =====================================================
+
+def system_diagnostics_page():
+
+    st.title("🔧 System Diagnostics")
+
+    if not is_admin():
+
+        st.error("Administrator access is required.")
+        return
+
+    st.write(
+        "A basic overview of the application's connection status."
+    )
+
+    st.markdown("---")
 
     col1, col2 = st.columns(2)
 
     with col1:
 
-        eco_card(
-            "Governance & Civic Education",
-            "Promoting informed citizenship, accountability "
-            "and meaningful youth participation.",
-            "🏛️"
-        )
+        if supabase:
 
-        eco_card(
-            "Climate Action & Environment",
-            "Encouraging environmental responsibility, "
-            "community resilience and sustainable practices.",
-            "🌍"
-        )
+            st.success("Supabase client initialised")
+
+        else:
+
+            st.error("Supabase client unavailable")
 
     with col2:
 
-        eco_card(
-            "Business & Entrepreneurship",
-            "Supporting innovation, enterprise development "
-            "and youth economic participation.",
-            "💼"
-        )
+        if is_logged_in():
 
-        eco_card(
-            "Technology, Innovation, Media & Arts",
-            "Using creativity, digital tools and innovation "
-            "to address community challenges.",
-            "💡"
-        )
+            st.success("User session active")
 
-    st.divider()
+        else:
 
-    st.subheader("About EcoLoop")
+            st.warning("No active user session")
+
+    st.markdown("---")
+
+    st.subheader("Application Information")
+
+    st.write(f"**Application:** {APP_NAME}")
+
+    st.write(f"**Organisation:** {NGIH_NAME}")
 
     st.write(
-        """
-        EcoLoop Node 2.0 is an environmental technology
-        initiative under NGIH's Climate Action & Environment
-        pillar.
-
-        It aims to connect environmental education,
-        responsible waste management, community participation
-        and digital innovation through one accessible platform.
-        """
+        f"**Authenticated user:** "
+        f"{st.session_state.get('user_id') or 'None'}"
     )
 
-    st.divider()
-
-    st.subheader("Our approach")
-
-    st.markdown(
-        """
-        - **Learn:** Make environmental knowledge accessible.
-        - **Participate:** Encourage practical community action.
-        - **Connect:** Bring people and initiatives together.
-        - **Measure:** Track verified contributions and progress.
-        - **Innovate:** Explore technology-driven environmental solutions.
-        """
+    st.write(
+        f"**Account role:** "
+        f"{(st.session_state.get('user') or {}).get('role', 'Guest')}"
     )
 
-    st.markdown(
-        f"""
-        <div class="eco-footer">
-            <strong>{APP_NAME}</strong><br>
-            An initiative of {NGIH_NAME}<br>
-            Climate Action & Environment
-        </div>
-        """,
-        unsafe_allow_html=True
+    st.caption(
+        "These diagnostics report basic application state. "
+        "They do not replace a full security or database audit."
     )
-
-
-# =====================================================
-# FINAL PAGE ROUTING
-# =====================================================
-
-if page == "About NGIH":
-    about_ngih_page()
-
-
-# =====================================================
-# APPLICATION FOOTER
-# =====================================================
-
-if page != "Home" and page != "About NGIH":
-
-    st.markdown(
-        f"""
-        <div class="eco-footer">
-            {APP_NAME} | {NGIH_NAME}<br>
-            Building sustainable communities through
-            youth participation and innovation.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-# =====================================================
-# ECOLOOP NODE 2.0 — SYSTEM DIAGNOSTICS
-# =====================================================
-
-def system_diagnostics_page():
-
-    show_page_header(
-        "System Diagnostics",
-        "Check the main application connections."
-    )
-
-    st.subheader("Application status")
-
-    # Supabase connection
-    if supabase is not None:
-        st.success("Supabase client initialised.")
-    else:
-        st.error("Supabase connection is unavailable.")
-
-    # Authentication status
-    if st.session_state.get("logged_in", False):
-
-        st.success("A user is signed in.")
-
-        user = st.session_state.get("user")
-
-        if user:
-            st.write("User ID:", user.id)
-
-        profile = st.session_state.get("profile")
-
-        if profile:
-            st.write(
-                "Profile:",
-                profile.get("full_name", "Name not provided")
-            )
-            st.write(
-                "Account role:",
-                profile.get("role", "Not assigned")
-            )
-        else:
-            st.warning("No profile information was loaded.")
-
-    else:
-        st.info("No user is currently signed in.")
-
-    st.divider()
-
-    st.subheader("Database connection test")
-
-    if st.button("Test database connection"):
-
-        if supabase is None:
-            st.error("Supabase client is unavailable.")
-
-        else:
-            try:
-                result = (
-                    supabase
-                    .table("collection_stations")
-                    .select("station_code")
-                    .limit(1)
-                    .execute()
-                )
-
-                st.success("Database query completed.")
-
-                if result.data:
-                    st.write("A collection station was found.")
-                else:
-                    st.warning(
-                        "The query worked, but no station was returned."
-                    )
-
-            except Exception as e:
-                st.error("Database query failed.")
-                st.code(str(e))
-
-
-# =====================================================
-# DIAGNOSTICS ROUTE
-# =====================================================
-
-if page == "System Diagnostics":
-    system_diagnostics_page()
