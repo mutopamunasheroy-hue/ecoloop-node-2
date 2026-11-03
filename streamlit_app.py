@@ -4,6 +4,7 @@ import qrcode
 import io
 import uuid
 from datetime import date
+from supabase import create_client
 
 # =====================================================
 # ECOLOOP NODE 2.0
@@ -15,6 +16,27 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+@st.cache_resource
+def get_supabase_client():
+    return create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_KEY"]
+    )
+
+try:
+    supabase = get_supabase_client()
+
+    supabase.table("collection_stations").select(
+        "station_code"
+    ).limit(1).execute()
+
+    st.sidebar.success("Supabase connected")
+
+except Exception:
+    supabase = None
+    st.sidebar.error(
+        "Supabase connection failed. Check app settings."
+    )
 
 # =====================================================
 # DESIGN SYSTEM
