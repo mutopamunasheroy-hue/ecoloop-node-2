@@ -422,11 +422,13 @@ def home_page():
     with col3:
         metric_card("Points earned", "0", "⭐")
 
+    
     st.caption(
         "These are starter dashboard values. "
         "They will be replaced with verified database records "
-        as the relevant features are connected."
+        "as the relevant features are connected."
     )
+
 
     st.divider()
 
