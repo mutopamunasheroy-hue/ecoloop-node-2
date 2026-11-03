@@ -242,36 +242,57 @@ if (
 
     restore_auth_session()
 
+   
 # =====================================================
 # ECOLOOP NODE — VISUAL DESIGN SYSTEM
 # =====================================================
 
+import os
+
+# -----------------------------------------------------
+# NGIH BRAND COLOURS
+# -----------------------------------------------------
+
+NGIH_FOREST = "#176B45"
+NGIH_LIME = "#A8D94F"
+NGIH_TEAL = "#168C83"
+NGIH_AMBER = "#E9A23B"
+NGIH_PURPLE = "#7654A6"
+
+LOGO_FILE = "IMG-20261028-WA0000.jpg"
+
+# -----------------------------------------------------
+# GLOBAL VISUAL STYLING
+# -----------------------------------------------------
+
 st.markdown("""
 <style>
-
-/* -------------------------------
-   GLOBAL TYPOGRAPHY
--------------------------------- */
 
 @import url(
     'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap'
 );
 
+:root {
+    --eco-green: #176B45;
+    --eco-lime: #A8D94F;
+    --eco-teal: #168C83;
+    --eco-amber: #E9A23B;
+    --eco-purple: #7654A6;
+}
+
+/* GLOBAL TYPOGRAPHY */
+
 html, body, [class*="css"] {
     font-family: 'DM Sans', sans-serif;
 }
 
-/* -------------------------------
-   MAIN APP BACKGROUND
--------------------------------- */
+/* MAIN BACKGROUND */
 
 .stApp {
     background-color: var(--background-color);
 }
 
-/* -------------------------------
-   MAIN HEADINGS
--------------------------------- */
+/* HEADINGS */
 
 h1, h2, h3 {
     font-weight: 800 !important;
@@ -279,34 +300,41 @@ h1, h2, h3 {
 }
 
 h1 {
-    color: #176B45 !important;
+    color: var(--eco-green) !important;
 }
 
 h2, h3 {
     color: var(--text-color) !important;
 }
 
-/* -------------------------------
-   BUTTONS
--------------------------------- */
+/* BODY TEXT */
+
+p, label, .stMarkdown, .stCaption {
+    line-height: 1.6;
+}
+
+/* BUTTONS */
 
 .stButton > button {
     border-radius: 12px;
-    min-height: 44px;
+    min-height: 46px;
     font-weight: 700;
-    border: 1px solid #176B45;
+    border: 1px solid var(--eco-green);
     transition: 0.2s ease;
 }
 
-.stButton > button:hover {
-    border-color: #A8D94F;
-    color: #176B45;
-    transform: translateY(-1px);
+.stButton > button[kind="primary"] {
+    background-color: var(--eco-green);
+    color: white;
+    border: 1px solid var(--eco-green);
 }
 
-/* -------------------------------
-   INPUT FIELDS
--------------------------------- */
+.stButton > button:hover {
+    border-color: var(--eco-lime);
+    color: var(--eco-green);
+}
+
+/* INPUT FIELDS */
 
 .stTextInput input,
 .stNumberInput input,
@@ -315,9 +343,7 @@ h2, h3 {
     border-radius: 10px;
 }
 
-/* -------------------------------
-   SIDEBAR
--------------------------------- */
+/* SIDEBAR */
 
 section[data-testid="stSidebar"] {
     min-width: 260px;
@@ -331,16 +357,14 @@ section[data-testid="stSidebar"] button {
     text-align: left;
 }
 
-/* -------------------------------
-   SIDEBAR MENU CONTROL
--------------------------------- */
+/* SIDEBAR MENU CONTROL */
 
 button[data-testid="stSidebarCollapsedControl"],
 button[data-testid="stSidebarCollapseButton"] {
-    min-width: 44px !important;
-    min-height: 44px !important;
-    width: 44px !important;
-    height: 44px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    width: 48px !important;
+    height: 48px !important;
     border-radius: 10px !important;
     border: 2px solid #A8D94F !important;
     background-color: #176B45 !important;
@@ -351,20 +375,19 @@ button[data-testid="stSidebarCollapseButton"] {
 
 button[data-testid="stSidebarCollapsedControl"] svg,
 button[data-testid="stSidebarCollapseButton"] svg {
-    width: 24px !important;
-    height: 24px !important;
+    width: 25px !important;
+    height: 25px !important;
     color: white !important;
     stroke: white !important;
 }
 
-/* -------------------------------
-   ECOLOOP CARDS
--------------------------------- */
+/* ECOLOOP CARDS */
 
 .eco-card {
     padding: 20px;
     border-radius: 16px;
     border: 1px solid rgba(128, 128, 128, 0.2);
+    border-left: 5px solid var(--eco-lime);
     background: var(--secondary-background-color);
     margin-bottom: 16px;
 }
@@ -377,40 +400,39 @@ button[data-testid="stSidebarCollapseButton"] svg {
 
 .eco-card-description {
     font-size: 14px;
-    line-height: 1.6;
+    line-height: 1.7;
 }
 
-/* -------------------------------
-   METRIC CARDS
--------------------------------- */
+/* METRIC CARDS */
 
 [data-testid="stMetric"] {
     background: var(--secondary-background-color);
     padding: 16px;
     border-radius: 14px;
     border: 1px solid rgba(128, 128, 128, 0.2);
+    border-top: 3px solid var(--eco-green);
 }
 
-/* -------------------------------
-   ALERTS AND NOTICES
--------------------------------- */
+/* ALERTS */
 
 div[data-testid="stAlert"] {
     border-radius: 12px;
 }
 
-/* -------------------------------
-   TABLES
--------------------------------- */
+/* TABLES */
 
 [data-testid="stDataFrame"] {
     border-radius: 12px;
     overflow: hidden;
 }
 
-/* -------------------------------
-   MOBILE LAYOUT
--------------------------------- */
+/* LINKS */
+
+a {
+    color: var(--eco-teal);
+}
+
+/* MOBILE LAYOUT */
 
 @media (max-width: 768px) {
 
@@ -437,12 +459,25 @@ div[data-testid="stAlert"] {
     }
 
     .stButton > button {
-        min-height: 46px;
+        min-height: 48px;
     }
 }
 
 </style>
 """, unsafe_allow_html=True)
+
+
+# =====================================================
+# NGIH LOGO DISPLAY
+# =====================================================
+
+def show_ngih_logo():
+
+    if os.path.exists(LOGO_FILE):
+        st.image(
+            LOGO_FILE,
+            width=180
+        )
 
 
 # =====================================================
@@ -497,6 +532,9 @@ def get_table_count(table_name):
 
     except Exception:
         return 0
+
+
+
 
 # =====================================================
 # ECOLOOP NODE — NAVIGATION STRUCTURE
