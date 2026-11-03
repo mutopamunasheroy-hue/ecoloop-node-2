@@ -468,18 +468,40 @@ a {
 
 
 # =====================================================
-# NGIH LOGO DISPLAY
+# ECOLOOP NODE — MAIN APP HEADER
 # =====================================================
 
-def show_ngih_logo():
+import os
 
-    if os.path.exists(LOGO_FILE):
-        st.image(
-            LOGO_FILE,
-            width=180
+LOGO_FILE = "IMG-20261028-WA0000.jpg"
+
+
+def show_app_header():
+
+    left, right = st.columns([1, 3])
+
+    with left:
+        if os.path.exists(LOGO_FILE):
+            st.image(
+                LOGO_FILE,
+                width=190
+            )
+        else:
+            st.warning("NGIH logo not found.")
+
+    with right:
+        st.markdown(
+            f"<h1 style='margin-bottom:0;'>{APP_NAME}</h1>",
+            unsafe_allow_html=True
         )
 
+        st.markdown(
+            f"**Powered by {NGIH_NAME} (NGIH)**"
+        )
 
+        st.caption(APP_TAGLINE)
+
+    st.divider()
 # =====================================================
 # REUSABLE PAGE DESIGN COMPONENTS
 # =====================================================
@@ -4128,6 +4150,7 @@ PAGE_ROUTES = {
 # ---------------------------------------------
 
 render_navigation()
+show_app_header()
 
 
 # ---------------------------------------------
@@ -4146,17 +4169,20 @@ selected_page = PAGE_ROUTES.get(
 
 selected_page()
 
-
 # ---------------------------------------------
 # NGIH FOOTER — ECOLOOP NODE
 # ---------------------------------------------
 
 st.divider()
 
-st.markdown("### ♻️ EcoLoop Node")
+footer_logo, footer_text = st.columns([1, 4])
 
-st.markdown("**Powered by Next Gen Impact Hub (NGIH)**")
+with footer_logo:
+    if os.path.exists(LOGO_FILE):
+        st.image(LOGO_FILE, width=75)
 
-st.caption("Designed by Munashe Roy Mutopa — Project Coordinator")
-
-st.caption("Version 2.0")
+with footer_text:
+    st.markdown("### EcoLoop Node")
+    st.markdown("**Powered by Next Gen Impact Hub (NGIH)**")
+    st.caption("Designed by Munashe Roy Mutopa — Project Coordinator")
+    st.caption("Version 2.0")
