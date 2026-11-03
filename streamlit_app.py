@@ -5,10 +5,11 @@ import qrcode
 from pathlib import Path
 from io import BytesIO
 from datetime import datetime
+import re
 
-# --------------------------------------------------
+# ==================================================
 # PAGE CONFIGURATION
-# --------------------------------------------------
+# ==================================================
 
 st.set_page_config(
     page_title="EcoLoop Node 2.0",
@@ -19,64 +20,115 @@ st.set_page_config(
 
 LOGO_FILE = "IMG-20261028-WA0000.jpg"
 
-# --------------------------------------------------
-# DESIGN
-# --------------------------------------------------
+# ==================================================
+# DESIGN SYSTEM
+# ==================================================
 
 st.markdown("""
 <style>
 .stApp {
-    background-color: #F4F8F5;
+    background: #F5F8F5;
+    color: #24342A;
 }
-h1, h2, h3 {
-    color: #176B45;
+
+[data-testid="stHeader"] {
+    background: #F5F8F5;
 }
+
+h1, h2, h3, h4 {
+    color: #145C3A !important;
+}
+
+p, label, li {
+    color: #293B30;
+}
+
+[data-testid="stSidebar"] {
+    background: #123D2B;
+}
+
+[data-testid="stSidebar"] * {
+    color: #FFFFFF !important;
+}
+
+[data-testid="stSidebar"] .stRadio label {
+    color: #FFFFFF !important;
+}
+
 [data-testid="stMetric"] {
-    background: white;
+    background: #FFFFFF;
     padding: 18px;
-    border-radius: 12px;
-    border: 1px solid #E0EAE3;
+    border: 1px solid #DCE8DF;
+    border-radius: 13px;
 }
-div.stButton > button {
-    background-color: #176B45;
-    color: white;
-    border-radius: 8px;
+
+[data-testid="stMetricLabel"] {
+    color: #53685A !important;
+}
+
+[data-testid="stMetricValue"] {
+    color: #145C3A !important;
+}
+
+.stTextInput input,
+.stNumberInput input,
+.stSelectbox div[data-baseweb="select"],
+.stTextArea textarea {
+    background: #FFFFFF !important;
+    color: #24342A !important;
+}
+
+div.stButton > button,
+div.stFormSubmitButton > button {
+    background: #176B45;
+    color: white !important;
+    border-radius: 9px;
     border: none;
     min-height: 42px;
+    font-weight: 600;
 }
-div.stButton > button:hover {
-    background-color: #104D32;
-    color: white;
+
+div.stButton > button:hover,
+div.stFormSubmitButton > button:hover {
+    background: #104D32;
+    color: white !important;
 }
+
 .eco-footer {
     text-align: center;
-    color: #60756A;
-    padding: 25px 5px 10px 5px;
+    color: #52675A;
+    padding: 25px 5px;
     border-top: 1px solid #DCE7DF;
-    margin-top: 35px;
+    margin-top: 40px;
 }
-.small-note {
+
+.eco-subtitle {
     color: #60756A;
-    font-size: 13px;
+    font-size: 15px;
 }
+
+div[data-testid="stExpander"] {
+    background: #FFFFFF;
+    border-radius: 10px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
-# --------------------------------------------------
+# ==================================================
 # SESSION DATA
-# --------------------------------------------------
+# ==================================================
 
-if "users" not in st.session_state:
-    st.session_state.users = []
+defaults = {
+    "users": [],
+    "records": [],
+    "collected": [],
+    "current_user": None
+}
 
-if "records" not in st.session_state:
-    st.session_state.records = []
-
-if "current_user" not in st.session_state:
-    st.session_state.current_user = None
-
-if "collected" not in st.session_state:
-    st.session_state.collected = []
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 STATIONS = {
     "ECO001": "City Centre Station",
@@ -93,9 +145,9 @@ MATERIALS = [
     "Electronic"
 ]
 
-# --------------------------------------------------
+# ==================================================
 # HELPER FUNCTIONS
-# --------------------------------------------------
+# ==================================================
 
 def approved_records():
     return [
@@ -107,6 +159,14 @@ def approved_records():
 def total_weight():
     return sum(
         r["weight"] for r in approved_records()
+    )
+
+
+def user_points(username):
+    return sum(
+        r["points"]
+        for r in approved_records()
+        if r["username"] == username
     )
 
 
@@ -132,23 +192,17 @@ def make_qr(station_id):
     return output
 
 
-def get_points(user):
-    return sum(
-        r["points"]
-        for r in approved_records()
-        if r["user"] == user
+def valid_email(email):
+    return bool(
+        re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email)
     )
 
 
-def get_user_names():
-    return [u["name"] for u in st.session_state.users]
+# ==================================================
+# BRAND HEADER
+# ==================================================
 
-
-# --------------------------------------------------
-# HEADER AND BRANDING
-# --------------------------------------------------
-
-logo_col, title_col = st.columns([1, 5])
+logo_col, brand_col = st.columns([1, 5])
 
 with logo_col:
     if Path(LOGO_FILE).is_file():
@@ -156,94 +210,80 @@ with logo_col:
     else:
         st.markdown("## ♻️ NGIH")
 
-with title_col:
+with brand_col:
     st.markdown(
         "<h1 style='margin-bottom:0;'>EcoLoop Node 2.0</h1>",
         unsafe_allow_html=True
     )
     st.markdown(
-        "<p style='color:#60756A;margin-top:0;'>"
-        "Smart Waste Management & Recycling Coordination"
+        "<p class='eco-subtitle'>"
+        "Intelligent Waste Management & Recycling Coordination"
         "</p>",
         unsafe_allow_html=True
     )
 
 st.divider()
 
-# --------------------------------------------------
-# SIDEBAR NAVIGATION
-# --------------------------------------------------
+# ==================================================
+# NAVIGATION
+# ==================================================
 
 st.sidebar.markdown("## ♻️ EcoLoop Node")
 
 if Path(LOGO_FILE).is_file():
-    st.sidebar.image(LOGO_FILE, width=100)
+    st.sidebar.image(LOGO_FILE, width=115)
 
-st.sidebar.caption("An NGIH environmental technology initiative")
+st.sidebar.caption("Next Gen Impact Hub | NGIH")
 
 page = st.sidebar.radio(
-    "NAVIGATION",
+    "EXPLORE PLATFORM",
     [
-        "Home Dashboard",
-        "User Registration",
+        "Home",
+        "Register",
+        "My Profile",
         "Record Waste",
-        "Station QR Codes",
-        "Contribution Verification",
+        "QR Stations",
+        "Verify Contributions",
         "Leaderboard",
         "Collection Management",
         "Environmental Impact",
-        "About EcoLoop"
+        "About"
     ]
 )
 
 st.sidebar.divider()
 
-st.sidebar.markdown("### Platform status")
-st.sidebar.success("Demonstration mode")
+st.sidebar.markdown("### Platform information")
+st.sidebar.success("Demo platform active")
 st.sidebar.caption(
-    "Hardware sensors and live multi-user storage "
-    "are planned for future development."
+    "Digital demonstration. Secure accounts, shared database "
+    "and physical sensors are future development stages."
 )
 
-# --------------------------------------------------
-# HOME DASHBOARD
-# --------------------------------------------------
+# ==================================================
+# HOME
+# ==================================================
 
-if page == "Home Dashboard":
+if page == "Home":
 
     st.title("Welcome to EcoLoop")
     st.write(
-        "A smarter approach to waste separation, "
-        "recycling participation and collection coordination."
+        "Turning waste into opportunity through technology, "
+        "community participation and smarter recycling."
     )
 
     approved = approved_records()
 
-    col1, col2, col3, col4 = st.columns(4)
+    a, b, c, d = st.columns(4)
 
-    col1.metric(
-        "Registered Users",
-        len(st.session_state.users)
-    )
-
-    col2.metric(
-        "Approved Contributions",
-        len(approved)
-    )
-
-    col3.metric(
-        "Waste Recovered",
-        f"{total_weight():.1f} kg"
-    )
-
-    col4.metric(
-        "Collection Stations",
-        len(STATIONS)
-    )
+    a.metric("Registered Participants", len(st.session_state.users))
+    b.metric("Approved Contributions", len(approved))
+    c.metric("Waste Recovered", f"{total_weight():.1f} kg")
+    d.metric("Collection Stations", len(STATIONS))
 
     st.divider()
 
-    left, right = st.columns(2)
+    left, right = st.columns([1.4, 1])
 
     with left:
         st.subheader("Waste Recovery Overview")
@@ -251,72 +291,107 @@ if page == "Home Dashboard":
         if approved:
             material_data = {}
 
-            for r in approved:
-                material_data[r["material"]] = (
-                    material_data.get(r["material"], 0)
-                    + r["weight"]
+            for record in approved:
+                material_data[record["material"]] = (
+                    material_data.get(record["material"], 0)
+                    + record["weight"]
                 )
 
-            chart_df = pd.DataFrame(
+            df = pd.DataFrame(
                 list(material_data.items()),
                 columns=["Material", "Weight (kg)"]
             )
 
-            st.bar_chart(
-                chart_df.set_index("Material")
-            )
+            st.bar_chart(df.set_index("Material"))
+
         else:
             st.info(
-                "No approved contributions yet. "
-                "Start by recording a contribution."
+                "No approved waste contributions yet. "
+                "Your recovery data will appear here."
             )
 
     with right:
         st.subheader("How EcoLoop Works")
 
         st.markdown("""
-        1. **Register:** Join the EcoLoop community.
-        2. **Separate:** Sort waste by material.
-        3. **Contribute:** Record your waste contribution.
-        4. **Verify:** Contributions are checked.
-        5. **Collect:** Waste is organised for collection.
-        6. **Measure:** Track recycling participation.
+        **01 — Register**
+
+        Join the EcoLoop community.
+
+        **02 — Separate**
+
+        Sort waste by material.
+
+        **03 — Contribute**
+
+        Record your waste contribution.
+
+        **04 — Verify**
+
+        Contributions are checked.
+
+        **05 — Recover**
+
+        Organise waste for collection.
+
+        **06 — Measure**
+
+        Track environmental participation.
         """)
 
     st.divider()
-    st.subheader("Our Collection Stations")
+    st.subheader("Our Digital Collection Network")
 
-    station_cols = st.columns(3)
+    cols = st.columns(3)
 
-    for i, (station_id, station_name) in enumerate(
-        STATIONS.items()
-    ):
-        with station_cols[i]:
+    for i, (station_id, name) in enumerate(STATIONS.items()):
+        with cols[i]:
             st.markdown(f"### {station_id}")
-            st.write(station_name)
-            st.caption("Digital demonstration station")
+            st.write(name)
+            st.caption("Demonstration station")
 
-# --------------------------------------------------
-# USER REGISTRATION
-# --------------------------------------------------
+# ==================================================
+# REGISTRATION
+# ==================================================
 
-elif page == "User Registration":
+elif page == "Register":
 
-    st.title("Join the EcoLoop Community")
+    st.title("Create Your EcoLoop Profile")
 
     st.write(
-        "Register to participate in waste recovery "
-        "and environmental activities."
+        "Become part of a community working towards "
+        "better waste management and environmental sustainability."
+    )
+
+    st.info(
+        "Complete this form to create your demonstration profile. "
+        "You can then record contributions and participate "
+        "in EcoLoop activities."
     )
 
     with st.form("registration_form"):
 
-        name = st.text_input("Full name")
+        st.subheader("Personal Information")
 
-        email = st.text_input("Email address")
+        full_name = st.text_input(
+            "Full Name",
+            placeholder="Enter your full name"
+        )
+
+        username = st.text_input(
+            "Choose a Username",
+            placeholder="Example: EcoChampion01"
+        )
+
+        email = st.text_input(
+            "Email Address",
+            placeholder="Example: user@example.com"
+        )
+
+        st.subheader("Community Information")
 
         user_type = st.selectbox(
-            "Account type",
+            "Account Type",
             [
                 "Individual",
                 "School",
@@ -326,52 +401,134 @@ elif page == "User Registration":
         )
 
         location = st.text_input(
-            "Community or area"
+            "Community or Area",
+            placeholder="Enter your community"
+        )
+
+        st.caption(
+            "This demonstration does not collect passwords. "
+            "Do not enter sensitive personal information."
         )
 
         submitted = st.form_submit_button(
-            "Register"
+            "Create EcoLoop Profile",
+            use_container_width=True
         )
 
         if submitted:
 
-            if not name.strip() or not email.strip():
-                st.error(
-                    "Please enter your name and email."
-                )
+            if not all([
+                full_name.strip(),
+                username.strip(),
+                email.strip(),
+                location.strip()
+            ]):
+                st.error("Please complete all fields.")
+
+            elif not valid_email(email.strip()):
+                st.error("Please enter a valid email address.")
+
+            elif any(
+                u["username"].lower() == username.strip().lower()
+                for u in st.session_state.users
+            ):
+                st.error("That username is already taken.")
 
             elif any(
                 u["email"].lower() == email.strip().lower()
                 for u in st.session_state.users
             ):
-                st.warning(
-                    "This email is already registered."
-                )
+                st.error("This email is already registered.")
 
             else:
+
                 st.session_state.users.append({
-                    "name": name.strip(),
+                    "name": full_name.strip(),
+                    "username": username.strip(),
                     "email": email.strip(),
                     "type": user_type,
-                    "location": location.strip()
+                    "location": location.strip(),
+                    "joined": datetime.now().strftime("%Y-%m-%d")
                 })
 
                 st.success(
-                    f"Welcome to EcoLoop, {name}!"
+                    f"Welcome to EcoLoop, {full_name}!"
                 )
+                st.balloons()
 
-# --------------------------------------------------
+# ==================================================
+# MY PROFILE
+# ==================================================
+
+elif page == "My Profile":
+
+    st.title("Participant Profiles")
+
+    if not st.session_state.users:
+
+        st.info("No participants have registered yet.")
+
+    else:
+
+        usernames = [
+            u["username"] for u in st.session_state.users
+        ]
+
+        selected = st.selectbox(
+            "Select demonstration profile",
+            usernames
+        )
+
+        user = next(
+            u for u in st.session_state.users
+            if u["username"] == selected
+        )
+
+        st.subheader(user["name"])
+
+        a, b, c = st.columns(3)
+
+        a.metric("EcoPoints", user_points(selected))
+
+        b.metric(
+            "Approved Contributions",
+            len([
+                r for r in approved_records()
+                if r["username"] == selected
+            ])
+        )
+
+        c.metric(
+            "Waste Recovered",
+            f"{sum(r['weight'] for r in approved_records() if r['username'] == selected):.1f} kg"
+        )
+
+        st.write(f"**Username:** {user['username']}")
+        st.write(f"**Email:** {user['email']}")
+        st.write(f"**Account type:** {user['type']}")
+        st.write(f"**Community:** {user['location']}")
+        st.write(f"**Joined:** {user['joined']}")
+
+        st.caption(
+            "Profiles are demonstration records, not private authenticated accounts."
+        )
+
+# ==================================================
 # RECORD WASTE
-# --------------------------------------------------
+# ==================================================
 
 elif page == "Record Waste":
 
     st.title("Record a Waste Contribution")
 
+    st.write(
+        "Submit details about waste delivered to an EcoLoop station."
+    )
+
     if not st.session_state.users:
 
         st.warning(
-            "Please register a user before recording waste."
+            "Please create a participant profile first."
         )
 
     else:
@@ -379,12 +536,15 @@ elif page == "Record Waste":
         with st.form("waste_form"):
 
             selected_user = st.selectbox(
-                "Contributor",
-                get_user_names()
+                "Select Participant",
+                [
+                    u["username"]
+                    for u in st.session_state.users
+                ]
             )
 
             material = st.selectbox(
-                "Waste material",
+                "Waste Material",
                 MATERIALS
             )
 
@@ -397,12 +557,14 @@ elif page == "Record Waste":
             )
 
             station = st.selectbox(
-                "Collection station",
-                list(STATIONS.keys())
+                "Collection Station",
+                list(STATIONS.keys()),
+                format_func=lambda x: f"{x} — {STATIONS[x]}"
             )
 
             submitted = st.form_submit_button(
-                "Submit Contribution"
+                "Submit Contribution",
+                use_container_width=True
             )
 
             if submitted:
@@ -413,7 +575,7 @@ elif page == "Record Waste":
 
                 st.session_state.records.append({
                     "id": record_id,
-                    "user": selected_user,
+                    "username": selected_user,
                     "material": material,
                     "weight": float(weight),
                     "station": station,
@@ -425,25 +587,19 @@ elif page == "Record Waste":
                 })
 
                 st.success(
-                    f"Contribution {record_id} submitted "
-                    "for verification."
+                    f"{record_id} submitted successfully for verification."
                 )
 
-    st.caption(
-        "Contributions remain pending until verified."
-    )
+# ==================================================
+# QR STATIONS
+# ==================================================
 
-# --------------------------------------------------
-# STATION QR CODES
-# --------------------------------------------------
+elif page == "QR Stations":
 
-elif page == "Station QR Codes":
-
-    st.title("EcoLoop Digital Collection Stations")
+    st.title("EcoLoop Collection Stations")
 
     st.write(
-        "Each demonstration station has a unique QR code "
-        "for identification."
+        "Each digital station has its own identification QR code."
     )
 
     for station_id, station_name in STATIONS.items():
@@ -454,32 +610,32 @@ elif page == "Station QR Codes":
 
             qr_image = make_qr(station_id)
 
-            st.image(qr_image, width=190)
+            st.image(qr_image, width=200)
 
             st.download_button(
-                label=f"Download {station_id} QR Code",
+                "Download QR Code",
                 data=qr_image.getvalue(),
                 file_name=f"{station_id}_QR.png",
                 mime="image/png",
-                key=f"download_{station_id}"
+                key=f"qr_{station_id}"
             )
 
             st.caption(
-                "Demonstration QR code. It identifies the "
-                "station but does not yet submit data automatically."
+                "This QR code identifies the station. "
+                "It does not yet submit contributions automatically."
             )
 
-# --------------------------------------------------
-# CONTRIBUTION VERIFICATION
-# --------------------------------------------------
+# ==================================================
+# VERIFY CONTRIBUTIONS
+# ==================================================
 
-elif page == "Contribution Verification":
+elif page == "Verify Contributions":
 
     st.title("Contribution Verification")
 
     st.warning(
         "Demonstration coordinator interface. "
-        "This version does not have secure administrator login."
+        "This page does not yet have administrator authentication."
     )
 
     pending = [
@@ -489,7 +645,7 @@ elif page == "Contribution Verification":
 
     if not pending:
 
-        st.info("There are no pending contributions.")
+        st.info("No contributions are awaiting verification.")
 
     else:
 
@@ -497,25 +653,17 @@ elif page == "Contribution Verification":
 
             with st.container(border=True):
 
-                st.markdown(
-                    f"### {record['id']} — {record['user']}"
-                )
+                st.markdown(f"### {record['id']}")
 
-                st.write(
-                    f"Material: {record['material']}"
-                )
+                st.write(f"Participant: {record['username']}")
+                st.write(f"Material: {record['material']}")
+                st.write(f"Weight: {record['weight']} kg")
+                st.write(f"Station: {record['station']}")
+                st.write(f"Submitted: {record['date']}")
 
-                st.write(
-                    f"Weight: {record['weight']} kg"
-                )
+                approve_col, reject_col = st.columns(2)
 
-                st.write(
-                    f"Station: {record['station']}"
-                )
-
-                col1, col2 = st.columns(2)
-
-                with col1:
+                with approve_col:
 
                     if st.button(
                         "Approve",
@@ -527,12 +675,10 @@ elif page == "Contribution Verification":
                             5 + int(record["weight"] * 2)
                         )
 
-                        st.success(
-                            "Contribution approved."
-                        )
+                        st.success("Contribution approved.")
                         st.rerun()
 
-                with col2:
+                with reject_col:
 
                     if st.button(
                         "Reject",
@@ -540,26 +686,24 @@ elif page == "Contribution Verification":
                     ):
 
                         record["status"] = "Rejected"
-                        st.warning(
-                            "Contribution rejected."
-                        )
+                        st.warning("Contribution rejected.")
                         st.rerun()
 
-# --------------------------------------------------
+# ==================================================
 # LEADERBOARD
-# --------------------------------------------------
+# ==================================================
 
 elif page == "Leaderboard":
 
     st.title("EcoLoop Community Leaderboard")
 
     st.write(
-        "Recognising participation in waste recovery."
+        "Recognising community participation in waste recovery."
     )
 
     if not st.session_state.users:
 
-        st.info("No registered users yet.")
+        st.info("No participants registered yet.")
 
     else:
 
@@ -568,20 +712,20 @@ elif page == "Leaderboard":
         for user in st.session_state.users:
 
             ranking.append({
-                "Participant": user["name"],
+                "Participant": user["username"],
                 "Account Type": user["type"],
-                "Approved Waste (kg)": sum(
+                "Recovered Waste (kg)": sum(
                     r["weight"]
                     for r in approved_records()
-                    if r["user"] == user["name"]
+                    if r["username"] == user["username"]
                 ),
-                "EcoPoints": get_points(user["name"])
+                "EcoPoints": user_points(user["username"])
             })
 
         ranking_df = pd.DataFrame(ranking)
 
         ranking_df = ranking_df.sort_values(
-            by="EcoPoints",
+            "EcoPoints",
             ascending=False
         )
 
@@ -592,17 +736,17 @@ elif page == "Leaderboard":
         )
 
         st.caption(
-            "EcoPoints are demonstration points, "
-            "not cash or financial rewards."
+            "EcoPoints are demonstration participation points, "
+            "not cash rewards."
         )
 
-# --------------------------------------------------
+# ==================================================
 # COLLECTION MANAGEMENT
-# --------------------------------------------------
+# ==================================================
 
 elif page == "Collection Management":
 
-    st.title("Waste Collection Management")
+    st.title("Collection Management")
 
     approved = approved_records()
 
@@ -611,20 +755,22 @@ elif page == "Collection Management":
         if r["id"] not in st.session_state.collected
     ]
 
+    total_waiting = sum(
+        r["weight"] for r in uncollected
+    )
+
     st.metric(
         "Approved Waste Awaiting Collection",
-        f"{sum(r['weight'] for r in uncollected):.1f} kg"
+        f"{total_waiting:.1f} kg"
     )
 
     if not uncollected:
 
-        st.info(
-            "No approved waste is currently awaiting collection."
-        )
+        st.info("No approved waste is awaiting collection.")
 
     else:
 
-        for station_id in STATIONS:
+        for station_id, station_name in STATIONS.items():
 
             station_records = [
                 r for r in uncollected
@@ -634,16 +780,7 @@ elif page == "Collection Management":
             if station_records:
 
                 st.subheader(
-                    f"{station_id} — {STATIONS[station_id]}"
-                )
-
-                station_weight = sum(
-                    r["weight"] for r in station_records
-                )
-
-                st.write(
-                    f"Total awaiting collection: "
-                    f"{station_weight:.1f} kg"
+                    f"{station_id} — {station_name}"
                 )
 
                 for record in station_records:
@@ -663,14 +800,12 @@ elif page == "Collection Management":
                             record["id"]
                         )
 
-                        st.success(
-                            "Collection status updated."
-                        )
+                        st.success("Collection status updated.")
                         st.rerun()
 
-# --------------------------------------------------
+# ==================================================
 # ENVIRONMENTAL IMPACT
-# --------------------------------------------------
+# ==================================================
 
 elif page == "Environmental Impact":
 
@@ -678,18 +813,11 @@ elif page == "Environmental Impact":
 
     approved = approved_records()
 
-    st.write(
-        "Explore the amount and types of waste "
-        "recorded through the EcoLoop demonstration."
-    )
-
-    total = total_weight()
-
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     col1.metric(
-        "Total Approved Waste",
-        f"{total:.1f} kg"
+        "Total Waste Recovered",
+        f"{total_weight():.1f} kg"
     )
 
     col2.metric(
@@ -697,19 +825,24 @@ elif page == "Environmental Impact":
         len(set(r["material"] for r in approved))
     )
 
+    col3.metric(
+        "Approved Contributions",
+        len(approved)
+    )
+
     if approved:
 
-        impact_data = {}
+        material_data = {}
 
         for record in approved:
 
-            impact_data[record["material"]] = (
-                impact_data.get(record["material"], 0)
+            material_data[record["material"]] = (
+                material_data.get(record["material"], 0)
                 + record["weight"]
             )
 
         impact_df = pd.DataFrame(
-            list(impact_data.items()),
+            list(material_data.items()),
             columns=["Material", "Weight (kg)"]
         )
 
@@ -728,91 +861,79 @@ elif page == "Environmental Impact":
     else:
 
         st.info(
-            "Environmental data will appear when "
-            "contributions are approved."
+            "Environmental data will appear after contributions "
+            "have been approved."
         )
 
     st.caption(
-        "This tracker reports recorded waste quantities. "
-        "It does not yet calculate verified carbon savings."
+        "This dashboard reports recorded quantities. "
+        "It does not claim verified carbon savings."
     )
 
-# --------------------------------------------------
+# ==================================================
 # ABOUT
-# --------------------------------------------------
+# ==================================================
 
-elif page == "About EcoLoop":
+elif page == "About":
 
     st.title("About EcoLoop Node 2.0")
 
     st.markdown("""
     ### Rethinking Waste Management Through Technology
 
-    EcoLoop Node 2.0 is an environmental technology
-    initiative designed to improve waste separation,
-    recycling participation and collection coordination.
+    EcoLoop Node 2.0 is an environmental technology initiative
+    developed to improve waste separation, recycling participation
+    and collection coordination.
 
     ### Our Mission
 
-    To make waste management more accessible,
-    organised and data-driven through affordable
-    digital technology.
+    To make waste management more accessible, organised and
+    data-driven through affordable digital technology.
 
     ### Our Vision
 
-    Communities where waste is recognised as a
-    recoverable resource rather than simply a problem.
+    Communities where waste is recognised as a recoverable
+    resource rather than simply a problem.
 
-    ### Current Platform Features
+    ### Current Demonstration Features
 
-    - Digital user registration
+    - Participant registration
+    - Digital participant profiles
     - Waste contribution recording
-    - QR-coded collection station identification
+    - QR-coded station identification
     - Contribution verification
-    - Community recycling leaderboard
-    - Collection monitoring
+    - Community leaderboard
+    - Collection management
     - Environmental data tracking
 
     ### Future Development
 
-    Future versions aim to explore:
-
-    - ESP32-based smart collection stations
-    - Ultrasonic waste-level monitoring
-    - Weight sensors
+    - ESP32 smart collection stations
+    - Ultrasonic fill-level sensors
+    - Weight measurement sensors
     - AI-assisted waste classification
-    - Real-time collection notifications
-    - A shared database for multiple users
+    - Live collection notifications
+    - Secure database and authentication
     - Integration with recycling organisations
-
-    These are planned capabilities, not yet active features.
     """)
 
     st.divider()
 
-    st.subheader("Developed by")
+    st.subheader("Designed and Developed by")
 
-    st.markdown("**Munashe R. Mutopa**")
+    st.markdown("## Munashe R. Mutopa")
 
-    st.write(
-        "Designed and Developed by Munashe R. Mutopa"
-    )
+    st.write("An initiative of Next Gen Impact Hub (NGIH)")
 
-    st.write(
-        "An initiative of Next Gen Impact Hub (NGIH)"
-    )
-
-# --------------------------------------------------
+# ==================================================
 # FOOTER
-# --------------------------------------------------
+# ==================================================
 
 st.markdown("""
 <div class="eco-footer">
     <strong>EcoLoop Node 2.0</strong><br>
     Designed and Developed by Munashe R. Mutopa<br>
     An initiative of Next Gen Impact Hub (NGIH)<br>
-    <span class="small-note">
-        Building smarter and more sustainable communities.
-    </span>
+    Building smarter and more sustainable communities.
 </div>
 """, unsafe_allow_html=True)
