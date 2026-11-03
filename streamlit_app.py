@@ -4059,39 +4059,15 @@ selected_page()
 
 
 # ---------------------------------------------
-# NGIH FOOTER
+# NGIH FOOTER — ECOLOOP NODE
 # ---------------------------------------------
 
 st.divider()
 
-st.markdown(
-    """
-    <div style="
-        text-align: center;
-        padding: 18px 8px;
-        line-height: 1.8;
-    ">
-        <div style="
-            font-size: 15px;
-            font-weight: 700;
-            color: #A8D94F;
-        ">
-            ♻️ EcoLoop Node
-        </div>
+st.markdown("### ♻️ EcoLoop Node")
 
-        <div style="font-size: 13px;">
-            Powered by <strong>Next Gen Impact Hub (NGIH)</strong>
-        </div>
+st.markdown("**Powered by Next Gen Impact Hub (NGIH)**")
 
-        <div style="font-size: 12px; opacity: 0.75;">
-            Designed by Munashe Roy Mutopa
-            — Project Coordinator
-        </div>
+st.caption("Designed by Munashe Roy Mutopa — Project Coordinator")
 
-        <div style="font-size: 11px; opacity: 0.6;">
-            Version 2.0
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.caption("Version 2.0")
