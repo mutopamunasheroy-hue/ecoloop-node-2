@@ -468,38 +468,46 @@ a {
 
 
 # =====================================================
-# ECOLOOP NODE — MAIN APP HEADER
+# ECOLOOP NODE — RESPONSIVE MAIN HEADER
 # =====================================================
-
-import os
-
-LOGO_FILE = "IMG-20261028-WA0000.jpg"
-
 
 def show_app_header():
 
-    left, right = st.columns([1, 3])
+    left, right = st.columns([1.2, 3], gap="small")
 
     with left:
         if os.path.exists(LOGO_FILE):
             st.image(
                 LOGO_FILE,
-                width=190
+                width=150
             )
         else:
             st.warning("NGIH logo not found.")
 
     with right:
         st.markdown(
-            f"<h1 style='margin-bottom:0;'>{APP_NAME}</h1>",
+            f"""
+            <div style="
+                padding-top: 18px;
+                min-width: 0;
+                overflow: visible;
+            ">
+                <h1 style="
+                    margin: 0;
+                    font-size: clamp(22px, 4vw, 36px);
+                    line-height: 1.2;
+                    white-space: normal;
+                ">{APP_NAME}</h1>
+                <p style="margin: 6px 0 3px 0; font-weight: 600;">
+                    Powered by {NGIH_NAME} (NGIH)
+                </p>
+                <p style="margin: 0; font-size: 12px; opacity: 0.8;">
+                    {APP_TAGLINE}
+                </p>
+            </div>
+            """,
             unsafe_allow_html=True
         )
-
-        st.markdown(
-            f"**Powered by {NGIH_NAME} (NGIH)**"
-        )
-
-        st.caption(APP_TAGLINE)
 
     st.divider()
 # =====================================================
