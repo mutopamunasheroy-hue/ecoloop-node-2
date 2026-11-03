@@ -467,113 +467,30 @@ a {
 """, unsafe_allow_html=True)
 
 
+width: 480px) {{
 # =====================================================
-# ECOLOOP NODE — MOBILE FRIENDLY BRAND HEADER
+# ECOLOOP NODE — MAIN APP HEADER
 # =====================================================
 
 import os
-import base64
 
 LOGO_FILE = "IMG-20261028-WA0000.jpg"
 
 
 def show_app_header():
 
-    if os.path.exists(LOGO_FILE):
+    logo, branding = st.columns([1, 2], gap="small")
 
-        with open(LOGO_FILE, "rb") as logo_file:
-            logo_data = base64.b64encode(
-                logo_file.read()
-            ).decode("utf-8")
+    with logo:
+        if os.path.exists(LOGO_FILE):
+            st.image(LOGO_FILE, width=120)
+        else:
+            st.warning("NGIH logo not found.")
 
-        logo_html = f"""
-        <img src="data:image/jpeg;base64,{logo_data}"
-             style="
-                width:140px;
-                height:auto;
-                max-height:none;
-                object-fit:contain;
-                display:block;
-             ">
-        """
-
-    else:
-        logo_html = "<strong>NGIH</strong>"
-
-    st.markdown(
-        f"""
-        <style>
-        .ecoloop-brand-header {{
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            gap: 14px;
-            width: 100%;
-            overflow: visible;
-            padding: 12px 0;
-        }}
-
-        .ecoloop-brand-logo {{
-            flex: 0 0 140px;
-            min-width: 0;
-        }}
-
-        .ecoloop-brand-logo img {{
-            width: 100%;
-            height: auto;
-            max-height: none;
-            object-fit: contain;
-        }}
-
-        .ecoloop-brand-text {{
-            flex: 1;
-            min-width: 0;
-        }}
-
-        .ecoloop-brand-text h1 {{
-            font-size: clamp(21px, 4vw, 34px);
-            line-height: 1.15;
-            margin: 0 0 7px 0;
-        }}
-
-        .ecoloop-brand-text p {{
-            margin: 3px 0;
-            overflow-wrap: anywhere;
-        }}
-
-        @media(max-width: 480px) {{
-            .ecoloop-brand-header {{
-                gap: 9px;
-            }}
-
-            .ecoloop-brand-logo {{
-                flex-basis: 95px;
-            }}
-
-            .ecoloop-brand-text h1 {{
-                font-size: 21px;
-            }}
-        }}
-        </style>
-
-        <div class="ecoloop-brand-header">
-
-            <div class="ecoloop-brand-logo">
-                {logo_html}
-            </div>
-
-            <div class="ecoloop-brand-text">
-                <h1>{APP_NAME}</h1>
-                <p><strong>Powered by {NGIH_NAME} (NGIH)</strong></p>
-                <p style="font-size:12px;">
-                    {APP_TAGLINE}
-                </p>
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    with branding:
+        st.subheader(APP_NAME)
+        st.markdown(f"**Powered by {NGIH_NAME} (NGIH)**")
+        st.caption(APP_TAGLINE)
 
     st.divider()
 # =====================================================
