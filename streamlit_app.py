@@ -1,58 +1,356 @@
 import streamlit as st
 import pandas as pd
 import qrcode
-from PIL import Image
-from io import BytesIO
-from pathlib import Path
-from datetime import datetime
+import io
 import uuid
+from datetime import date
 
 # =====================================================
-# ECOLOOP NODE 2.0 | NEXT GEN IMPACT HUB
+# ECOLOOP NODE 2.0
 # =====================================================
 
 st.set_page_config(
-    page_title="EcoLoop Node 2.0 | NGIH",
+    page_title="EcoLoop Node 2.0",
     page_icon="♻️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# BRAND COLOURS
-DARK = "#123D2B"
-GREEN = "#176B45"
-LIME = "#B7F36B"
-TEAL = "#19B8A5"
-AMBER = "#FFB84D"
-CREAM = "#F5F8F3"
-WHITE = "#FFFFFF"
+# =====================================================
+# DESIGN SYSTEM
+# =====================================================
 
-MISSION = (
-    "To create a generation of youth who lead and influence "
-    "across governance, economy, environment, and technology."
-)
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
 
-PILLARS = [
-    "Governance & Civic Education",
-    "Business & Entrepreneurship",
-    "Climate Action & Environment",
-    "Technology, Innovation, Media & Arts"
-]
+:root {
+    --forest: #123D2B;
+    --green: #176B45;
+    --lime: #B7F36B;
+    --teal: #19B8A5;
+    --amber: #FFB84D;
+    --ink: #17231D;
+    --muted: #52645A;
+    --paper: #F5F7F2;
+    --white: #FFFFFF;
+    --line: #DCE5DC;
+}
+
+html, body, [class*="css"] {
+    font-family: 'DM Sans', sans-serif;
+}
+
+.stApp {
+    background: var(--paper);
+    color: var(--ink);
+}
+
+h1, h2, h3, h4 {
+    color: var(--forest) !important;
+    font-weight: 800 !important;
+}
+
+p, li, label {
+    color: var(--ink);
+}
+
+/* HIGH-VISIBILITY MENU */
+
+[data-testid="stSidebarCollapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: fixed !important;
+    top: 12px !important;
+    left: 12px !important;
+    z-index: 999999 !important;
+    background: #123D2B !important;
+    border: 2px solid #B7F36B !important;
+    border-radius: 12px !important;
+    width: 54px !important;
+    height: 50px !important;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.25) !important;
+}
+
+[data-testid="stSidebarCollapsedControl"] button {
+    width: 50px !important;
+    height: 46px !important;
+    background: #123D2B !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 10px !important;
+}
+
+[data-testid="stSidebarCollapsedControl"] button svg {
+    width: 27px !important;
+    height: 27px !important;
+    stroke: #FFFFFF !important;
+    stroke-width: 2.8px !important;
+}
+
+[data-testid="stSidebarCollapseButton"] button {
+    background: #B7F36B !important;
+    color: #123D2B !important;
+    border: 2px solid #FFFFFF !important;
+    border-radius: 10px !important;
+    width: 42px !important;
+    height: 42px !important;
+}
+
+[data-testid="stSidebarCollapseButton"] button svg {
+    stroke: #123D2B !important;
+    width: 23px !important;
+    height: 23px !important;
+}
+
+[data-testid="stHeader"] {
+    background: transparent !important;
+}
+
+/* SIDEBAR */
+
+[data-testid="stSidebar"] {
+    background: #123D2B !important;
+}
+
+[data-testid="stSidebar"] * {
+    color: #FFFFFF !important;
+}
+
+[data-testid="stSidebar"] hr {
+    border-color: rgba(255,255,255,0.25) !important;
+}
+
+[data-testid="stSidebar"] [role="radiogroup"] label {
+    background: rgba(255,255,255,0.07);
+    border-radius: 9px;
+    padding: 8px 10px;
+    margin-bottom: 5px;
+    color: #FFFFFF !important;
+}
+
+[data-testid="stSidebar"] [role="radiogroup"] label:hover {
+    background: rgba(183,243,107,0.18);
+}
+
+/* HERO */
+
+.hero {
+    background: linear-gradient(120deg, #123D2B, #176B45 65%, #19B8A5);
+    border-radius: 22px;
+    padding: 35px;
+    margin-bottom: 24px;
+}
+
+.hero h1 {
+    color: #FFFFFF !important;
+    font-size: 40px;
+    line-height: 1.15;
+}
+
+.hero p {
+    color: #FFFFFF !important;
+    font-size: 16px;
+}
+
+.eyebrow {
+    color: #B7F36B !important;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 2px;
+}
+
+/* CARDS */
+
+.eco-card {
+    background: #FFFFFF;
+    border: 1px solid #DCE5DC;
+    border-radius: 17px;
+    padding: 21px;
+    margin-bottom: 14px;
+    box-shadow: 0 3px 12px rgba(18,61,43,0.04);
+}
+
+.eco-card h3 {
+    color: #123D2B !important;
+    font-size: 19px;
+}
+
+.eco-card p {
+    color: #26352D !important;
+}
+
+.stat-card {
+    background: #FFFFFF;
+    border: 1px solid #DCE5DC;
+    border-radius: 16px;
+    padding: 18px;
+    min-height: 105px;
+}
+
+.stat-number {
+    color: #123D2B;
+    font-size: 28px;
+    font-weight: 800;
+}
+
+.stat-caption {
+    color: #52645A;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.section-label {
+    color: #176B45;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+}
+
+/* INFORMATION STRIPS */
+
+.green-strip, .teal-strip, .amber-strip {
+    border-radius: 11px;
+    padding: 15px 18px;
+    margin: 14px 0;
+}
+
+.green-strip {
+    background: #E8F5E8;
+    border-left: 5px solid #176B45;
+}
+
+.teal-strip {
+    background: #E2F7F3;
+    border-left: 5px solid #19B8A5;
+}
+
+.amber-strip {
+    background: #FFF4DF;
+    border-left: 5px solid #FFB84D;
+}
+
+.green-strip p, .teal-strip p, .amber-strip p {
+    color: #17231D !important;
+    margin: 0;
+}
+
+/* BUTTONS */
+
+div.stButton > button,
+div.stDownloadButton > button {
+    background: #176B45 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #176B45 !important;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+    min-height: 43px;
+}
+
+div.stButton > button:hover,
+div.stDownloadButton > button:hover {
+    background: #123D2B !important;
+    color: #FFFFFF !important;
+}
+
+/* INPUTS */
+
+.stTextInput input,
+.stTextArea textarea,
+.stNumberInput input {
+    background: #FFFFFF !important;
+    color: #17231D !important;
+    border: 1px solid #C9D8CC !important;
+    border-radius: 9px !important;
+}
+
+[data-testid="stMetric"] {
+    background: #FFFFFF;
+    border: 1px solid #DCE5DC;
+    padding: 14px;
+    border-radius: 13px;
+}
+
+[data-testid="stMetricLabel"] {
+    color: #52645A !important;
+}
+
+[data-testid="stMetricValue"] {
+    color: #123D2B !important;
+}
+
+/* FOOTER */
+
+.footer {
+    background: #123D2B;
+    border-radius: 18px;
+    padding: 25px;
+    margin-top: 35px;
+    text-align: center;
+}
+
+.footer p {
+    color: #FFFFFF !important;
+    margin: 6px;
+}
+
+.footer .small {
+    color: #D4E5D8 !important;
+    font-size: 12px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # =====================================================
 # SESSION DATA
 # =====================================================
 
 defaults = {
-    "users": {},
-    "records": [],
+    "profile": {
+        "name": "",
+        "community": ""
+    },
+    "waste_records": [],
     "gallery": [],
-    "groups": ["NGIH"],
-    "group_requests": [],
-    "quiz_scores": {},
+    "groups": [{
+        "id": "NGIH",
+        "name": "Next Gen Impact Hub",
+        "type": "Youth-led initiative",
+        "description": "A youth-led initiative creating opportunities for positive change.",
+        "status": "Approved"
+    }],
+    "pending_groups": [],
     "quiz_attempts": [],
-    "active_user": None,
-    "active_page": "Home",
+    "points": 0,
+    "quiz_score": None,
+    "nodes": [
+        {
+            "id": "NODE-001",
+            "name": "EcoLoop Node 001",
+            "location": "Bulawayo",
+            "function": "General recycling",
+            "fill": 25,
+            "status": "Active"
+        },
+        {
+            "id": "NODE-002",
+            "name": "EcoLoop Node 002",
+            "location": "Bulawayo",
+            "function": "Plastic collection",
+            "fill": 65,
+            "status": "Active"
+        },
+        {
+            "id": "NODE-003",
+            "name": "EcoLoop Node 003",
+            "location": "Bulawayo",
+            "function": "Paper collection",
+            "fill": 90,
+            "status": "Needs collection"
+        }
+    ],
     "collection_log": []
 }
 
@@ -61,172 +359,58 @@ for key, value in defaults.items():
         st.session_state[key] = value
 
 
-def make_id():
-    return str(uuid.uuid4())[:8]
+# =====================================================
+# HELPER FUNCTIONS
+# =====================================================
 
-
-def get_user():
-    username = st.session_state.active_user
-    if username:
-        return st.session_state.users.get(username)
-    return None
-
-
-def approved_records():
+def verified_records():
     return [
-        r for r in st.session_state.records
-        if r["status"] == "Approved"
+        record for record in st.session_state.waste_records
+        if record["status"] == "Verified"
     ]
 
 
-def total_waste():
-    return sum(float(r["weight"]) for r in approved_records())
-
-
-def points_for(username):
-    quiz = st.session_state.quiz_scores.get(username, 0)
-
-    waste = sum(
-        int(float(r["weight"]) * 2) + 5
-        for r in approved_records()
-        if r["username"] == username
+def verified_weight():
+    return sum(
+        float(record["weight"])
+        for record in verified_records()
     )
 
-    return quiz + waste
+
+def qr_image(value):
+    qr = qrcode.QRCode(box_size=8, border=3)
+    qr.add_data(value)
+    qr.make(fit=True)
+
+    img = qr.make_image(
+        fill_color="#123D2B",
+        back_color="white"
+    )
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
 
 
-# =====================================================
-# DESIGN AND MOBILE STYLING
-# =====================================================
-
-st.markdown(f"""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-
-html, body, [class*="css"] {{
-    font-family: 'DM Sans', sans-serif;
-}}
-
-.stApp {{
-    background: {CREAM};
-}}
-
-[data-testid="stSidebar"] {{
-    background: {DARK};
-}}
-
-[data-testid="stSidebar"] * {{
-    color: white;
-}}
-
-.hero {{
-    background: linear-gradient(120deg, {DARK}, {GREEN});
-    padding: 34px 28px;
-    border-radius: 20px;
-    color: white;
-    margin-bottom: 22px;
-}}
-
-.hero h1 {{
-    color: white;
-    font-size: clamp(30px, 5vw, 48px);
-    font-weight: 800;
-    line-height: 1.15;
-}}
-
-.hero p {{
-    color: #EAF5E8;
-    font-size: 17px;
-    line-height: 1.65;
-}}
-
-.section-title {{
-    color: {DARK};
-    font-size: 25px;
-    font-weight: 800;
-    margin-top: 24px;
-    margin-bottom: 14px;
-}}
-
-.feature-card {{
-    background: white;
-    border: 1px solid #E2EADF;
-    border-radius: 16px;
-    padding: 18px;
-    min-height: 150px;
-    margin-bottom: 12px;
-}}
-
-.feature-card h3 {{
-    color: {DARK};
-    font-size: 18px;
-}}
-
-.feature-card p {{
-    color: #52645A;
-    font-size: 14px;
-    line-height: 1.6;
-}}
-
-.mission-card {{
-    background: #EAF4E8;
-    border-left: 5px solid {GREEN};
-    padding: 20px;
-    border-radius: 12px;
-    color: {DARK};
-    line-height: 1.7;
-}}
-
-div[data-testid="stMetric"] {{
-    background: white;
-    border: 1px solid #E2EADF;
-    border-radius: 13px;
-    padding: 12px;
-}}
-
-div.stButton > button {{
-    border-radius: 10px;
-    font-weight: 700;
-    min-height: 42px;
-}}
-
-.gallery-card {{
-    background: white;
-    border: 1px solid #E2EADF;
-    border-radius: 14px;
-    padding: 12px;
-    margin-bottom: 14px;
-}}
-
-@media(max-width: 700px) {{
-    .hero {{
-        padding: 24px 18px;
-    }}
-    .hero p {{
-        font-size: 16px;
-    }}
-    .section-title {{
-        font-size: 22px;
-    }}
-}}
-</style>
-""", unsafe_allow_html=True)
+def stat_card(number, label):
+    st.markdown(f"""
+    <div class="stat-card">
+        <div class="stat-number">{number}</div>
+        <div class="stat-caption">{label}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
-# =====================================================
-# LOGO
-# =====================================================
-
-logo_options = [
-    "NGIH_logo_HD.png",
-    "ngih_logo_hd.png",
-    "IMG-20261028-WA0000.jpg"
-]
-
-logo_path = next(
-    (Path(x) for x in logo_options if Path(x).is_file()),
-    None
-)
+def footer():
+    st.markdown("""
+    <div class="footer">
+        <p><b>EcoLoop Node 2.0</b></p>
+        <p>A project developed under NGIH — Next Gen Impact Hub.</p>
+        <p>Small actions. Smarter communities. A greener future.</p>
+        <p class="small">Developed by Munashe R. Mutopa</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # =====================================================
@@ -235,347 +419,410 @@ logo_path = next(
 
 with st.sidebar:
 
-    if logo_path:
-        st.image(str(logo_path), width=135)
-    else:
-        st.markdown("## ♻️ NGIH")
+    try:
+        st.image("IMG-20261028-WA0000.jpg", width=110)
+    except Exception:
+        st.markdown("## ♻️ ECOLOOP")
 
-    st.markdown("### ECOLOOP NODE 2.0")
-    st.caption("Small actions. Smarter communities.")
-
+    st.markdown("### EcoLoop Node 2.0")
+    st.caption("Smarter waste. Stronger communities.")
     st.divider()
 
-    navigation = {
-        "EXPLORE": [
-            "Home",
+    pages = {
+        "HOME": ["Home"],
+        "DISCOVER": [
             "Explore & Learn",
             "Eco Quiz",
-            "Action Gallery"
+            "Action Gallery",
+            "Community Groups"
         ],
-        "MY ACTION": [
+        "PARTICIPATE": [
             "My Profile",
             "Record Waste",
-            "QR Stations",
+            "EcoLoop Nodes",
             "Leaderboard"
         ],
-        "COMMUNITY": [
-            "Community Groups",
-            "Collection Management",
-            "Environmental Impact"
+        "MONITOR": [
+            "Environmental Impact",
+            "Collection Management"
         ],
         "MANAGE": [
-            "Register",
             "Verify Contributions",
-            "Admin Studio",
-            "About NGIH"
-        ]
+            "Admin Studio"
+        ],
+        "ABOUT": ["About NGIH"]
     }
 
-    for heading, items in navigation.items():
-        st.markdown(f"**{heading}**")
+    page_options = []
 
-        for item in items:
-            if st.button(
-                item,
-                key=f"nav_{item}",
-                use_container_width=True
-            ):
-                st.session_state.active_page = item
-                st.rerun()
+    for section, items in pages.items():
+        st.caption(section)
+        page_options.extend(items)
+
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = "Home"
+
+    selected_page = st.radio(
+        "Choose a page",
+        page_options,
+        key="current_page",
+        label_visibility="collapsed"
+    )
 
     st.divider()
-
-    user = get_user()
-
-    if user:
-        st.success(f"Welcome, {user['name']}")
-        if st.button("Sign out", use_container_width=True):
-            st.session_state.active_user = None
-            st.rerun()
-    else:
-        st.caption("Browsing as a visitor.")
-
-    st.caption("NGIH — A youth-led initiative")
-
-
-page = st.session_state.active_page
+    st.markdown(f"**🌱 EcoPoints: {st.session_state.points}**")
+    st.caption("EcoLoop Node 2.0 • Prototype")
 
 
 # =====================================================
-# HOME
+# HOME PAGE
 # =====================================================
 
-if page == "Home":
+if selected_page == "Home":
 
     st.markdown("""
     <div class="hero">
-        <h1>Small actions.<br>
-        Smarter communities.<br>
-        A greener future.</h1>
-
+        <p class="eyebrow">NGIH • CLIMATE ACTION & ENVIRONMENT</p>
+        <h1>Waste less.<br>Think smarter.<br>Act together.</h1>
         <p>
-        Welcome to EcoLoop Node 2.0 — a digital platform
-        connecting people, communities and recycling action.
-        Learn, participate, record contributions and celebrate
-        environmental impact.
+        A digital platform exploring how technology and community
+        participation can support better waste management.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
+    st.subheader("Welcome to EcoLoop Node 2.0")
+
+    st.write(
+        "A community-focused platform bringing environmental learning, "
+        "waste contributions and local action together."
+    )
+
+    a, b, c, d = st.columns(4)
+
+    with a:
+        stat_card(
+            len(st.session_state.waste_records),
+            "Submissions"
+        )
+
+    with b:
+        stat_card(
+            f"{verified_weight():.1f} kg",
+            "Verified waste"
+        )
+
+    with c:
+        stat_card(
+            len([
+                item for item in st.session_state.gallery
+                if item["status"] == "Approved"
+            ]),
+            "Published photos"
+        )
+
+    with d:
+        stat_card(
+            len(st.session_state.groups),
+            "Community groups"
+        )
+
+    st.write("")
+
     st.markdown(
-        '<div class="section-title">Explore EcoLoop</div>',
+        '<p class="section-label">GET INVOLVED</p>',
         unsafe_allow_html=True
     )
+
+    st.subheader("Small actions create collective impact")
 
     a, b, c = st.columns(3)
 
     with a:
+
         st.markdown("""
-        <div class="feature-card">
-            <h3>📚 Learn</h3>
-            <p>Explore recycling knowledge, waste separation
-            and environmental awareness.</p>
+        <div class="eco-card">
+            <h3>♻️ Record waste</h3>
+            <p>Register waste contributions and support responsible recycling.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("Record a contribution"):
+            st.session_state.current_page = "Record Waste"
+            st.rerun()
+
+    with b:
+
+        st.markdown("""
+        <div class="eco-card">
+            <h3>🌱 Explore EcoLoop Nodes</h3>
+            <p>Discover collection points and scan their QR codes.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("Explore EcoLoop Nodes"):
+            st.session_state.current_page = "EcoLoop Nodes"
+            st.rerun()
+
+    with c:
+
+        st.markdown("""
+        <div class="eco-card">
+            <h3>🧠 Learn and play</h3>
+            <p>Explore environmental topics and test your knowledge.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("Try an eco quiz"):
+            st.session_state.current_page = "Eco Quiz"
+            st.rerun()
+
+    st.markdown(
+        '<p class="section-label">OUR APPROACH</p>',
+        unsafe_allow_html=True
+    )
+
+    st.subheader("Technology meets community action")
+
+    a, b = st.columns(2)
+
+    with a:
+
+        st.markdown("""
+        <div class="eco-card">
+            <h3>📊 Better information</h3>
+            <p>Understand waste contributions and local patterns.</p>
+        </div>
+        <div class="eco-card">
+            <h3>🤝 Community participation</h3>
+            <p>Connect schools, youth groups and local initiatives.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with b:
+
         st.markdown("""
-        <div class="feature-card">
-            <h3>♻️ Participate</h3>
-            <p>Record contributions, join community activities
-            and take on EcoChallenges.</p>
+        <div class="eco-card">
+            <h3>📱 Accessible technology</h3>
+            <p>Explore digital tools for reporting and coordination.</p>
         </div>
-        """, unsafe_allow_html=True)
-
-    with c:
-        st.markdown("""
-        <div class="feature-card">
-            <h3>🏆 Celebrate</h3>
-            <p>Earn EcoPoints, recognise participation and
-            follow community progress.</p>
+        <div class="eco-card">
+            <h3>🌍 Environmental learning</h3>
+            <p>Build awareness through quizzes and shared experiences.</p>
         </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown(
-        '<div class="section-title">EcoLoop at a glance</div>',
-        unsafe_allow_html=True
-    )
-
-    # Three columns to avoid squeezing mobile screens
-    m1, m2, m3 = st.columns(3)
-
-    with m1:
-        st.metric("Approved", len(approved_records()))
-
-    with m2:
-        st.metric("Members", len(st.session_state.users))
-
-    with m3:
-        st.metric("Waste", f"{total_waste():.1f} kg")
-
-    st.markdown(
-        '<div class="section-title">Our Impact in Action</div>',
-        unsafe_allow_html=True
-    )
-
-    st.write(
-        "Celebrating NGIH campaigns, clean-up exercises, "
-        "youth participation and community environmental projects."
-    )
-
-    photos = [
-        p for p in st.session_state.gallery
-        if p["status"] == "Approved"
-    ]
-
-    if photos:
-        cols = st.columns(3)
-
-        for i, photo in enumerate(photos[-6:]):
-            with cols[i % 3]:
-                st.image(photo["image"], use_container_width=True)
-                st.caption(
-                    f"{photo['caption']} · {photo['group']}"
-                )
-    else:
-        st.info(
-            "The NGIH gallery is ready for its first campaign "
-            "and community photographs."
-        )
-
-    st.markdown(
-        '<div class="section-title">How EcoLoop works</div>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown("""
-    <div class="mission-card">
-    <b>1. Join</b> — Create a demonstration profile.<br><br>
-    <b>2. Participate</b> — Record a waste contribution or
-    join an environmental activity.<br><br>
-    <b>3. Verify</b> — Contributions are reviewed before
-    being counted.<br><br>
-    <b>4. Track</b> — Follow approved contributions and
-    community progress.
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.caption(
-        "EcoLoop Node 2.0 is a demonstration platform. "
-        "Physical smart-bin and sensor integration is planned "
-        "for future development."
-    )# =====================================================
+        """, unsafe_allow_html=True)# =====================================================
 # EXPLORE & LEARN
 # =====================================================
 
-elif page == "Explore & Learn":
+elif selected_page == "Explore & Learn":
 
-    st.title("📚 Explore & Learn")
-
+    st.title("🌍 Explore & Learn")
     st.write(
-        "Build practical knowledge about waste management, "
-        "recycling and environmental responsibility."
+        "Discover practical ways to protect the environment "
+        "and build more sustainable communities."
     )
 
-    lessons = {
-        "Understanding waste separation": (
-            "Waste separation means sorting materials into "
-            "different categories so they can be handled "
-            "appropriately. Examples include paper, plastic, "
-            "glass, metal and organic waste."
-        ),
-        "Why recycling matters": (
-            "Recycling can reduce the amount of material sent "
-            "to disposal sites, conserve resources and create "
-            "opportunities for recovery and reuse."
-        ),
-        "The circular economy": (
-            "A circular economy aims to keep products and "
-            "materials in use for longer through reuse, repair, "
-            "recycling and better product design."
-        ),
-        "Community environmental action": (
-            "Community action includes clean-up campaigns, "
-            "awareness activities, responsible disposal and "
-            "working with local recycling partners."
-        )
+    topics = {
+        "Waste separation": {
+            "description": "Separating waste makes recycling and responsible disposal easier.",
+            "tips": [
+                "Keep paper and cardboard separate from wet waste.",
+                "Rinse recyclable containers where appropriate.",
+                "Avoid mixing hazardous waste with ordinary household waste."
+            ]
+        },
+        "Plastic pollution": {
+            "description": "Plastic pollution affects land, rivers, wildlife and human settlements.",
+            "tips": [
+                "Choose reusable bags and containers where possible.",
+                "Avoid unnecessary single-use plastics.",
+                "Support responsible collection and recycling."
+            ]
+        },
+        "Composting": {
+            "description": "Composting turns suitable organic waste into useful soil material.",
+            "tips": [
+                "Separate fruit and vegetable scraps.",
+                "Use suitable dry materials such as leaves.",
+                "Avoid adding plastics or unsuitable materials."
+            ]
+        },
+        "Climate action": {
+            "description": "Local environmental action contributes to wider climate resilience.",
+            "tips": [
+                "Protect existing trees and green spaces.",
+                "Participate in community clean-up activities.",
+                "Share reliable environmental information."
+            ]
+        },
+        "Circular economy": {
+            "description": "A circular economy aims to reduce waste by keeping materials in use.",
+            "tips": [
+                "Repair items instead of immediately discarding them.",
+                "Reuse materials where safe and practical.",
+                "Support recycling and responsible production."
+            ]
+        }
     }
 
-    for title, description in lessons.items():
-        with st.expander(title):
-            st.write(description)
+    selected_topic = st.selectbox(
+        "Choose a learning topic",
+        list(topics.keys())
+    )
+
+    topic = topics[selected_topic]
+
+    st.markdown(f"""
+    <div class="eco-card">
+        <h3>{selected_topic}</h3>
+        <p>{topic["description"]}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.subheader("Practical actions")
+
+    for tip in topic["tips"]:
+        st.markdown(f"- {tip}")
+
+    st.markdown("""
+    <div class="teal-strip">
+        <p><b>Remember:</b> Environmental change begins with informed,
+        consistent and collective action.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # =====================================================
 # ECO QUIZ
 # =====================================================
 
-elif page == "Eco Quiz":
+elif selected_page == "Eco Quiz":
 
     st.title("🧠 Eco Quiz")
-
-    st.write("Test your environmental knowledge.")
+    st.write("Test your environmental knowledge and earn demonstration points.")
 
     questions = [
         {
-            "question": "Which action helps reduce waste?",
+            "question": "What is the main purpose of waste separation?",
             "options": [
-                "Reusing materials",
-                "Throwing everything away",
-                "Mixing all waste"
+                "To make waste heavier",
+                "To make recycling and disposal easier",
+                "To increase pollution",
+                "To mix all waste together"
             ],
-            "answer": "Reusing materials"
+            "answer": "To make recycling and disposal easier"
         },
         {
-            "question": "What is waste separation?",
+            "question": "Which of these is an example of organic waste?",
             "options": [
-                "Sorting waste into categories",
+                "Plastic bottle",
+                "Aluminium can",
+                "Fruit peel",
+                "Glass jar"
+            ],
+            "answer": "Fruit peel"
+        },
+        {
+            "question": "What does reuse mean?",
+            "options": [
+                "Using an item again",
                 "Burning all waste",
-                "Mixing all materials"
+                "Throwing everything away",
+                "Mixing recyclable materials"
             ],
-            "answer": "Sorting waste into categories"
+            "answer": "Using an item again"
         },
         {
-            "question": "Which is an example of organic waste?",
+            "question": "Which action can help reduce plastic pollution?",
             "options": [
-                "Fruit peels",
-                "Glass bottles",
-                "Metal cans"
+                "Dumping plastic in rivers",
+                "Using reusable bags",
+                "Burning plastic",
+                "Littering public spaces"
             ],
-            "answer": "Fruit peels"
+            "answer": "Using reusable bags"
         },
         {
-            "question": "What does a circular economy encourage?",
+            "question": "What is composting?",
             "options": [
-                "Reuse and recovery",
-                "Unnecessary disposal",
-                "More littering"
+                "Making suitable organic waste into soil material",
+                "Mixing plastic with metal",
+                "Burning paper",
+                "Dumping waste in water"
             ],
-            "answer": "Reuse and recovery"
-        },
-        {
-            "question": "Why are community clean-ups useful?",
-            "options": [
-                "They improve shared spaces",
-                "They increase litter",
-                "They prevent recycling"
-            ],
-            "answer": "They improve shared spaces"
+            "answer": "Making suitable organic waste into soil material"
         }
     ]
 
-    username = st.session_state.active_user
+    with st.form("eco_quiz_form"):
 
-    if not username:
-        st.warning("Register first to save your quiz score.")
+        answers = {}
 
-    else:
+        for index, question in enumerate(questions):
 
-        number = st.selectbox(
-            "Choose a question",
-            range(1, len(questions) + 1)
+            st.markdown(f"**Question {index + 1}**")
+            st.write(question["question"])
+
+            answers[index] = st.radio(
+                "Select your answer",
+                question["options"],
+                key=f"eco_question_{index}",
+                index=None
+            )
+
+            st.divider()
+
+        submitted = st.form_submit_button(
+            "Submit my answers",
+            use_container_width=True
         )
 
-        q = questions[number - 1]
+    if submitted:
 
-        st.subheader(f"Question {number}")
-        st.write(q["question"])
+        unanswered = [
+            index for index, answer in answers.items()
+            if answer is None
+        ]
 
-        answer = st.radio(
-            "Select your answer",
-            q["options"],
-            key=f"quiz_answer_{number}"
-        )
+        if unanswered:
 
-        if st.button("Submit answer"):
+            st.warning("Please answer all five questions first.")
 
-            attempt_key = f"{username}_{number}"
+        else:
 
-            attempted = attempt_key in st.session_state.quiz_attempts
+            score = sum(
+                answers[index] == questions[index]["answer"]
+                for index in range(len(questions))
+            )
 
-            if answer == q["answer"]:
+            st.session_state.quiz_score = score
+            earned = score * 5
 
-                st.success("Correct! Well done.")
+            st.session_state.points += earned
 
-                if not attempted:
+            st.session_state.quiz_attempts.append({
+                "date": str(date.today()),
+                "score": score,
+                "points": earned
+            })
 
-                    st.session_state.quiz_scores[username] = (
-                        st.session_state.quiz_scores.get(username, 0) + 10
-                    )
+            st.success(f"You scored {score} out of 5!")
+            st.metric("Demonstration EcoPoints earned", earned)
 
-                    st.session_state.quiz_attempts.append(attempt_key)
+            if score == 5:
+                st.balloons()
+                st.write("Excellent work! You got every question correct.")
 
-                    st.info("You earned 10 EcoPoints!")
-
-                else:
-                    st.caption("Points for this question were already awarded.")
+            elif score >= 3:
+                st.write("Good effort! Keep learning.")
 
             else:
-                st.error("Not quite. Review the learning section and try again.")
+                st.write("Keep exploring the learning section and try again.")
 
-        st.metric(
-            "Quiz EcoPoints",
-            st.session_state.quiz_scores.get(username, 0)
+    if st.session_state.quiz_score is not None:
+        st.info(
+            f"Your most recent quiz score: "
+            f"{st.session_state.quiz_score}/5"
         )
 
 
@@ -583,931 +830,1048 @@ elif page == "Eco Quiz":
 # ACTION GALLERY
 # =====================================================
 
-elif page == "Action Gallery":
+elif selected_page == "Action Gallery":
 
-    st.title("📸 Our Impact in Action")
+    st.title("📸 Community Action Gallery")
 
     st.write(
-        "A visual record of NGIH campaigns, clean-up activities, "
-        "youth participation and community environmental projects."
+        "A space to showcase environmental activities, "
+        "community clean-ups and local action."
     )
 
-    # Gallery filtering
-    approved_photos = [
-        p for p in st.session_state.gallery
-        if p["status"] == "Approved"
+    st.markdown("""
+    <div class="amber-strip">
+        <p><b>Gallery review:</b> Submitted photos remain pending until
+        an administrator approves them. Obtain permission before
+        uploading identifiable photos of other people, especially minors.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.subheader("Share an environmental activity")
+
+    with st.form("gallery_submission", clear_on_submit=True):
+
+        contributor = st.text_input("Your name or group name")
+        activity = st.text_input("Activity title")
+        location = st.text_input("Activity location")
+        description = st.text_area("Describe the activity")
+
+        uploaded_photos = st.file_uploader(
+            "Upload activity photos",
+            type=["jpg", "jpeg", "png"],
+            accept_multiple_files=True
+        )
+
+        gallery_submit = st.form_submit_button(
+            "Submit for review",
+            use_container_width=True
+        )
+
+    if gallery_submit:
+
+        if not contributor or not activity or not uploaded_photos:
+
+            st.error("Please provide your name, activity title and at least one photo.")
+
+        else:
+
+            for photo in uploaded_photos:
+
+                st.session_state.gallery.append({
+                    "id": str(uuid.uuid4())[:8],
+                    "contributor": contributor,
+                    "activity": activity,
+                    "location": location,
+                    "description": description,
+                    "photo": photo.getvalue(),
+                    "filename": photo.name,
+                    "status": "Pending"
+                })
+
+            st.success(
+                f"{len(uploaded_photos)} photo(s) submitted for review."
+            )
+
+    st.divider()
+    st.subheader("Published activities")
+
+    published = [
+        item for item in st.session_state.gallery
+        if item["status"] == "Approved"
     ]
 
-    available_groups = sorted(
-        set(p["group"] for p in approved_photos)
-    )
+    if not published:
 
-    selected_group = st.selectbox(
-        "Explore gallery",
-        ["All groups"] + available_groups
-    )
+        st.info("No approved activities have been published yet.")
 
-    if selected_group == "All groups":
-        display_photos = approved_photos
     else:
-        display_photos = [
-            p for p in approved_photos
-            if p["group"] == selected_group
-        ]
 
-    if display_photos:
+        columns = st.columns(2)
 
-        cols = st.columns(2)
+        for index, item in enumerate(published):
 
-        for i, photo in enumerate(reversed(display_photos)):
-
-            with cols[i % 2]:
-
-                st.markdown(
-                    '<div class="gallery-card">',
-                    unsafe_allow_html=True
-                )
+            with columns[index % 2]:
 
                 st.image(
-                    photo["image"],
+                    item["photo"],
                     use_container_width=True
                 )
 
-                st.markdown(f"**{photo['caption']}**")
-
+                st.markdown(f"**{item['activity']}**")
                 st.caption(
-                    f"{photo['group']} · {photo['date']}"
+                    f"{item['location']} • Shared by {item['contributor']}"
                 )
 
-                if photo.get("credit"):
-                    st.caption(f"Credit: {photo['credit']}")
-
-                st.markdown("</div>", unsafe_allow_html=True)
-
-    else:
-        st.info(
-            "No approved photographs yet. The gallery is ready "
-            "for NGIH and participating community uploads."
-        )
-
-    st.divider()
-
-    st.subheader("Upload campaign photographs")
-
-    st.write(
-        "Submit photographs from NGIH activities or participating "
-        "community groups. Photos are reviewed before appearing publicly."
-    )
-
-    if not get_user():
-
-        st.warning("Create a profile before submitting photographs.")
-
-    else:
-
-        group = st.selectbox(
-            "Choose gallery",
-            st.session_state.groups,
-            key="upload_gallery_group"
-        )
-
-        caption = st.text_input(
-            "Photo caption",
-            placeholder="Example: Community clean-up activity"
-        )
-
-        credit = st.text_input(
-            "Photographer or group credit (optional)"
-        )
-
-        uploads = st.file_uploader(
-            "Select photographs",
-            type=["jpg", "jpeg", "png"],
-            accept_multiple_files=True,
-            key="ngih_gallery_upload",
-            help="You can select several JPG or PNG photographs."
-        )
-
-        # Preview selected files
-        if uploads:
-
-            st.success(f"{len(uploads)} photograph(s) selected.")
-
-            preview_columns = st.columns(3)
-
-            for i, uploaded in enumerate(uploads):
-
-                try:
-                    uploaded.seek(0)
-                    image = Image.open(uploaded)
-                    image.verify()
-
-                    uploaded.seek(0)
-                    image = Image.open(uploaded).convert("RGB")
-
-                    with preview_columns[i % 3]:
-                        st.image(
-                            image,
-                            caption=uploaded.name,
-                            use_container_width=True
-                        )
-
-                except Exception:
-                    st.error(
-                        f"Unable to read {uploaded.name}. "
-                        "Please try another image."
-                    )
-
-        permission = st.checkbox(
-            "I confirm that I have permission to submit these "
-            "photographs and that appropriate permission has been "
-            "obtained from identifiable people shown."
-        )
-
-        if st.button(
-            "Submit photographs for review",
-            use_container_width=True
-        ):
-
-            if not uploads:
-                st.error("Select at least one photograph.")
-
-            elif not caption.strip():
-                st.error("Please add a photo caption.")
-
-            elif not permission:
-                st.error("Please confirm the photo permissions.")
-
-            else:
-
-                saved = 0
-
-                for uploaded in uploads:
-
-                    try:
-                        uploaded.seek(0)
-
-                        image = Image.open(uploaded).convert("RGB")
-                        image.thumbnail((1600, 1600))
-
-                        buffer = BytesIO()
-
-                        image.save(
-                            buffer,
-                            format="JPEG",
-                            quality=88,
-                            optimize=True
-                        )
-
-                        st.session_state.gallery.append({
-                            "id": make_id(),
-                            "image": buffer.getvalue(),
-                            "caption": caption.strip(),
-                            "credit": credit.strip(),
-                            "group": group,
-                            "date": datetime.now().strftime("%d %b %Y"),
-                            "status": "Pending"
-                        })
-
-                        saved += 1
-
-                    except Exception:
-                        st.error(
-                            f"Problem processing {uploaded.name}."
-                        )
-
-                if saved:
-                    st.success(
-                        f"{saved} photograph(s) submitted successfully."
-                    )
-
-                    st.info(
-                        "Your photographs are awaiting administrator approval."
-                    )
+                if item["description"]:
+                    st.write(item["description"])
 
 
 # =====================================================
 # COMMUNITY GROUPS
 # =====================================================
 
-elif page == "Community Groups":
+elif selected_page == "Community Groups":
 
-    st.title("🌍 Community Groups")
+    st.title("🤝 Community Groups")
 
     st.write(
-        "A space for schools, youth groups, community teams "
-        "and environmental initiatives."
+        "Discover youth initiatives and community groups "
+        "working towards environmental improvement."
     )
 
-    st.subheader("Participating galleries")
+    st.subheader("Explore groups")
 
-    for group in st.session_state.groups:
-        st.markdown(f"♻️ **{group}**")
+    approved_groups = [
+        group for group in st.session_state.groups
+        if group["status"] == "Approved"
+    ]
+
+    if not approved_groups:
+
+        st.info("No approved groups are available yet.")
+
+    else:
+
+        for group in approved_groups:
+
+            st.markdown(f"""
+            <div class="eco-card">
+                <h3>{group['name']}</h3>
+                <p><b>Group type:</b> {group['type']}</p>
+                <p>{group['description']}</p>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.divider()
+    st.subheader("Request to add a community group")
 
-    st.subheader("Request a community gallery")
+    with st.form("group_request_form", clear_on_submit=True):
 
-    st.write(
-        "Groups can request their own profile and dedicated "
-        "campaign gallery."
-    )
+        group_name = st.text_input("Group or initiative name")
 
-    group_name = st.text_input("Group or school name")
-    area = st.text_input("Community or area")
-    description = st.text_area("Describe your group's activities")
-
-    if st.button("Submit group request"):
-
-        if not group_name.strip() or not area.strip():
-
-            st.error("Please provide the group name and area.")
-
-        else:
-
-            st.session_state.group_requests.append({
-                "id": make_id(),
-                "name": group_name.strip(),
-                "area": area.strip(),
-                "description": description.strip(),
-                "status": "Pending"
-            })
-
-            st.success("Your request has been submitted for review.")
-
-
-# =====================================================
-# REGISTER
-# =====================================================
-
-elif page == "Register":
-
-    st.title("👋 Join EcoLoop")
-
-    st.write("Create a demonstration profile.")
-
-    with st.form("register_form"):
-
-        name = st.text_input("Display name")
-        username = st.text_input("Choose a username")
-        email = st.text_input("Email address")
-
-        account_type = st.selectbox(
-            "Joining as",
+        group_type = st.selectbox(
+            "Group type",
             [
-                "Individual",
-                "Student",
-                "Community group member",
-                "Volunteer"
+                "Youth group",
+                "School or university club",
+                "Community organisation",
+                "Environmental initiative",
+                "Other"
             ]
         )
 
-        area = st.text_input("Community or area")
+        group_location = st.text_input("Community or location")
+        group_description = st.text_area("What does your group do?")
+        contact_person = st.text_input("Contact person's name")
 
-        submit = st.form_submit_button("Create profile")
+        group_submit = st.form_submit_button(
+            "Submit group for approval",
+            use_container_width=True
+        )
 
-    if submit:
+    if group_submit:
 
-        key = username.strip().lower()
+        if not group_name or not group_location or not group_description:
 
-        if not name.strip() or not key:
-
-            st.error("Please provide a name and username.")
-
-        elif key in st.session_state.users:
-
-            st.error("That username is already taken.")
+            st.error("Please complete the required group details.")
 
         else:
 
-            st.session_state.users[key] = {
-                "name": name.strip(),
-                "username": key,
-                "email": email.strip(),
-                "type": account_type,
-                "area": area.strip(),
-                "joined": datetime.now().strftime("%d %b %Y")
-            }
-
-            st.session_state.active_user = key
-
-            st.success("Your profile has been created!")
-            st.rerun()
-
-    st.warning(
-        "This is a demonstration registration system, not secure "
-        "account authentication. Avoid entering sensitive information."
-    )
-
-
-# =====================================================
-# MY PROFILE
-# =====================================================
-
-elif page == "My Profile":
-
-    st.title("👤 My Profile")
-
-    user = get_user()
-
-    if not user:
-
-        st.warning("Please register first.")
-
-    else:
-
-        username = user["username"]
-
-        st.subheader(user["name"])
-
-        st.write(f"**Username:** {username}")
-        st.write(f"**Account type:** {user['type']}")
-        st.write(f"**Community:** {user['area'] or 'Not provided'}")
-        st.write(f"**Joined:** {user['joined']}")
-
-        st.divider()
-
-        c1, c2 = st.columns(2)
-
-        with c1:
-            st.metric("EcoPoints", points_for(username))
-
-        with c2:
-
-            count = sum(
-                1 for r in approved_records()
-                if r["username"] == username
-            )
-
-            st.metric("Approved", count)
-
-        st.subheader("My contributions")
-
-        mine = [
-            r for r in st.session_state.records
-            if r["username"] == username
-        ]
-
-        if mine:
-            st.dataframe(
-                pd.DataFrame(mine),
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info("You have not recorded a contribution yet.")# =====================================================
-# RECORD WASTE
-# =====================================================
-
-elif page == "Record Waste":
-
-    st.title("♻️ Record a Contribution")
-
-    st.write(
-        "Record waste collected for recycling or appropriate recovery."
-    )
-
-    user = get_user()
-
-    if not user:
-
-        st.warning("Please create a profile first.")
-
-    else:
-
-        with st.form("waste_form"):
-
-            material = st.selectbox(
-                "Material type",
-                [
-                    "Plastic",
-                    "Paper",
-                    "Cardboard",
-                    "Glass",
-                    "Metal",
-                    "Organic",
-                    "Other"
-                ]
-            )
-
-            weight = st.number_input(
-                "Estimated weight (kg)",
-                min_value=0.1,
-                max_value=10000.0,
-                value=1.0,
-                step=0.1
-            )
-
-            station = st.selectbox(
-                "Collection point",
-                [
-                    "Community collection point",
-                    "School collection point",
-                    "NGIH activity",
-                    "Other"
-                ]
-            )
-
-            notes = st.text_area("Additional information")
-
-            submit = st.form_submit_button("Submit contribution")
-
-        if submit:
-
-            st.session_state.records.append({
-                "id": make_id(),
-                "username": user["username"],
-                "name": user["name"],
-                "material": material,
-                "weight": float(weight),
-                "station": station,
-                "notes": notes,
-                "date": datetime.now().strftime("%d %b %Y %H:%M"),
+            st.session_state.pending_groups.append({
+                "id": str(uuid.uuid4())[:8],
+                "name": group_name,
+                "type": group_type,
+                "location": group_location,
+                "description": group_description,
+                "contact": contact_person,
                 "status": "Pending"
             })
 
-            st.success("Contribution submitted for verification.")
+            st.success(
+                "Your group request has been submitted for review."
+            )
 
-
+    st.caption(
+        "Group requests are demonstration submissions and require "
+        "administrator review before publication."
+    )# =====================================================
+# MY PROFILE
 # =====================================================
-# QR STATIONS
-# =====================================================
 
-elif page == "QR Stations":
+elif selected_page == "My Profile":
 
-    st.title("🔳 EcoLoop QR Stations")
+    st.title("👤 My Profile")
+    st.write("Set up your EcoLoop participant profile.")
 
-    st.write(
-        "Demonstration QR codes for identifying collection points."
+    with st.form("profile_form"):
+
+        name = st.text_input(
+            "Your name",
+            value=st.session_state.profile["name"]
+        )
+
+        community = st.text_input(
+            "Your community",
+            value=st.session_state.profile["community"]
+        )
+
+        save_profile = st.form_submit_button(
+            "Save profile",
+            use_container_width=True
+        )
+
+    if save_profile:
+
+        st.session_state.profile = {
+            "name": name,
+            "community": community
+        }
+
+        st.success("Profile saved for this session.")
+
+    st.divider()
+    st.subheader("Your EcoLoop activity")
+
+    a, b, c = st.columns(3)
+
+    with a:
+        stat_card(st.session_state.points, "EcoPoints")
+
+    with b:
+        stat_card(len(st.session_state.waste_records), "Waste submissions")
+
+    with c:
+        stat_card(len(st.session_state.quiz_attempts), "Quiz attempts")
+
+    st.caption(
+        "Prototype note: profile information is currently stored "
+        "temporarily in your browser session."
     )
 
-    stations = [
-        "NGIH Community Station",
-        "School Recycling Station",
-        "Community Collection Point"
-    ]
 
-    for station in stations:
+# =====================================================
+# RECORD WASTE
+# =====================================================
 
-        with st.expander(station):
+elif selected_page == "Record Waste":
 
-            qr = qrcode.make(f"EcoLoop Station: {station}")
+    st.title("♻️ Record a Waste Contribution")
 
-            buffer = BytesIO()
-            qr.save(buffer, format="PNG")
+    st.write(
+        "Record waste collected or separated during a community activity."
+    )
 
-            st.image(buffer.getvalue(), width=200)
+    with st.form("waste_record_form", clear_on_submit=True):
 
-            st.download_button(
-                "Download QR code",
-                data=buffer.getvalue(),
-                file_name=f"{station.replace(' ', '_')}.png",
-                mime="image/png",
-                key=f"qr_{station}"
+        contributor = st.text_input(
+            "Contributor or group name",
+            value=st.session_state.profile["name"]
+        )
+
+        waste_type = st.selectbox(
+            "Waste category",
+            [
+                "Plastic",
+                "Paper and cardboard",
+                "Glass",
+                "Metal",
+                "Organic waste",
+                "Mixed recyclable waste",
+                "Other"
+            ]
+        )
+
+        weight = st.number_input(
+            "Estimated weight (kg)",
+            min_value=0.1,
+            max_value=10000.0,
+            value=1.0,
+            step=0.5
+        )
+
+        collection_location = st.text_input("Collection location")
+
+        collection_date = st.date_input(
+            "Date of collection",
+            value=date.today()
+        )
+
+        notes = st.text_area("Additional information")
+
+        waste_submit = st.form_submit_button(
+            "Submit contribution",
+            use_container_width=True
+        )
+
+    if waste_submit:
+
+        if not contributor or not collection_location:
+
+            st.error("Please enter the contributor and collection location.")
+
+        else:
+
+            st.session_state.waste_records.append({
+                "id": str(uuid.uuid4())[:8],
+                "contributor": contributor,
+                "type": waste_type,
+                "weight": float(weight),
+                "location": collection_location,
+                "date": str(collection_date),
+                "notes": notes,
+                "status": "Pending"
+            })
+
+            st.success(
+                "Contribution submitted. It is awaiting verification."
             )
+
+    st.divider()
+    st.subheader("Your submitted contributions")
+
+    if st.session_state.waste_records:
+
+        for record in reversed(st.session_state.waste_records):
+
+            st.markdown(f"""
+            <div class="eco-card">
+                <h3>{record['type']} • {record['weight']} kg</h3>
+                <p><b>Contributor:</b> {record['contributor']}</p>
+                <p><b>Location:</b> {record['location']}</p>
+                <p><b>Date:</b> {record['date']}</p>
+                <p><b>Status:</b> {record['status']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    else:
+
+        st.info("You have not submitted any contributions yet.")
+
+
+# =====================================================
+# ECOLOOP NODES
+# =====================================================
+
+elif selected_page == "EcoLoop Nodes":
+
+    st.title("🌱 EcoLoop Nodes")
+
+    st.write(
+        "Explore identified waste collection points within the EcoLoop system."
+    )
+
+    st.markdown("""
+    <div class="teal-strip">
+        <p><b>How nodes work:</b> Each EcoLoop Node has a unique Node ID.
+        Its QR code helps identify the node and its collection function.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.subheader("Node network overview")
+
+    nodes = st.session_state.nodes
+
+    a, b, c = st.columns(3)
+
+    with a:
+        stat_card(len(nodes), "Registered nodes")
+
+    with b:
+        stat_card(
+            len([node for node in nodes if node["status"] == "Active"]),
+            "Active nodes"
+        )
+
+    with c:
+        stat_card(
+            len([
+                node for node in nodes
+                if node["fill"] >= 80
+            ]),
+            "Nodes needing attention"
+        )
+
+    st.divider()
+    st.subheader("Explore the nodes")
+
+    for node in nodes:
+
+        with st.container(border=True):
+
+            left, right = st.columns([2, 1])
+
+            with left:
+
+                st.markdown(f"### {node['name']}")
+                st.write(f"**Node ID:** {node['id']}")
+                st.write(f"**Location:** {node['location']}")
+                st.write(f"**Node function:** {node['function']}")
+                st.write(f"**Status:** {node['status']}")
+
+                st.write("Demonstration collection level")
+
+                st.progress(
+                    min(node["fill"], 100) / 100
+                )
+
+                st.caption(f"{node['fill']}% indicated fill level")
+
+                if node["fill"] >= 80:
+                    st.warning("Collection attention may be required.")
+                else:
+                    st.success("No high fill-level alert in this demonstration.")
+
+            with right:
+
+                qr_data = (
+                    f"EcoLoop Node 2.0 | "
+                    f"Node ID: {node['id']} | "
+                    f"Name: {node['name']} | "
+                    f"Location: {node['location']} | "
+                    f"Function: {node['function']}"
+                )
+
+                qr_buffer = qr_image(qr_data)
+
+                st.image(qr_buffer, width=150)
+
+                st.download_button(
+                    "Download Node QR",
+                    data=qr_buffer.getvalue(),
+                    file_name=f"{node['id']}.png",
+                    mime="image/png",
+                    key=f"download_{node['id']}"
+                )
+
+    st.divider()
+    st.subheader("Understand the Node system")
+
+    st.markdown("""
+    <div class="eco-card">
+        <h3>📍 Node identification</h3>
+        <p>Every node has a unique identifier to distinguish it from
+        other collection points.</p>
+    </div>
+    <div class="eco-card">
+        <h3>📱 QR code access</h3>
+        <p>QR codes provide a quick way to identify a node and view
+        its basic information.</p>
+    </div>
+    <div class="eco-card">
+        <h3>📊 Collection monitoring</h3>
+        <p>Node records can help coordinate collection activities
+        and monitor reported collection levels.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.caption(
+        "Current prototype: QR codes are generated digitally. "
+        "Fill levels are sample values, not live sensor readings."
+    )
 
 
 # =====================================================
 # LEADERBOARD
 # =====================================================
 
-elif page == "Leaderboard":
+elif selected_page == "Leaderboard":
 
     st.title("🏆 EcoLoop Leaderboard")
 
     st.write(
-        "Recognising environmental participation through "
-        "demonstration EcoPoints."
+        "A demonstration ranking based on EcoPoints earned through "
+        "quiz participation."
     )
 
-    if not st.session_state.users:
+    leaderboard = {}
 
-        st.info("No members have registered yet.")
+    for attempt in st.session_state.quiz_attempts:
+
+        participant = st.session_state.profile["name"] or "Guest"
+
+        leaderboard[participant] = (
+            leaderboard.get(participant, 0) + attempt["points"]
+        )
+
+    leaderboard_data = [
+        {
+            "Participant": name,
+            "EcoPoints": points
+        }
+        for name, points in leaderboard.items()
+    ]
+
+    if leaderboard_data:
+
+        leaderboard_df = pd.DataFrame(leaderboard_data)
+
+        leaderboard_df = leaderboard_df.sort_values(
+            "EcoPoints",
+            ascending=False
+        ).reset_index(drop=True)
+
+        leaderboard_df.index = leaderboard_df.index + 1
+
+        st.dataframe(
+            leaderboard_df,
+            use_container_width=True
+        )
 
     else:
 
-        rows = []
-
-        for username, user in st.session_state.users.items():
-
-            rows.append({
-                "Member": user["name"],
-                "Community": user["area"],
-                "EcoPoints": points_for(username)
-            })
-
-        rows.sort(
-            key=lambda x: x["EcoPoints"],
-            reverse=True
-        )
-
-        st.dataframe(
-            pd.DataFrame(rows),
-            use_container_width=True,
-            hide_index=True
+        st.info(
+            "Complete the Eco Quiz to appear on this demonstration leaderboard."
         )
 
     st.caption(
-        "EcoPoints are demonstration engagement points, "
-        "not money or guaranteed rewards."
+        "This prototype leaderboard is session-based and is not a shared "
+        "community ranking."
     )
-
-
-# =====================================================
-# COLLECTION MANAGEMENT
-# =====================================================
-
-elif page == "Collection Management":
-
-    st.title("🚛 Collection Management")
-
-    st.write(
-        "A demonstration view of approved waste contributions "
-        "available for collection coordination."
-    )
-
-    approved = approved_records()
-
-    if approved:
-
-        st.dataframe(
-            pd.DataFrame(approved),
-            use_container_width=True,
-            hide_index=True
-        )
-
-    else:
-
-        st.info("No approved contributions are listed yet.")
-
-    st.divider()
-
-    st.subheader("Record collection activity")
-
-    notes = st.text_area("Collection activity notes")
-
-    if st.button("Save collection activity"):
-
-        if not notes.strip():
-
-            st.error("Please add collection notes.")
-
-        else:
-
-            st.session_state.collection_log.append({
-                "date": datetime.now().strftime("%d %b %Y %H:%M"),
-                "notes": notes.strip()
-            })
-
-            st.success("Collection activity saved.")
-
-    if st.session_state.collection_log:
-
-        st.subheader("Collection activity log")
-
-        st.dataframe(
-            pd.DataFrame(st.session_state.collection_log),
-            use_container_width=True,
-            hide_index=True
-        )
 
 
 # =====================================================
 # ENVIRONMENTAL IMPACT
 # =====================================================
 
-elif page == "Environmental Impact":
+elif selected_page == "Environmental Impact":
 
-    st.title("🌱 Environmental Impact")
+    st.title("🌍 Environmental Impact Dashboard")
 
     st.write(
-        "Follow the contributions recorded and approved "
-        "through this EcoLoop demonstration."
+        "A snapshot of recorded and verified environmental contributions."
     )
 
-    records = approved_records()
+    total_records = len(st.session_state.waste_records)
+    verified = verified_records()
 
-    total = sum(float(r["weight"]) for r in records)
+    pending = [
+        record for record in st.session_state.waste_records
+        if record["status"] == "Pending"
+    ]
 
-    members = len(set(r["username"] for r in records))
+    total_verified = sum(
+        record["weight"] for record in verified
+    )
 
-    c1, c2, c3 = st.columns(3)
+    a, b, c, d = st.columns(4)
 
-    with c1:
-        st.metric("Waste", f"{total:.1f} kg")
+    with a:
+        stat_card(total_records, "Total submissions")
 
-    with c2:
-        st.metric("Approved", len(records))
+    with b:
+        stat_card(len(verified), "Verified submissions")
 
-    with c3:
-        st.metric("Members", members)
+    with c:
+        stat_card(len(pending), "Pending submissions")
 
-    if records:
+    with d:
+        stat_card(f"{total_verified:.1f} kg", "Verified waste")
 
-        df = pd.DataFrame(records)
+    st.divider()
+    st.subheader("Verified waste by category")
 
-        st.subheader("Materials recorded")
+    if verified:
 
-        chart = df.groupby("material")["weight"].sum()
+        impact_df = pd.DataFrame(verified)
 
-        st.bar_chart(chart)
+        category_data = (
+            impact_df.groupby("type")["weight"]
+            .sum()
+            .sort_values(ascending=False)
+        )
 
-        st.subheader("Contribution records")
+        st.bar_chart(category_data)
 
         st.dataframe(
-            df,
-            use_container_width=True,
-            hide_index=True
+            impact_df[
+                ["contributor", "type", "weight", "location", "date"]
+            ],
+            use_container_width=True
         )
 
     else:
 
         st.info(
-            "Impact information will appear as contributions "
-            "are submitted and approved."
+            "Verified waste data will appear here after contributions "
+            "have been reviewed."
         )
 
-    st.caption(
-        "This dashboard reports recorded weights only. "
-        "It does not estimate unverified carbon savings."
+    st.markdown("""
+    <div class="green-strip">
+        <p><b>Data integrity:</b> Only verified submissions are included
+        in the verified waste total. Figures are based on prototype records.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# =====================================================
+# COLLECTION MANAGEMENT
+# =====================================================
+
+elif selected_page == "Collection Management":
+
+    st.title("🚛 Collection Management")
+
+    st.write(
+        "Monitor EcoLoop Nodes and coordinate collection activities."
     )
+
+    node_df = pd.DataFrame(st.session_state.nodes)
+
+    if not node_df.empty:
+
+        st.dataframe(
+            node_df,
+            use_container_width=True
+        )
+
+        st.subheader("Node collection levels")
+
+        for node in st.session_state.nodes:
+
+            st.write(f"**{node['name']} — {node['location']}**")
+
+            st.progress(
+                min(node["fill"], 100) / 100
+            )
+
+            if node["fill"] >= 80:
+                st.warning("Collection attention may be needed.")
+            else:
+                st.success("No high fill-level alert in this demonstration.")
+
+    st.divider()
+    st.subheader("Record a collection")
+
+    with st.form("collection_form", clear_on_submit=True):
+
+        node_id = st.selectbox(
+            "Select EcoLoop Node",
+            [node["id"] for node in st.session_state.nodes]
+        )
+
+        collection_team = st.text_input(
+            "Collection team or responsible group"
+        )
+
+        collected_amount = st.number_input(
+            "Collected amount (kg)",
+            min_value=0.1,
+            max_value=10000.0,
+            value=1.0
+        )
+
+        collection_notes = st.text_area("Collection notes")
+
+        collection_submit = st.form_submit_button(
+            "Save collection record",
+            use_container_width=True
+        )
+
+    if collection_submit:
+
+        if not collection_team:
+
+            st.error("Please enter the collection team.")
+
+        else:
+
+            st.session_state.collection_log.append({
+                "node": node_id,
+                "team": collection_team,
+                "weight": float(collected_amount),
+                "notes": collection_notes,
+                "date": str(date.today())
+            })
+
+            st.success("Collection record saved.")
+
+    if st.session_state.collection_log:
+
+        st.subheader("Collection history")
+
+        st.dataframe(
+            pd.DataFrame(st.session_state.collection_log),
+            use_container_width=True
+        )
 
 
 # =====================================================
 # VERIFY CONTRIBUTIONS
 # =====================================================
 
-elif page == "Verify Contributions":
+elif selected_page == "Verify Contributions":
 
     st.title("✅ Verify Contributions")
 
-    st.warning(
-        "Demonstration admin area. It is not protected by secure "
-        "administrator authentication. Do not use it for real "
-        "community records."
+    st.write(
+        "Review waste submissions, gallery contributions and group requests."
     )
 
-    pending = [
-        r for r in st.session_state.records
-        if r["status"] == "Pending"
+    st.markdown("""
+    <div class="amber-strip">
+        <p><b>Prototype security notice:</b> This page is not protected
+        by administrator authentication. Do not use it for real public
+        administration until secure accounts and permissions are added.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.subheader("Waste submissions")
+
+    pending_waste = [
+        record for record in st.session_state.waste_records
+        if record["status"] == "Pending"
     ]
 
-    if not pending:
+    if not pending_waste:
 
-        st.info("No contributions awaiting review.")
+        st.info("There are no pending waste submissions.")
 
-    for record in pending:
+    else:
 
-        with st.expander(
-            f"{record['name']} · {record['material']} · "
-            f"{record['weight']} kg"
-        ):
+        for record in pending_waste:
 
-            st.write(f"**Station:** {record['station']}")
-            st.write(f"**Date:** {record['date']}")
-            st.write(f"**Notes:** {record['notes']}")
+            with st.expander(
+                f"{record['type']} — {record['weight']} kg — {record['contributor']}"
+            ):
 
-            a, b = st.columns(2)
+                st.write(f"Location: {record['location']}")
+                st.write(f"Date: {record['date']}")
+                st.write(f"Notes: {record['notes']}")
 
-            with a:
+                col1, col2 = st.columns(2)
 
-                if st.button(
-                    "Approve",
-                    key=f"approve_{record['id']}"
-                ):
+                with col1:
 
-                    record["status"] = "Approved"
+                    if st.button(
+                        "Approve",
+                        key=f"approve_waste_{record['id']}"
+                    ):
 
-                    st.success("Contribution approved.")
-                    st.rerun()
+                        record["status"] = "Verified"
+                        st.success("Contribution verified.")
+                        st.rerun()
 
-            with b:
+                with col2:
 
-                if st.button(
-                    "Reject",
-                    key=f"reject_{record['id']}"
-                ):
+                    if st.button(
+                        "Reject",
+                        key=f"reject_waste_{record['id']}"
+                    ):
 
-                    record["status"] = "Rejected"
+                        record["status"] = "Rejected"
+                        st.warning("Contribution rejected.")
+                        st.rerun()
 
-                    st.warning("Contribution rejected.")
-                    st.rerun()
+    st.divider()
+    st.subheader("Gallery submissions")
+
+    pending_photos = [
+        item for item in st.session_state.gallery
+        if item["status"] == "Pending"
+    ]
+
+    if not pending_photos:
+
+        st.info("There are no pending photos.")
+
+    else:
+
+        for item in pending_photos:
+
+            with st.expander(item["activity"]):
+
+                st.image(
+                    item["photo"],
+                    use_container_width=True
+                )
+
+                st.write(f"Contributor: {item['contributor']}")
+                st.write(f"Location: {item['location']}")
+                st.write(item["description"])
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+
+                    if st.button(
+                        "Approve photo",
+                        key=f"approve_photo_{item['id']}"
+                    ):
+
+                        item["status"] = "Approved"
+                        st.success("Photo approved.")
+                        st.rerun()
+
+                with col2:
+
+                    if st.button(
+                        "Reject photo",
+                        key=f"reject_photo_{item['id']}"
+                    ):
+
+                        item["status"] = "Rejected"
+                        st.warning("Photo rejected.")
+                        st.rerun()
+
+    st.divider()
+    st.subheader("Community group requests")
+
+    pending_group_requests = [
+        group for group in st.session_state.pending_groups
+        if group["status"] == "Pending"
+    ]
+
+    if not pending_group_requests:
+
+        st.info("There are no pending group requests.")
+
+    else:
+
+        for group in pending_group_requests:
+
+            with st.expander(group["name"]):
+
+                st.write(f"Type: {group['type']}")
+                st.write(f"Location: {group['location']}")
+                st.write(f"Description: {group['description']}")
+                st.write(f"Contact: {group['contact']}")
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+
+                    if st.button(
+                        "Approve group",
+                        key=f"approve_group_{group['id']}"
+                    ):
+
+                        group["status"] = "Approved"
+
+                        st.session_state.groups.append({
+                            "id": group["id"],
+                            "name": group["name"],
+                            "type": group["type"],
+                            "description": group["description"],
+                            "status": "Approved"
+                        })
+
+                        st.success("Group approved.")
+                        st.rerun()
+
+                with col2:
+
+                    if st.button(
+                        "Reject group",
+                        key=f"reject_group_{group['id']}"
+                    ):
+
+                        group["status"] = "Rejected"
+                        st.warning("Group request rejected.")
+                        st.rerun()
 
 
 # =====================================================
 # ADMIN STUDIO
 # =====================================================
 
-elif page == "Admin Studio":
+elif selected_page == "Admin Studio":
 
-    st.title("🛠️ NGIH Admin Studio")
+    st.title("⚙️ EcoLoop Admin Studio")
 
-    st.warning(
-        "This demonstration admin area is not password-protected. "
-        "Do not publish sensitive information or use it for real "
-        "administrator operations."
+    st.write(
+        "A demonstration overview of the platform's administrative data."
     )
 
-    st.subheader("Review gallery submissions")
+    st.markdown("""
+    <div class="amber-strip">
+        <p><b>Important:</b> This is a prototype administration page.
+        It has no secure login or role-based access. Do not expose it
+        as a real administrator portal.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    pending_photos = [
-        p for p in st.session_state.gallery
-        if p["status"] == "Pending"
-    ]
+    a, b, c = st.columns(3)
 
-    if not pending_photos:
+    with a:
+        stat_card(
+            len(st.session_state.waste_records),
+            "Waste records"
+        )
 
-        st.info("No photographs awaiting review.")
+    with b:
+        stat_card(
+            len(st.session_state.gallery),
+            "Gallery submissions"
+        )
 
-    for photo in pending_photos:
-
-        with st.expander(photo["caption"]):
-
-            st.image(
-                photo["image"],
-                use_container_width=True
-            )
-
-            st.caption(
-                f"Group: {photo['group']} · "
-                f"Credit: {photo['credit'] or 'Not supplied'}"
-            )
-
-            a, b = st.columns(2)
-
-            with a:
-
-                if st.button(
-                    "Approve photo",
-                    key=f"approve_photo_{photo['id']}"
-                ):
-
-                    photo["status"] = "Approved"
-
-                    st.success("Photo approved.")
-                    st.rerun()
-
-            with b:
-
-                if st.button(
-                    "Reject photo",
-                    key=f"reject_photo_{photo['id']}"
-                ):
-
-                    photo["status"] = "Rejected"
-
-                    st.warning("Photo rejected.")
-                    st.rerun()
+    with c:
+        stat_card(
+            len(st.session_state.nodes),
+            "EcoLoop Nodes"
+        )
 
     st.divider()
+    st.subheader("Waste contribution data")
 
-    st.subheader("Review community group requests")
+    if st.session_state.waste_records:
 
-    pending_groups = [
-        g for g in st.session_state.group_requests
-        if g["status"] == "Pending"
-    ]
+        waste_export = pd.DataFrame(
+            st.session_state.waste_records
+        )
 
-    if not pending_groups:
+        st.dataframe(
+            waste_export,
+            use_container_width=True
+        )
 
-        st.info("No group requests awaiting review.")
+        csv_data = waste_export.to_csv(
+            index=False
+        ).encode("utf-8")
 
-    for group in pending_groups:
+        st.download_button(
+            "Download waste records (CSV)",
+            data=csv_data,
+            file_name="ecoloop_waste_records.csv",
+            mime="text/csv"
+        )
 
-        with st.expander(group["name"]):
+    else:
 
-            st.write(f"**Area:** {group['area']}")
-            st.write(group["description"])
-
-            a, b = st.columns(2)
-
-            with a:
-
-                if st.button(
-                    "Approve group",
-                    key=f"approve_group_{group['id']}"
-                ):
-
-                    group["status"] = "Approved"
-
-                    if group["name"] not in st.session_state.groups:
-                        st.session_state.groups.append(group["name"])
-
-                    st.success("Group approved.")
-                    st.rerun()
-
-            with b:
-
-                if st.button(
-                    "Decline group",
-                    key=f"decline_group_{group['id']}"
-                ):
-
-                    group["status"] = "Declined"
-
-                    st.warning("Group request declined.")
-                    st.rerun()
+        st.info("No waste records available.")
 
     st.divider()
+    st.subheader("Export collection history")
 
-    st.subheader("Preview NGIH logo")
+    if st.session_state.collection_log:
 
-    logo_upload = st.file_uploader(
-        "Choose a PNG or JPG logo",
-        type=["png", "jpg", "jpeg"],
-        key="logo_preview"
-    )
+        collection_export = pd.DataFrame(
+            st.session_state.collection_log
+        )
 
-    if logo_upload:
+        csv_collection = collection_export.to_csv(
+            index=False
+        ).encode("utf-8")
 
-        try:
+        st.download_button(
+            "Download collection records (CSV)",
+            data=csv_collection,
+            file_name="ecoloop_collection_records.csv",
+            mime="text/csv"
+        )
 
-            image = Image.open(logo_upload)
+    else:
 
-            st.image(image, width=220)
+        st.info("No collection records available.")
 
-            st.info(
-                "This previews your logo. To update it permanently, "
-                "upload the original high-resolution file to GitHub."
-            )
+    st.divider()
+    st.subheader("Prototype data management")
 
-        except Exception:
+    if st.button("Clear this session's demonstration data"):
 
-            st.error("The logo file could not be opened.")
+        st.session_state.clear()
+        st.rerun()
 
 
 # =====================================================
 # ABOUT NGIH
 # =====================================================
 
-elif page == "About NGIH":
+elif selected_page == "About NGIH":
 
     st.title("🌍 About NGIH")
 
-    st.subheader("Next Gen Impact Hub")
-
-    st.markdown(f"""
-    <div class="mission-card">
-        <b>OUR MISSION</b><br><br>
-        {MISSION}
+    st.markdown("""
+    <div class="hero">
+        <p class="eyebrow">NEXT GEN IMPACT HUB</p>
+        <h1>Young people.<br>Ideas. Impact.</h1>
+        <p>
+        Creating a generation of youth who lead and influence
+        across governance, economy, environment and technology.
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
+    st.subheader("Our mission")
+
+    st.write(
+        "To create a generation of youth who lead and influence "
+        "across governance, economy, environment, and technology."
+    )
+
     st.subheader("Our four pillars")
 
-    for pillar in PILLARS:
-        st.markdown(f"♻️ **{pillar}**")
+    pillars = [
+        (
+            "🏛️ Governance & Civic Education",
+            "Supporting informed participation, accountability and civic awareness."
+        ),
+        (
+            "💼 Business & Entrepreneurship",
+            "Encouraging innovation, enterprise and economic participation."
+        ),
+        (
+            "🌱 Climate Action & Environment",
+            "Promoting environmental responsibility and sustainable communities."
+        ),
+        (
+            "💻 Technology, Innovation, Media & Arts",
+            "Using creativity and technology to address real-world challenges."
+        )
+    ]
 
-    st.divider()
+    for title, description in pillars:
+
+        st.markdown(f"""
+        <div class="eco-card">
+            <h3>{title}</h3>
+            <p>{description}</p>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.subheader("About EcoLoop Node 2.0")
 
     st.write(
-        "EcoLoop Node 2.0 is a youth-driven environmental "
-        "technology project developed under NGIH. It explores "
-        "how accessible digital tools can support waste separation, "
-        "recycling participation, community coordination and "
-        "environmental data."
+        "EcoLoop Node 2.0 is a digital environmental management "
+        "prototype developed under NGIH's Climate Action & Environment pillar. "
+        "It explores how accessible digital technology can support "
+        "waste separation, recycling awareness, community participation "
+        "and collection coordination."
     )
 
-    st.write(
-        "The current platform is a software demonstration. "
-        "Future development aims to explore physical smart "
-        "collection stations, sensor integration and "
-        "AI-assisted waste classification."
+    st.markdown("""
+    <div class="teal-strip">
+        <p><b>Our vision:</b> Small actions. Smarter communities. A greener future.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.caption(
+        "NGIH is presented here as a youth-led initiative."
     )
-
-    st.divider()
-
-    st.write(
-        "We believe young people should not only participate "
-        "in development, but also lead, influence and create "
-        "solutions across the spaces that shape their communities."
-    )
-
-    st.caption("NGIH — A youth-led initiative.")
 
 
 # =====================================================
 # FOOTER
 # =====================================================
 
-st.divider()
-
-st.markdown(f"""
-<div style="text-align:center; padding:15px;">
-    <h4 style="color:{DARK};">♻️ EcoLoop Node 2.0</h4>
-
-    <p style="color:#52645A;">
-    A project developed under NGIH — Next Gen Impact Hub.
-    </p>
-
-    <p style="color:#52645A;">
-    Small actions. Smarter communities. A greener future.
-    </p>
-
-    <p style="color:#52645A; font-size:12px;">
-    Developed by Munashe R. Mutopa
-    </p>
-</div>
-""", unsafe_allow_html=True)
+footer()
