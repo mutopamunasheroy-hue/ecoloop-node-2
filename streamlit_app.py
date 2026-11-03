@@ -954,6 +954,7 @@ def home_page():
         "🌱"
     )
 
+
 # =====================================================
 # PAGE 2 — LOGIN
 # =====================================================
@@ -961,18 +962,21 @@ def home_page():
 def login_form():
 
     st.title("Welcome Back")
-
     st.write("Log in to continue your EcoLoop journey.")
 
     if not supabase:
         st.error("The database connection is unavailable.")
         return
 
+    st.divider()
+
+    st.subheader("Member Login")
+
     with st.form("ecoloop_login_form"):
 
         email = st.text_input(
             "Email Address",
-            placeholder="Enter your email"
+            placeholder="Enter your registered email"
         )
 
         password = st.text_input(
@@ -992,7 +996,6 @@ def login_form():
                 st.warning("Please enter your email and password.")
 
             else:
-
                 try:
 
                     response = supabase.auth.sign_in_with_password({
@@ -1002,27 +1005,75 @@ def login_form():
 
                     if set_user_session(response):
 
-                        st.success("Login successful!")
+                        st.success("Welcome back to EcoLoop Node!")
+
                         st.session_state["current_page"] = "Home"
                         st.session_state["main_category"] = "Home"
+
                         st.rerun()
 
                     else:
-                        st.error("Login could not be completed.")
+                        st.error(
+                            "Your login was not completed. "
+                            "Please try again."
+                        )
 
-                except Exception:
-                    st.error(
-                        "Login failed. Check your email and password "
-                        "or try again."
+                except Exception as error:
+                    st.error("We could not complete your login.")
+                    st.caption(f"Authentication details: {str(error)}")
+
+    st.divider()
+
+    # FORGOT PASSWORD
+
+    with st.expander("Forgot your password?"):
+
+        st.write(
+            "Enter your registered email address. "
+            "We'll request a password-reset email."
+        )
+
+        reset_email = st.text_input(
+            "Registered Email",
+            key="password_reset_email",
+            placeholder="Enter your email address"
+        )
+
+        if st.button(
+            "Send Password Reset Link",
+            use_container_width=True
+        ):
+
+            if not reset_email.strip():
+                st.warning("Please enter your registered email.")
+
+            else:
+                try:
+
+                    supabase.auth.reset_password_for_email(
+                        reset_email.strip()
                     )
+
+                    st.success(
+                        "If the account exists, a password-reset "
+                        "email will be sent. Check your inbox."
+                    )
+
+                except Exception as error:
+                    st.error("We could not request the password reset.")
+                    st.caption(f"Details: {str(error)}")
 
     st.divider()
 
     st.write("New to EcoLoop Node?")
 
-    if st.button("Create an Account", use_container_width=True):
+    if st.button(
+        "Create an Account",
+        use_container_width=True
+    ):
         navigate_to("Register")
         st.rerun()
+
 
 
 # =====================================================
