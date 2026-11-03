@@ -25,18 +25,13 @@ def get_supabase_client():
 
 try:
     supabase = get_supabase_client()
-
-    supabase.table("collection_stations").select(
-        "station_code"
-    ).limit(1).execute()
-
-    st.sidebar.success("Supabase connected")
+    st.sidebar.success("Supabase client initialised")
 
 except Exception as e:
     supabase = None
-    print("SUPABASE CONNECTION ERROR:", repr(e))
     st.sidebar.error(
-        "Supabase connection failed. Check app logs."
+        f"Supabase setup error: {type(e).__name__}: {e}"
+    )
     )
 
 # =====================================================
