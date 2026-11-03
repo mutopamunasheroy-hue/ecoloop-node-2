@@ -32,10 +32,11 @@ try:
 
     st.sidebar.success("Supabase connected")
 
-except Exception:
+except Exception as e:
     supabase = None
+    print("SUPABASE CONNECTION ERROR:", repr(e))
     st.sidebar.error(
-        "Supabase connection failed. Check app settings."
+        "Supabase connection failed. Check app logs."
     )
 
 # =====================================================
