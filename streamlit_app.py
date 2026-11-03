@@ -511,13 +511,16 @@ def home_page():
 # =====================================================
 # DISPLAY HOME PAGE
 # =====================================================
-
 if page == "Home":
-    home_page()def get_supabase_client():
+    home_page()
+
+
+def get_supabase_client():
     return create_client(
         st.secrets["SUPABASE_URL"],
         st.secrets["SUPABASE_KEY"]
-)
+    )
+
 # =====================================================
 # SUPABASE AUTHENTICATION
 # =====================================================
