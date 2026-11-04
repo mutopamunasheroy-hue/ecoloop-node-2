@@ -4200,10 +4200,27 @@ st.divider()
 footer_logo, footer_text = st.columns([1, 4])
 
 with footer_logo:
+
     if os.path.exists(LOGO_FILE):
-        st.image(LOGO_FILE, width=75)
+
+        with open(LOGO_FILE, "rb") as logo_file:
+            footer_logo_data = base64.b64encode(
+                logo_file.read()
+            ).decode("utf-8")
+
+        st.markdown(
+            f"""
+            <img
+                src="data:image/jpeg;base64,{footer_logo_data}"
+                width="75"
+                style="height:auto; max-height:none; object-fit:contain;"
+            >
+            """,
+            unsafe_allow_html=True
+        )
 
 with footer_text:
+
     st.markdown("### EcoLoop Node")
     st.markdown("**Powered by Next Gen Impact Hub (NGIH)**")
     st.caption("Designed by Munashe Roy Mutopa — Project Coordinator")
