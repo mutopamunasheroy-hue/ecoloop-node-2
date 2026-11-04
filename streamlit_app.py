@@ -523,40 +523,60 @@ def get_table_count(table_name):
 
 
 # =====================================================
-# ECOLOOP NODE — MOBILE FRIENDLY BRAND HEADER
+# ECOLOOP NODE — MOBILE BRAND HEADER
 # =====================================================
 
 import os
+import base64
 
 LOGO_FILE = "IMG-20261028-WA0000.jpg"
 
 
 def show_app_header():
 
-    logo_col, text_col = st.columns(
-        [1, 2],
-        gap="small"
-    )
+    if os.path.exists(LOGO_FILE):
 
-    with logo_col:
+        with open(LOGO_FILE, "rb") as logo_file:
+            logo_data = base64.b64encode(
+                logo_file.read()
+            ).decode("utf-8")
 
-        if os.path.exists(LOGO_FILE):
-            st.image(
-                LOGO_FILE,
-                width=110
-            )
-        else:
-            st.warning("NGIH logo not found.")
-
-    with text_col:
-
-        st.markdown(f"### {APP_NAME}")
-
-        st.markdown(
-            f"**Powered by {NGIH_NAME} (NGIH)**"
+        logo_html = (
+            f'<img src="data:image/jpeg;base64,{logo_data}" '
+            'width="125" '
+            'style="height:auto; max-height:none; '
+            'object-fit:contain; display:block;">'
         )
 
-        st.caption(APP_TAGLINE)
+    else:
+        logo_html = "NGIH"
+
+    header_html = f"""
+    <table width="100%" cellpadding="8" cellspacing="0"
+           style="border-collapse:collapse;">
+        <tr>
+            <td width="35%" valign="middle">
+                {logo_html}
+            </td>
+            <td width="65%" valign="middle">
+                <h2 style="margin:0; font-size:25px;">
+                    {APP_NAME}
+                </h2>
+                <p style="margin:6px 0;">
+                    <strong>Powered by {NGIH_NAME} (NGIH)</strong>
+                </p>
+                <p style="margin:4px 0; font-size:12px;">
+                    {APP_TAGLINE}
+                </p>
+            </td>
+        </tr>
+    </table>
+    """
+
+    st.markdown(
+        header_html,
+        unsafe_allow_html=True
+    )
 
     st.divider()
 
