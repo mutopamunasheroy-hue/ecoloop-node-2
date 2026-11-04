@@ -3929,27 +3929,27 @@ def verify_contributions_page():
                     use_container_width=True
                 ):
 
-                    try:
-    response = (
-        supabase.table("waste_contributions")
-        .update({"verification_status": "verified"})
-        .eq("id", contribution_id)
-        .eq("verification_status", "pending")
-        .select("id")
-        .execute()
-    )
+                                        try:
+                        response = (
+                            supabase.table("waste_contributions")
+                            .update({"verification_status": "verified"})
+                            .eq("id", contribution_id)
+                            .eq("verification_status", "pending")
+                            .select("id")
+                            .execute()
+                        )
 
-    if response.data:
-        st.success("Contribution approved.")
-        st.rerun()
-    else:
-        st.error(
-            "No contribution was updated. "
-            "Check your administrator role and database policies."
-        )
+                        if response.data:
+                            st.success("Contribution approved.")
+                            st.rerun()
+                        else:
+                            st.error(
+                                "No contribution was updated. "
+                                "Check your administrator role and database policies."
+                            )
 
-except Exception as e:
-    st.error(f"Approval error: {e}")
+                    except Exception as e:
+                        st.error(f"Approval error: {e}")
 
             with col2:
 
