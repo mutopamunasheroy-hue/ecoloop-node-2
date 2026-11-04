@@ -10,70 +10,49 @@ from datetime import date, timedelta
 STARTER_CHALLENGES = [
     {
         "title": "7-Day Recycling Challenge",
-        "description": (
-            "Sort recyclable materials for seven days. "
-            "Record your contributions and help reduce waste."
-        ),
+        "description": "Sort recyclable materials for seven days. Record your contributions and help reduce waste.",
         "challenge_type": "both",
         "target_quantity": 7,
         "points_reward": 100,
     },
     {
         "title": "Green Neighbourhood Challenge",
-        "description": (
-            "Plant and care for suitable indigenous trees "
-            "with permission and community support."
-        ),
+        "description": "Plant and care for suitable indigenous trees with permission and community support.",
         "challenge_type": "both",
         "target_quantity": 1,
         "points_reward": 150,
     },
     {
         "title": "Plastic-Free Week",
-        "description": (
-            "Reduce your use of single-use plastics "
-            "and record reusable alternatives."
-        ),
+        "description": "Reduce your use of single-use plastics and record reusable alternatives.",
         "challenge_type": "individual",
         "target_quantity": 7,
         "points_reward": 100,
     },
     {
         "title": "Clean Community Challenge",
-        "description": (
-            "Participate in a supervised community cleanup. "
-            "Avoid hazardous waste."
-        ),
+        "description": "Participate in a supervised community cleanup. Avoid hazardous waste.",
         "challenge_type": "both",
         "target_quantity": 1,
         "points_reward": 150,
     },
     {
         "title": "Eco-Education Challenge",
-        "description": (
-            "Spread environmental awareness through posters, "
-            "presentations and educational activities."
-        ),
+        "description": "Spread environmental awareness through posters, presentations and educational activities.",
         "challenge_type": "both",
         "target_quantity": 1,
         "points_reward": 100,
     },
     {
         "title": "Water Conservation Challenge",
-        "description": (
-            "Practise responsible water use and identify "
-            "everyday ways to reduce unnecessary waste."
-        ),
+        "description": "Practise responsible water use and identify everyday ways to reduce unnecessary waste.",
         "challenge_type": "individual",
         "target_quantity": 7,
         "points_reward": 100,
     },
     {
         "title": "Waste-to-Value Challenge",
-        "description": (
-            "Explore safe and creative ways to reuse "
-            "materials or turn organic waste into compost."
-        ),
+        "description": "Explore safe and creative ways to reuse materials or turn organic waste into compost.",
         "challenge_type": "both",
         "target_quantity": 1,
         "points_reward": 120,
@@ -114,7 +93,6 @@ def get_my_participation(supabase, user_id):
 # =====================================================
 
 def publish_starter_challenges(supabase, user_id, challenges):
-
     existing_titles = {
         item.get("title", "").strip().lower()
         for item in challenges
@@ -122,11 +100,9 @@ def publish_starter_challenges(supabase, user_id, challenges):
 
     today = date.today()
     end_date = today + timedelta(days=30)
-
     added = 0
 
     for item in STARTER_CHALLENGES:
-
         if item["title"].strip().lower() in existing_titles:
             continue
 
@@ -155,7 +131,6 @@ def publish_starter_challenges(supabase, user_id, challenges):
 # =====================================================
 
 def join_challenge(supabase, challenge_id, user_id):
-
     existing = (
         supabase.table("challenge_participants")
         .select("id")
@@ -197,7 +172,7 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
 
     # LOAD DATABASE RECORDS
 
-        try:
+    try:
         challenges = get_challenges(supabase)
         participations = get_my_participation(
             supabase, user_id
@@ -223,21 +198,14 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
     col1, col2, col3 = st.columns(3)
 
     col1.metric("Available", len(challenges))
-    col2.metric(
-        "Joined",
-        len(participations) if user_id else "—"
-    )
-    col3.metric(
-        "Completed",
-        completed_count if user_id else "—"
-    )
+    col2.metric("Joined", len(participations) if user_id else "—")
+    col3.metric("Completed", completed_count if user_id else "—")
 
     st.divider()
 
     # ADMIN PUBLISHING
 
     if is_admin:
-
         with st.expander("🌍 Publish starter challenges"):
 
             st.write(
@@ -249,12 +217,9 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
                 "Publish starter challenges",
                 use_container_width=True
             ):
-
                 try:
                     added = publish_starter_challenges(
-                        supabase,
-                        user_id,
-                        challenges
+                        supabase, user_id, challenges
                     )
 
                     st.success(
@@ -262,11 +227,9 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
                     )
                     st.rerun()
 
-                except Exception:
-                    st.error(
-                        "Could not publish challenges. "
-                        "Check the database permissions."
-                    )
+                except Exception as e:
+                    st.error("Could not publish challenges.")
+                    st.exception(e)
 
     # GUEST INFORMATION
 
@@ -301,7 +264,6 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
     filtered = []
 
     for challenge in challenges:
-
         title = challenge.get("title") or ""
         description = challenge.get("description") or ""
 
@@ -328,7 +290,6 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
     # DISPLAY CHALLENGES
 
     for challenge in filtered:
-
         challenge_id = str(challenge["id"])
         joined = participation_map.get(challenge_id)
 
@@ -340,10 +301,11 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
         target = challenge.get("target_quantity")
 
         with st.container(border=True):
-
-            st.subheader("🌱 " + challenge.get(
-                "title", "Environmental Challenge"
-            ))
+            st.subheader(
+                "🌱 " + challenge.get(
+                    "title", "Environmental Challenge"
+                )
+            )
 
             st.write(challenge.get("description") or "")
 
@@ -361,11 +323,9 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
                 st.caption(f"Target: {target}")
 
             if not user_id:
-
                 st.info("Log in to join this challenge.")
 
             elif joined:
-
                 st.success("You have joined this challenge.")
 
                 progress = joined.get("progress", 0) or 0
@@ -374,11 +334,9 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
                     progress_value = min(
                         float(progress) / float(target), 1.0
                     )
-                    st.progress(progress_value)
 
-                    st.write(
-                        f"Progress: {progress} / {target}"
-                    )
+                    st.progress(progress_value)
+                    st.write(f"Progress: {progress} / {target}")
 
                 if joined.get("completed") is True:
                     st.success("🏆 Challenge completed!")
@@ -390,7 +348,6 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
                     )
 
             elif challenge_type == "group":
-
                 st.info(
                     "This challenge is for groups. "
                     "Group joining will be enabled after the "
@@ -398,18 +355,14 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
                 )
 
             else:
-
                 if st.button(
                     "Join Challenge",
                     key=f"join_{challenge_id}",
                     use_container_width=True
                 ):
-
                     try:
                         success, message = join_challenge(
-                            supabase,
-                            challenge_id,
-                            user_id
+                            supabase, challenge_id, user_id
                         )
 
                         if success:
@@ -419,11 +372,9 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
 
                         st.rerun()
 
-                    except Exception:
-                        st.error(
-                            "Could not join this challenge. "
-                            "Please check your account permissions."
-                        )
+                    except Exception as e:
+                        st.error("Could not join this challenge.")
+                        st.exception(e)
 
     # FOOTER
 
