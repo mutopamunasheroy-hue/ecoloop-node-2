@@ -3936,13 +3936,31 @@ def verify_contributions_page():
                         )
 
                         if response.data:
-                            st.success("Contribution approved.")
-                            st.rerun()
-                        else:
-                            st.error(
-                                "No contribution was updated. "
-                                "Check administrator permissions and database policies."
-                            )
+    award_result = award_points(
+        supabase=supabase,
+        user_id=contribution.get("user_id"),
+        points=1,
+        activity_type="waste_contribution",
+        description=(
+            f"Verified waste contribution: "
+            f"{contribution.get('material_type')} "
+            f"({contribution.get('weight')} kg)"
+        ),
+        contribution_id=contribution_id
+    )
+
+    if award_result["success"]:
+        st.success("Contribution approved and 1 point awarded.")
+        st.rerun()
+    else:
+        st.error("Contribution approved, but points could not be awarded.")
+        st.error(award_result["message"])
+
+else:
+    st.error(
+        "No contribution was updated. "
+        "Check administrator permissions and database policies."
+    )
 
                     except Exception as e:
                         st.error(f"Approval error: {e}")
