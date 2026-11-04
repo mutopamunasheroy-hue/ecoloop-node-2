@@ -3925,7 +3925,7 @@ def verify_contributions_page():
                     key=f"approve_{contribution_id}",
                     use_container_width=True
                 ):
-                    try:
+                                        try:
                         response = (
                             supabase.table("waste_contributions")
                             .update({"verification_status": "verified"})
@@ -3935,7 +3935,7 @@ def verify_contributions_page():
                             .execute()
                         )
 
-                                                if response.data:
+                        if response.data:
                             award_result = award_points(
                                 supabase=supabase,
                                 user_id=contribution.get("user_id"),
@@ -3960,34 +3960,6 @@ def verify_contributions_page():
 
                     except Exception as e:
                         st.error(f"Approval error: {e}")
-
-            with col2:
-                if st.button(
-                    "Reject",
-                    key=f"reject_{contribution_id}",
-                    use_container_width=True
-                ):
-                    try:
-                        response = (
-                            supabase.table("waste_contributions")
-                            .update({"verification_status": "rejected"})
-                            .eq("id", contribution_id)
-                            .eq("verification_status", "pending")
-                            .select("id")
-                            .execute()
-                        )
-
-                        if response.data:
-                            st.warning("Contribution rejected.")
-                            st.rerun()
-                        else:
-                            st.error(
-                                "No contribution was updated. "
-                                "Check administrator permissions and database policies."
-                            )
-
-                    except Exception as e:
-                        st.error(f"Rejection error: {e}")
 
 # =====================================================
 # PAGE 17 — ADMIN STUDIO
