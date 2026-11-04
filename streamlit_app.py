@@ -1156,8 +1156,8 @@ def login_form():
         navigate_to("Register")
         st.rerun()
 
-
-
+         
+  
 # =====================================================
 # PAGE 3 — REGISTRATION
 # =====================================================
@@ -1204,101 +1204,64 @@ def registration_form():
             use_container_width=True
         )
 
-        if submitted:
+    if submitted:
 
-            if not full_name.strip() or not email.strip():
-                st.warning("Please complete your name and email.")
+        if not full_name.strip() or not email.strip():
+            st.warning("Please complete your name and email.")
 
-            elif len(password) < 8:
-                st.warning(
-                    "Your password must contain at least 8 characters."
-                )
+        elif len(password) < 8:
+            st.warning(
+                "Your password must contain at least 8 characters."
+            )
 
-            elif password != confirm_password:
-                st.warning("Your passwords do not match.")
+        elif password != confirm_password:
+            st.warning("Your passwords do not match.")
 
-            else:
+        else:
 
-                try:
+            try:
 
-                    response = supabase.auth.sign_up({
-                        "email": email.strip(),
-                        "password": password,
-                        def load_user_profile():
+                response = supabase.auth.sign_up({
+                    "email": email.strip(),
+                    "password": password,
+                    "options": {
+                        "data": {
+                            "full_name": full_name.strip()
+                        }
+                    }
+                })
 
-    if not supabase:
-        return None
+                user = getattr(response, "user", None)
+                session = getattr(response, "session", None)
 
-    user_id = st.session_state.get("user_id")
+                if user and session:
 
-    if not user_id:
-        return None
+                    set_user_session(response)
 
-    try:
-        response = (
-            supabase
-            .table("profiles")
-            .select("*")
-            .eq("id", user_id)
-            .maybe_single()
-            .execute()
-        )
-
-        profile = response.data or {}
-
-        user = st.session_state.get("user")
-
-        user_metadata = getattr(
-            user,
-            "user_metadata",
-            None
-        ) or {}
-
-        if not profile.get("full_name"):
-            profile["full_name"] = user_metadata.get("full_name")
-
-        st.session_state["profile"] = profile
-
-        return profile
-
-    except Exception:
-        return None
-                    
-
-                    user = getattr(response, "user", None)
-                    session = getattr(response, "session", None)
-
-                    if user and session:
-
-                        set_user_session(response)
-
-                        st.success(
-                            "Your account has been created successfully!"
-                        )
-
-                        st.session_state["current_page"] = "Home"
-                        st.session_state["main_category"] = "Home"
-                        st.rerun()
-
-                    elif user:
-
-                        st.success(
-                            "Registration received. Please check your "
-                            "email to confirm your account before logging in."
-                        )
-
-                    else:
-
-                        st.error(
-                            "Registration could not be completed. "
-                            "Please try again."
-                        )
-
-                except Exception:
-                    st.error(
-                        "Registration failed. The email may already "
-                        "be registered, or the details may be invalid."
+                    st.success(
+                        "Your account has been created successfully!"
                     )
+
+                    st.session_state["current_page"] = "Home"
+                    st.session_state["main_category"] = "Home"
+                    st.rerun()
+
+                elif user:
+
+                    st.success(
+                        "Registration received. Please check your "
+                        "email to confirm your account before logging in."
+                    )
+
+                else:
+
+                    st.error(
+                        "Registration could not be completed. "
+                        "Please try again."
+                    )
+
+            except Exception as e:
+                st.error(f"Registration failed: {e}")
 
     st.divider()
 
@@ -1307,7 +1270,7 @@ def registration_form():
     if st.button("Go to Login", use_container_width=True):
         navigate_to("Login")
         st.rerun()
-
+      
 
 # =====================================================
 # PAGE 4 — MY PROFILE
