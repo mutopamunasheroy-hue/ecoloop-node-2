@@ -7,7 +7,7 @@ import uuid
 
 from datetime import date, datetime
 from supabase import create_client
-
+from community_groups import render_community_groups_page
 
 # =====================================================
 # ECOLOOP NODE — APP CONFIGURATION
