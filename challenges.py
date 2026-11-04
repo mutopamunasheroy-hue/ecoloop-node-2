@@ -1,11 +1,15 @@
 
 import streamlit as st
 from datetime import date, timedelta
+from uuid import uuid4
+import re
 
 
 # =====================================================
 # ECOLOOP NODE — ENVIRONMENTAL CHALLENGES
 # =====================================================
+
+EVIDENCE_BUCKET = "challenge-evidence"
 
 STARTER_CHALLENGES = [
     {
@@ -88,6 +92,20 @@ def get_my_participation(supabase, user_id):
     return response.data or []
 
 
+def get_my_submissions(supabase, user_id):
+    if not user_id:
+        return []
+
+    response = (
+        supabase.table("challenge_submissions")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return response.data or []
+
+
 # =====================================================
 # PUBLISH STARTER CHALLENGES
 # =====================================================
@@ -154,6 +172,97 @@ def join_challenge(supabase, challenge_id, user_id):
 
 
 # =====================================================
+# SUBMIT CHALLENGE PROGRESS
+# =====================================================
+
+def submit_challenge_progress(
+    supabase,
+    participant_id,
+    user_id,
+    progress_amount,
+    description,
+    uploaded_file=None
+):
+    evidence_path = None
+
+    if uploaded_file is not None:
+        safe_name = re.sub(
+            r"[^A-Za-z0-9._-]",
+            "_",
+            uploaded_file.name
+        )
+
+        file_name = f"{uuid4().hex}_{safe_name}"
+
+        evidence_path = (
+            f"{user_id}/{participant_id}/{file_name}"
+        )
+
+        supabase.storage.from_(
+            EVIDENCE_BUCKET
+        ).upload(
+            evidence_path,
+            uploaded_file.getvalue(),
+            file_options={
+                "content-type": uploaded_file.type,
+                "upsert": "false",
+            }
+        )
+
+    record = {
+        "participant_id": participant_id,
+        "user_id": user_id,
+        "progress_amount": progress_amount,
+        "description": description.strip(),
+        "evidence_url": evidence_path,
+        "status": "pending",
+    }
+
+    supabase.table(
+        "challenge_submissions"
+    ).insert(record).execute()
+
+
+# =====================================================
+# DISPLAY SUBMISSION HISTORY
+# =====================================================
+
+def render_submission_history(submissions):
+    if not submissions:
+        st.caption("You have not submitted any challenge progress yet.")
+        return
+
+    st.markdown("**Your submission history**")
+
+    for submission in submissions:
+        status = submission.get("status", "pending")
+        amount = submission.get("progress_amount", 0)
+        created = submission.get("created_at", "")
+
+        with st.container(border=True):
+            if status == "approved":
+                st.success("Approved")
+
+            elif status == "rejected":
+                st.error("Rejected")
+
+            else:
+                st.info("Pending coordinator review")
+
+            st.write(f"Submitted progress: {amount}")
+            st.caption(f"Submitted: {created}")
+
+            if submission.get("description"):
+                st.write(submission["description"])
+
+            if submission.get("review_feedback"):
+                st.caption(
+                    "Coordinator feedback: "
+                    + submission["review_feedback"]
+                )
+
+
+# =====================================================
 # MAIN CHALLENGES PAGE
 # =====================================================
 
@@ -174,9 +283,14 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
 
     try:
         challenges = get_challenges(supabase)
+
         participations = get_my_participation(
             supabase, user_id
         )
+
+        submissions = get_my_submissions(
+            supabase, user_id
+        ) if user_id else []
 
     except Exception as e:
         st.error("Could not load challenges.")
@@ -188,6 +302,17 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
         for item in participations
     }
 
+    submissions_by_participant = {}
+
+    for submission in submissions:
+        participant_id = str(
+            submission.get("participant_id")
+        )
+
+        submissions_by_participant.setdefault(
+            participant_id, []
+        ).append(submission)
+
     # SUMMARY
 
     completed_count = sum(
@@ -198,8 +323,14 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
     col1, col2, col3 = st.columns(3)
 
     col1.metric("Available", len(challenges))
-    col2.metric("Joined", len(participations) if user_id else "—")
-    col3.metric("Completed", completed_count if user_id else "—")
+    col2.metric(
+        "Joined",
+        len(participations) if user_id else "—"
+    )
+    col3.metric(
+        "Completed",
+        completed_count if user_id else "—"
+    )
 
     st.divider()
 
@@ -336,16 +467,96 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
                     )
 
                     st.progress(progress_value)
-                    st.write(f"Progress: {progress} / {target}")
+                    st.write(f"Verified progress: {progress} / {target}")
 
                 if joined.get("completed") is True:
                     st.success("🏆 Challenge completed!")
+
                 else:
                     st.caption(
-                        "Your participation is registered. "
-                        "Evidence verification and progress updates "
-                        "will be enabled in the next setup."
+                        "Submit your progress below for "
+                        "coordinator verification."
                     )
+
+                    participant_id = str(joined["id"])
+
+                    with st.expander(
+                        "📤 Submit challenge progress"
+                    ):
+                        with st.form(
+                            key=f"submission_form_{participant_id}"
+                        ):
+                            progress_amount = st.number_input(
+                                "Progress achieved in this submission",
+                                min_value=0.01,
+                                value=1.0,
+                                step=1.0
+                            )
+
+                            description = st.text_area(
+                                "Describe what you accomplished",
+                                placeholder=(
+                                    "Explain the environmental "
+                                    "activity you completed..."
+                                )
+                            )
+
+                            uploaded_file = st.file_uploader(
+                                "Upload photographic evidence (optional)",
+                                type=["jpg", "jpeg", "png", "webp"],
+                                help="Maximum file size: 5 MB."
+                            )
+
+                            submit_button = st.form_submit_button(
+                                "Submit for verification",
+                                use_container_width=True
+                            )
+
+                            if submit_button:
+                                if not description.strip():
+                                    st.error(
+                                        "Please describe your activity."
+                                    )
+
+                                elif (
+                                    uploaded_file is not None
+                                    and len(uploaded_file.getvalue())
+                                    > 5 * 1024 * 1024
+                                ):
+                                    st.error(
+                                        "Your photograph exceeds "
+                                        "the 5 MB limit."
+                                    )
+
+                                else:
+                                    try:
+                                        submit_challenge_progress(
+                                            supabase,
+                                            participant_id,
+                                            user_id,
+                                            progress_amount,
+                                            description,
+                                            uploaded_file
+                                        )
+
+                                        st.success(
+                                            "Your progress has been "
+                                            "submitted for coordinator review!"
+                                        )
+
+                                        st.rerun()
+
+                                    except Exception as e:
+                                        st.error(
+                                            "Could not submit your progress."
+                                        )
+                                        st.exception(e)
+
+                    history = submissions_by_participant.get(
+                        participant_id, []
+                    )
+
+                    render_submission_history(history)
 
             elif challenge_type == "group":
                 st.info(
