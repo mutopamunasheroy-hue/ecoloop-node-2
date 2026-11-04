@@ -467,65 +467,7 @@ a {
 """, unsafe_allow_html=True)
 
 
-# =====================================================
-# ECOLOOP NODE — RESPONSIVE BRAND HEADER
-# =====================================================
 
-import os
-import base64
-
-LOGO_FILE = "IMG-20261028-WA0000.jpg"
-
-
-def show_app_header():
-
-    if os.path.exists(LOGO_FILE):
-
-        with open(LOGO_FILE, "rb") as image_file:
-            logo_data = base64.b64encode(
-                image_file.read()
-            ).decode("utf-8")
-
-        logo_html = (
-            f'<img src="data:image/jpeg;base64,{logo_data}" '
-            'style="width:110px; height:auto; max-height:none; '
-            'object-fit:contain; display:block;">'
-        )
-
-    else:
-        logo_html = "<strong>NGIH</strong>"
-
-    st.markdown(
-        f"""
-        <div style="display:flex; flex-direction:row;
-                    align-items:center; gap:14px;
-                    width:100%; padding:12px 0;">
-
-            <div style="flex:0 0 110px; min-width:0;">
-                {logo_html}
-            </div>
-
-            <div style="flex:1; min-width:0;">
-                <h1 style="font-size:25px; margin:0 0 6px 0;
-                           line-height:1.2;">
-                    {APP_NAME}
-                </h1>
-
-                <p style="font-size:13px; margin:4px 0;">
-                    <strong>Powered by {NGIH_NAME} (NGIH)</strong>
-                </p>
-
-                <p style="font-size:11px; margin:4px 0;">
-                    {APP_TAGLINE}
-                </p>
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.divider()
 # =====================================================
 # REUSABLE PAGE DESIGN COMPONENTS
 # =====================================================
@@ -580,7 +522,43 @@ def get_table_count(table_name):
         return 0
 
 
+# =====================================================
+# ECOLOOP NODE — MOBILE FRIENDLY BRAND HEADER
+# =====================================================
 
+import os
+
+LOGO_FILE = "IMG-20261028-WA0000.jpg"
+
+
+def show_app_header():
+
+    logo_col, text_col = st.columns(
+        [1, 2],
+        gap="small"
+    )
+
+    with logo_col:
+
+        if os.path.exists(LOGO_FILE):
+            st.image(
+                LOGO_FILE,
+                width=110
+            )
+        else:
+            st.warning("NGIH logo not found.")
+
+    with text_col:
+
+        st.markdown(f"### {APP_NAME}")
+
+        st.markdown(
+            f"**Powered by {NGIH_NAME} (NGIH)**"
+        )
+
+        st.caption(APP_TAGLINE)
+
+    st.divider()
 
 # =====================================================
 # ECOLOOP NODE — NAVIGATION STRUCTURE
