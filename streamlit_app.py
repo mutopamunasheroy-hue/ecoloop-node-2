@@ -1272,6 +1272,7 @@ def registration_form():
         st.rerun()
       
 
+
 # =====================================================
 # PAGE 4 — MY PROFILE
 # =====================================================
@@ -1283,23 +1284,48 @@ def account_page():
     if not require_login():
         return
 
-        profile = st.session_state.get("profile") or {}
+    # -----------------------------------------------
+    # LOAD MEMBER PROFILE
+    # -----------------------------------------------
+
+    profile = st.session_state.get("profile") or {}
 
     user = st.session_state.get("user")
 
     email = getattr(user, "email", "Not available")
 
-    display_name = profile.get("full_name") or "EcoLoop Member"
+    user_metadata = getattr(
+        user,
+        "user_metadata",
+        None
+    ) or {}
+
+    display_name = (
+        profile.get("full_name")
+        or user_metadata.get("full_name")
+        or "Name not available"
+    )
+
+    # -----------------------------------------------
+    # MEMBER NAME
+    # -----------------------------------------------
 
     st.subheader(display_name)
-    
+
+    st.caption(email)
+
+    st.divider()
+
+    # -----------------------------------------------
+    # ACCOUNT OVERVIEW
+    # -----------------------------------------------
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.metric(
             "Account Role",
-            profile.get("role", "user").capitalize()
+            str(profile.get("role") or "User").capitalize()
         )
 
     with col2:
@@ -1310,23 +1336,43 @@ def account_page():
 
     st.divider()
 
+    # -----------------------------------------------
+    # ACCOUNT INFORMATION
+    # -----------------------------------------------
+
     st.subheader("Account Information")
 
-    st.write("**Full Name:**", profile.get("full_name", "Not available"))
+    st.write("**Full Name:**", display_name)
+
     st.write("**Email:**", email)
-    st.write("**User ID:**", st.session_state.get("user_id", "Not available"))
+
+    st.write(
+        "**User ID:**",
+        st.session_state.get("user_id", "Not available")
+    )
 
     created_at = profile.get("created_at")
 
     if created_at:
-        st.write("**Member Since:**", str(created_at)[:10])
+        st.write(
+            "**Member Since:**",
+            str(created_at)[:10]
+        )
 
     st.divider()
+
+    # -----------------------------------------------
+    # ACCOUNT SECURITY
+    # -----------------------------------------------
 
     st.caption(
         "Your account information is managed through "
         "EcoLoop Node and its secure authentication system."
     )
+
+    # -----------------------------------------------
+    # LOG OUT
+    # -----------------------------------------------
 
     if st.button(
         "Log Out",
@@ -1334,6 +1380,7 @@ def account_page():
     ):
         clear_user_session()
         st.rerun()
+
 
 # =====================================================
 # PAGE 5 — ECOLOOP NODES AND QR STATIONS
