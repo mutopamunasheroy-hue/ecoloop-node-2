@@ -4,9 +4,10 @@ import re
 import qrcode
 from io import BytesIO
 
-# =========================================================
+
+# =====================================================
 # ECOLOOP NODE — GLOBAL SMART COLLECTION STATIONS
-# =========================================================
+# =====================================================
 
 TABLE = "collection_stations"
 
@@ -43,9 +44,9 @@ STATION_TYPES = [
 ]
 
 
-# =========================================================
+# =====================================================
 # QR CODE GENERATION
-# =========================================================
+# =====================================================
 
 def generate_qr_code(station_code):
     """Generate a downloadable QR code for a station."""
@@ -58,8 +59,8 @@ def generate_qr_code(station_code):
             border=4
         )
 
-        # The QR identifies the station.
-        # It does not authorise or verify a contribution.
+        # Identifies the station only.
+        # It does not authorise or verify contributions.
         qr.add_data(f"ECOLOOP-STATION:{station_code}")
         qr.make(fit=True)
 
@@ -78,10 +79,9 @@ def generate_qr_code(station_code):
         return None
 
 
-
-# =========================================================
+# =====================================================
 # STATION DATABASE FUNCTIONS
-# =========================================================
+# =====================================================
 
 def get_stations(supabase, active_only=False):
     """Retrieve collection stations."""
@@ -103,9 +103,7 @@ def get_stations(supabase, active_only=False):
         return response.data or [], None
 
     except Exception as e:
-        st.error(f"Station database error: {e}")
         return [], str(e)
-
 
 
 def generate_station_prefix(country_code, city):
@@ -170,9 +168,7 @@ def create_station(
             default=0
         ) + 1
 
-        station_code = (
-            f"{prefix}-{next_number:04d}"
-        )
+        station_code = f"{prefix}-{next_number:04d}"
 
         station_data = {
             "station_code": station_code,
@@ -215,15 +211,18 @@ def create_station(
 
 def update_station_status(
     supabase,
-    station_id,
+    station_code,
     is_active
 ):
-    """Activate or deactivate a station."""
+    """Activate or deactivate a station using its station code."""
 
     try:
         supabase.table(TABLE).update({
             "is_active": bool(is_active)
-        }).eq("id", station_id).execute()
+        }).eq(
+            "station_code",
+            station_code
+        ).execute()
 
         return True, "Station status updated."
 
@@ -231,17 +230,13 @@ def update_station_status(
         return False, str(e)
 
 
-# =========================================================
+# =====================================================
 # STATION DISPLAY
-# =========================================================
+# =====================================================
 
-def render_station_card(
-    station,
-    is_admin
-):
+def render_station_card(station, is_admin):
     """Display one station and its QR code."""
 
-    station_id = station.get("id")
     station_code = station.get("station_code", "")
     active = station.get("is_active", False)
 
@@ -321,13 +316,9 @@ def render_station_card(
 
         if qr_enabled and station_code:
 
-            with st.expander(
-                "View Station QR Code"
-            ):
+            with st.expander("View Station QR Code"):
 
-                qr_image = generate_qr_code(
-                    station_code
-                )
+                qr_image = generate_qr_code(station_code)
 
                 if qr_image:
 
@@ -342,25 +333,24 @@ def render_station_card(
                         data=qr_image,
                         file_name=f"{station_code}_QR.png",
                         mime="image/png",
-                        key=f"download_qr_{station_id}"
+                        key=f"download_qr_{station_code}"
                     )
 
         if is_admin:
 
             if st.button(
                 "Deactivate Station" if active else "Activate Station",
-                key=f"toggle_station_{station_id}",
+                key=f"toggle_station_{station_code}",
                 use_container_width=True
             ):
-
-                return station_id, not active
+                return station_code, not active
 
     return None
 
 
-# =========================================================
+# =====================================================
 # MAIN COLLECTION STATIONS PAGE
-# =========================================================
+# =====================================================
 
 def render_collection_stations(
     supabase,
@@ -389,11 +379,8 @@ def render_collection_stations(
 
     if error:
 
-        st.error(
-            "Could not load collection stations."
-        )
-
-        st.caption(error)
+        st.error("Could not load collection stations.")
+        st.error(f"Database details: {error}")
 
         return
 
@@ -421,17 +408,15 @@ def render_collection_stations(
 
     st.divider()
 
-    # -----------------------------------------------------
+    # -------------------------------------------------
     # REGISTER NEW STATION
-    # -----------------------------------------------------
+    # -------------------------------------------------
 
     if is_admin:
 
         st.subheader("Register New Station")
 
-        with st.expander(
-            "Create Collection Station"
-        ):
+        with st.expander("Create Collection Station"):
 
             with st.form("global_collection_station_form"):
 
@@ -454,13 +439,9 @@ def render_collection_stations(
                     "State / Province / Region"
                 )
 
-                city = st.text_input(
-                    "City"
-                )
+                city = st.text_input("City")
 
-                address = st.text_area(
-                    "Physical Address"
-                )
+                address = st.text_area("Physical Address")
 
                 capacity = st.number_input(
                     "Maximum Capacity (kg)",
@@ -474,9 +455,7 @@ def render_collection_stations(
                     MATERIALS
                 )
 
-                st.markdown(
-                    "**Optional GPS Coordinates**"
-                )
+                st.markdown("**Optional GPS Coordinates**")
 
                 add_coordinates = st.checkbox(
                     "Add GPS coordinates"
@@ -564,9 +543,9 @@ def render_collection_stations(
                                 f"Station registration failed: {result}"
                             )
 
-    # -----------------------------------------------------
+    # -------------------------------------------------
     # SEARCH AND FILTER
-    # -----------------------------------------------------
+    # -------------------------------------------------
 
     st.divider()
 
@@ -613,13 +592,11 @@ def render_collection_stations(
 
     if not filtered:
 
-        st.info(
-            "No matching collection stations found."
-        )
+        st.info("No matching collection stations found.")
 
-    # -----------------------------------------------------
+    # -------------------------------------------------
     # DISPLAY STATIONS
-    # -----------------------------------------------------
+    # -------------------------------------------------
 
     for station in filtered:
 
@@ -630,11 +607,11 @@ def render_collection_stations(
 
         if action:
 
-            station_id, new_status = action
+            station_code, new_status = action
 
             success, message = update_station_status(
                 supabase,
-                station_id,
+                station_code,
                 new_status
             )
 
