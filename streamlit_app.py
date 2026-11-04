@@ -11,6 +11,7 @@ from community_groups import render_community_groups_page
 from challenges import render_challenges_page
 from collection_stations import render_collection_stations
 from points_system import award_points, get_user_points, get_points_transactions
+from explore_learn import render_explore_learn
 
 # =====================================================
 # ECOLOOP NODE — APP CONFIGURATION
@@ -4244,7 +4245,7 @@ st.markdown("### ♻️ EcoLoop Node")
 
 st.markdown("**Powered by Next Gen Impact Hub (NGIH)**")
 
-st.caption("Designed by Munashe Roy Mutopa — Project Coordinator")
+st.caption("Designed by Munashe Roy Mutopa — General Coordinator")
 
 st.caption("Version 2.0")
 
