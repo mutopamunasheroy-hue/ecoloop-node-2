@@ -846,15 +846,25 @@ def home_page():
 
         return
 
+    
     # -----------------------------------------------
     # MEMBER DASHBOARD
     # -----------------------------------------------
 
     profile = st.session_state.get("profile") or {}
 
-    display_name = profile.get(
-        "full_name",
-        "EcoLoop Member"
+    user = st.session_state.get("user")
+
+    user_metadata = getattr(
+        user,
+        "user_metadata",
+        None
+    ) or {}
+
+    display_name = (
+        profile.get("full_name")
+        or user_metadata.get("full_name")
+        or "Name not available"
     )
 
     st.subheader(f"Welcome back, {display_name}!")
@@ -868,6 +878,7 @@ def home_page():
     contributions = []
     verified_weight = 0.0
     total_points = 0
+
 
     # -----------------------------------------------
     # LOAD MEMBER CONTRIBUTIONS
