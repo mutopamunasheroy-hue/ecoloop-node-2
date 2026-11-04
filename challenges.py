@@ -197,16 +197,16 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
 
     # LOAD DATABASE RECORDS
 
-    try:
+        try:
         challenges = get_challenges(supabase)
         participations = get_my_participation(
             supabase, user_id
         )
 
     except Exception as e:
-    st.error("Could not load challenges.")
-    st.exception(e)
-    return
+        st.error("Could not load challenges.")
+        st.exception(e)
+        return
 
     participation_map = {
         str(item["challenge_id"]): item
