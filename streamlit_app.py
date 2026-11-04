@@ -9,6 +9,7 @@ from datetime import date, datetime
 from supabase import create_client
 from community_groups import render_community_groups_page
 from challenges import render_challenges_page
+from collection_stations import render_collection_stations
 # =====================================================
 # ECOLOOP NODE — APP CONFIGURATION
 # =====================================================
@@ -4202,6 +4203,20 @@ def system_diagnostics_page():
 # FINAL SECTION — FOOTER AND APP ROUTER
 # =====================================================
 
+# ---------------------------------------------
+# COLLECTION MANAGEMENT PAGE
+# ---------------------------------------------
+
+def collection_management_page():
+
+    profile = st.session_state.get("profile") or {}
+
+    user_role = profile.get("role")
+
+    render_collection_stations(
+        supabase,
+        user_role=user_role
+    )
 # ---------------------------------------------
 # PAGE ROUTING
 # ---------------------------------------------
