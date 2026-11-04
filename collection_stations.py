@@ -78,6 +78,7 @@ def generate_qr_code(station_code):
         return None
 
 
+
 # =========================================================
 # STATION DATABASE FUNCTIONS
 # =========================================================
@@ -102,7 +103,9 @@ def get_stations(supabase, active_only=False):
         return response.data or [], None
 
     except Exception as e:
+        st.error(f"Station database error: {e}")
         return [], str(e)
+
 
 
 def generate_station_prefix(country_code, city):
