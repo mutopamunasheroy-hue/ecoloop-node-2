@@ -468,28 +468,62 @@ a {
 
 
 # =====================================================
-# ECOLOOP NODE — MAIN APP HEADER
+# ECOLOOP NODE — RESPONSIVE BRAND HEADER
 # =====================================================
 
 import os
+import base64
 
 LOGO_FILE = "IMG-20261028-WA0000.jpg"
 
 
 def show_app_header():
 
-    logo, branding = st.columns([1, 2], gap="small")
+    if os.path.exists(LOGO_FILE):
 
-    with logo:
-        if os.path.exists(LOGO_FILE):
-            st.image(LOGO_FILE, width=120)
-        else:
-            st.warning("NGIH logo not found.")
+        with open(LOGO_FILE, "rb") as image_file:
+            logo_data = base64.b64encode(
+                image_file.read()
+            ).decode("utf-8")
 
-    with branding:
-        st.subheader(APP_NAME)
-        st.markdown(f"**Powered by {NGIH_NAME} (NGIH)**")
-        st.caption(APP_TAGLINE)
+        logo_html = (
+            f'<img src="data:image/jpeg;base64,{logo_data}" '
+            'style="width:110px; height:auto; max-height:none; '
+            'object-fit:contain; display:block;">'
+        )
+
+    else:
+        logo_html = "<strong>NGIH</strong>"
+
+    st.markdown(
+        f"""
+        <div style="display:flex; flex-direction:row;
+                    align-items:center; gap:14px;
+                    width:100%; padding:12px 0;">
+
+            <div style="flex:0 0 110px; min-width:0;">
+                {logo_html}
+            </div>
+
+            <div style="flex:1; min-width:0;">
+                <h1 style="font-size:25px; margin:0 0 6px 0;
+                           line-height:1.2;">
+                    {APP_NAME}
+                </h1>
+
+                <p style="font-size:13px; margin:4px 0;">
+                    <strong>Powered by {NGIH_NAME} (NGIH)</strong>
+                </p>
+
+                <p style="font-size:11px; margin:4px 0;">
+                    {APP_TAGLINE}
+                </p>
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.divider()
 # =====================================================
