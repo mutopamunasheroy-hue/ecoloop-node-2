@@ -210,6 +210,7 @@ def is_logged_in():
     )
 
 
+
 def is_admin():
 
     profile = st.session_state.get("profile")
@@ -217,7 +218,19 @@ def is_admin():
     if not profile:
         return False
 
-    return profile.get("role") == "admin"
+    role = profile.get("role", "user")
+
+    return role in ["admin", "super_admin"]
+
+
+def is_super_admin():
+
+    profile = st.session_state.get("profile")
+
+    if not profile:
+        return False
+
+    return profile.get("role") == "super_admin"
 
 
 def require_login():
@@ -227,7 +240,6 @@ def require_login():
         return False
 
     return True
-
 
 # =====================================================
 # RESTORE AN EXISTING LOGIN
