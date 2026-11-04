@@ -1224,12 +1224,46 @@ def registration_form():
                     response = supabase.auth.sign_up({
                         "email": email.strip(),
                         "password": password,
-                        "options": {
-                            "data": {
-                                "full_name": full_name.strip()
-                            }
-                        }
-                    })
+                        def load_user_profile():
+
+    if not supabase:
+        return None
+
+    user_id = st.session_state.get("user_id")
+
+    if not user_id:
+        return None
+
+    try:
+        response = (
+            supabase
+            .table("profiles")
+            .select("*")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+
+        profile = response.data or {}
+
+        user = st.session_state.get("user")
+
+        user_metadata = getattr(
+            user,
+            "user_metadata",
+            None
+        ) or {}
+
+        if not profile.get("full_name"):
+            profile["full_name"] = user_metadata.get("full_name")
+
+        st.session_state["profile"] = profile
+
+        return profile
+
+    except Exception:
+        return None
+                    
 
                     user = getattr(response, "user", None)
                     session = getattr(response, "session", None)
@@ -1286,15 +1320,16 @@ def account_page():
     if not require_login():
         return
 
-    profile = st.session_state.get("profile") or {}
+        profile = st.session_state.get("profile") or {}
 
     user = st.session_state.get("user")
 
     email = getattr(user, "email", "Not available")
 
-    st.subheader(
-        profile.get("full_name", "EcoLoop Member")
-    )
+    display_name = profile.get("full_name") or "EcoLoop Member"
+
+    st.subheader(display_name)
+    
 
     col1, col2 = st.columns(2)
 
