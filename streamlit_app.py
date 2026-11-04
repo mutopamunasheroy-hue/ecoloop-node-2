@@ -2075,8 +2075,11 @@ def environmental_impact_page():
         "🌱"
     )
 
+
+
+  
 # =====================================================
-# PAGE 8 — COMMUNITY LEADERBOARD
+# PAGE 8 — UNIVERSAL COMMUNITY LEADERBOARD
 # =====================================================
 
 def leaderboard_page():
@@ -2085,7 +2088,8 @@ def leaderboard_page():
 
     st.write(
         "Recognising individuals and communities "
-        "contributing towards a cleaner environment."
+        "making an impact through waste contributions, "
+        "quizzes, learning, challenges and environmental actions."
     )
 
     if not supabase:
@@ -2093,150 +2097,84 @@ def leaderboard_page():
         return
 
     # -----------------------------------------------
-    # LOAD VERIFIED CONTRIBUTIONS
+    # LOAD UNIVERSAL INDIVIDUAL LEADERBOARD
     # -----------------------------------------------
 
     try:
 
-        response = (
+        individual_response = (
             supabase
-            .table("waste_contributions")
-            .select("user_id, weight, points")
-            .eq("verification_status", "verified")
+            .table("individual_leaderboard")
+            .select("*")
+            .order("universal_rank")
             .execute()
         )
 
-        contributions = response.data or []
+        individuals = individual_response.data or []
 
-    except Exception:
+    except Exception as e:
 
-        st.error("Leaderboard information could not be loaded.")
-        return
-
-    if not contributions:
-
-        show_empty_state(
-            "The leaderboard will appear once members have "
-            "verified waste contributions."
+        st.error(
+            f"Individual leaderboard could not load: {e}"
         )
         return
 
     # -----------------------------------------------
-    # CALCULATE INDIVIDUAL SCORES
+    # DISPLAY INDIVIDUAL RANKINGS
     # -----------------------------------------------
-
-    individual_scores = {}
-
-    for item in contributions:
-
-        user_id = item.get("user_id")
-
-        if not user_id:
-            continue
-
-        if user_id not in individual_scores:
-
-            individual_scores[user_id] = {
-                "weight": 0.0,
-                "points": 0
-            }
-
-        individual_scores[user_id]["weight"] += float(
-            item.get("weight") or 0
-        )
-
-        individual_scores[user_id]["points"] += int(
-            item.get("points") or 0
-        )
-
-    # -----------------------------------------------
-    # LOAD MEMBER PROFILES
-    # -----------------------------------------------
-
-    profiles = {}
-
-    try:
-
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id, full_name")
-            .execute()
-        )
-
-        for profile in profile_response.data or []:
-
-            profiles[profile["id"]] = profile.get(
-                "full_name",
-                "EcoLoop Member"
-            )
-
-    except Exception:
-
-        st.warning(
-            "Member names could not be loaded. "
-            "User IDs will be displayed instead."
-        )
-
-    # -----------------------------------------------
-    # BUILD INDIVIDUAL LEADERBOARD
-    # -----------------------------------------------
-
-    ranking_rows = []
-
-    for user_id, score in individual_scores.items():
-
-        ranking_rows.append({
-            "Member": profiles.get(
-                user_id,
-                "EcoLoop Member"
-            ),
-            "Verified Waste (kg)": round(
-                score["weight"], 2
-            ),
-            "Points": score["points"]
-        })
-
-    ranking_rows.sort(
-        key=lambda row: (
-            row["Points"],
-            row["Verified Waste (kg)"]
-        ),
-        reverse=True
-    )
 
     st.subheader("🌟 Individual Rankings")
 
-    if ranking_rows:
+    if individuals:
 
-        for position, member in enumerate(
-            ranking_rows[:3],
-            start=1
-        ):
+        for member in individuals[:3]:
+
+            rank = member.get("universal_rank", "-")
 
             medal = {
                 1: "🥇",
                 2: "🥈",
                 3: "🥉"
-            }.get(position, "🏅")
+            }.get(rank, "🏅")
+
+            name = (
+                member.get("full_name")
+                or "EcoLoop Member"
+            )
+
+            points = member.get("total_points") or 0
 
             st.markdown(
                 f"""
                 <div class="eco-card">
                     <div class="eco-card-title">
-                        {medal} {position}. {member['Member']}
+                        {medal} {rank}. {name}
                     </div>
                     <div class="eco-card-description">
-                        {member['Verified Waste (kg)']:.2f} kg
-                        verified · {member['Points']} points
+                        {points} Universal Points
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
+        individual_rows = []
+
+        for member in individuals:
+
+            individual_rows.append({
+                "Rank": member.get("universal_rank"),
+                "Member": (
+                    member.get("full_name")
+                    or "EcoLoop Member"
+                ),
+                "Universal Points": (
+                    member.get("total_points") or 0
+                )
+            })
+
         st.dataframe(
-            pd.DataFrame(ranking_rows),
+            pd.DataFrame(individual_rows),
             use_container_width=True,
             hide_index=True
         )
@@ -2244,114 +2182,53 @@ def leaderboard_page():
     else:
 
         show_empty_state(
-            "No individual rankings are available yet."
+            "Individual rankings will appear as members join EcoLoop."
         )
 
     st.divider()
 
     # -----------------------------------------------
-    # TEAM LEADERBOARD
+    # LOAD UNIVERSAL GROUP LEADERBOARD
     # -----------------------------------------------
 
-    st.subheader("🤝 Community Team Rankings")
+    st.subheader("🤝 Community Group Rankings")
 
     st.caption(
-        "Team rankings are based on verified contributions "
-        "from members with approved group memberships."
+        "Groups earn points through activities "
+        "recorded directly against their group accounts."
     )
 
     try:
 
-        membership_response = (
-            supabase
-            .table("group_memberships")
-            .select("*")
-            .eq("status", "approved")
-            .execute()
-        )
-
-        memberships = membership_response.data or []
-
         group_response = (
             supabase
-            .table("community_groups")
+            .table("group_leaderboard")
             .select("*")
+            .order("universal_rank")
             .execute()
         )
 
         groups = group_response.data or []
 
-        group_names = {}
+        if groups:
 
-        for group in groups:
+            group_rows = []
 
-            group_id = group.get("id")
+            for group in groups:
 
-            group_name = (
-                group.get("group_name")
-                or group.get("name")
-                or group.get("title")
-                or "Community Group"
-            )
-
-            if group_id:
-                group_names[group_id] = group_name
-
-        user_groups = {}
-
-        for membership in memberships:
-
-            user_id = membership.get("user_id")
-            group_id = membership.get("group_id")
-
-            if user_id and group_id:
-                user_groups.setdefault(
-                    user_id, set()
-                ).add(group_id)
-
-        team_scores = {}
-
-        for user_id, score in individual_scores.items():
-
-            for group_id in user_groups.get(user_id, set()):
-
-                if group_id not in team_scores:
-
-                    team_scores[group_id] = {
-                        "weight": 0.0,
-                        "points": 0
-                    }
-
-                team_scores[group_id]["weight"] += score["weight"]
-                team_scores[group_id]["points"] += score["points"]
-
-        team_rows = []
-
-        for group_id, score in team_scores.items():
-
-            team_rows.append({
-                "Community Group": group_names.get(
-                    group_id,
-                    "Community Group"
-                ),
-                "Verified Waste (kg)": round(
-                    score["weight"], 2
-                ),
-                "Points": score["points"]
-            })
-
-        team_rows.sort(
-            key=lambda row: (
-                row["Points"],
-                row["Verified Waste (kg)"]
-            ),
-            reverse=True
-        )
-
-        if team_rows:
+                group_rows.append({
+                    "Rank": group.get("universal_rank"),
+                    "Community Group": (
+                        group.get("group_name")
+                        or "Community Group"
+                    ),
+                    "Universal Points": (
+                        group.get("total_points") or 0
+                    )
+                })
 
             st.dataframe(
-                pd.DataFrame(team_rows),
+                pd.DataFrame(group_rows),
                 use_container_width=True,
                 hide_index=True
             )
@@ -2359,27 +2236,31 @@ def leaderboard_page():
         else:
 
             show_empty_state(
-                "Team rankings will appear when groups have "
-                "approved members with verified contributions."
+                "Community group rankings will appear "
+                "as groups earn points."
             )
 
-    except Exception:
+    except Exception as e:
 
-        st.info(
-            "Team rankings are not available yet. "
-            "The existing group membership structure needs "
-            "to be checked before this section can be connected."
+        st.error(
+            f"Community group rankings could not load: {e}"
         )
 
     st.divider()
 
+    # -----------------------------------------------
+    # RECOGNITION
+    # -----------------------------------------------
+
     eco_card(
-        "Recognition through participation",
-        "EcoLoop rankings recognise recorded, verified "
-        "environmental contributions. Rankings are updated "
-        "as new contributions are approved.",
+        "One community. Many ways to make an impact.",
+        "Every verified contribution, completed quiz, "
+        "learning activity, environmental action and "
+        "approved challenge can contribute to universal points.",
         "🌍"
     )
+  
+    
 
 # =====================================================
 # PAGE 9 — EXPLORE & LEARN
