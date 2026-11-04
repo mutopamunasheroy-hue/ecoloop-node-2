@@ -4197,31 +4197,12 @@ selected_page()
 
 st.divider()
 
-footer_logo, footer_text = st.columns([1, 4])
+st.markdown("### ♻️ EcoLoop Node")
 
-with footer_logo:
+st.markdown("**Powered by Next Gen Impact Hub (NGIH)**")
 
-    if os.path.exists(LOGO_FILE):
+st.caption("Designed by Munashe Roy Mutopa — Project Coordinator")
 
-        with open(LOGO_FILE, "rb") as logo_file:
-            footer_logo_data = base64.b64encode(
-                logo_file.read()
-            ).decode("utf-8")
+st.caption("Version 2.0")
 
-        st.markdown(
-            f"""
-            <img
-                src="data:image/jpeg;base64,{footer_logo_data}"
-                width="75"
-                style="height:auto; max-height:none; object-fit:contain;"
-            >
-            """,
-            unsafe_allow_html=True
-        )
-
-with footer_text:
-
-    st.markdown("### EcoLoop Node")
-    st.markdown("**Powered by Next Gen Impact Hub (NGIH)**")
-    st.caption("Designed by Munashe Roy Mutopa — Project Coordinator")
-    st.caption("Version 2.0")
+st.caption("© 2026 Next Gen Impact Hub. All rights reserved.")
