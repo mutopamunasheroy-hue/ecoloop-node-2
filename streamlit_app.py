@@ -10,6 +10,7 @@ from supabase import create_client
 from community_groups import render_community_groups_page
 from challenges import render_challenges_page
 from collection_stations import render_collection_stations
+
 # =====================================================
 # ECOLOOP NODE — APP CONFIGURATION
 # =====================================================
