@@ -3870,19 +3870,14 @@ def verify_contributions_page():
 
         contributions = response.data or []
 
-    except Exception:
-        st.error(
-            "Pending contributions could not be loaded. "
-            "Check the database permissions."
-        )
+    except Exception as e:
+        st.error(f"Could not load pending contributions: {e}")
         return
 
     if not contributions:
-
         show_empty_state(
             "There are no pending contributions to review."
         )
-
         return
 
     st.write(
@@ -3929,7 +3924,7 @@ def verify_contributions_page():
                     use_container_width=True
                 ):
 
-                                        try:
+                    try:
                         response = (
                             supabase.table("waste_contributions")
                             .update({"verification_status": "verified"})
@@ -3945,7 +3940,7 @@ def verify_contributions_page():
                         else:
                             st.error(
                                 "No contribution was updated. "
-                                "Check your administrator role and database policies."
+                                "Check administrator permissions and database policies."
                             )
 
                     except Exception as e:
@@ -3960,22 +3955,26 @@ def verify_contributions_page():
                 ):
 
                     try:
-                        (
+                        response = (
                             supabase.table("waste_contributions")
                             .update({"verification_status": "rejected"})
                             .eq("id", contribution_id)
                             .eq("verification_status", "pending")
+                            .select("id")
                             .execute()
                         )
 
-                        st.warning("Contribution rejected.")
-                        st.rerun()
+                        if response.data:
+                            st.warning("Contribution rejected.")
+                            st.rerun()
+                        else:
+                            st.error(
+                                "No contribution was updated. "
+                                "Check administrator permissions and database policies."
+                            )
 
-                    except Exception:
-                        st.error(
-                            "Rejection failed. Check administrator "
-                            "permissions and database verification rules."
-                        )
+                    except Exception as e:
+                        st.error(f"Rejection error: {e}")
 
 # =====================================================
 # PAGE 17 — ADMIN STUDIO
