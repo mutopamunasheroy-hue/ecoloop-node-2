@@ -8,7 +8,7 @@ import uuid
 from datetime import date, datetime
 from supabase import create_client
 from community_groups import render_community_groups_page
-
+from challenges import render_challenges_page
 # =====================================================
 # ECOLOOP NODE — APP CONFIGURATION
 # =====================================================
@@ -4222,7 +4222,11 @@ PAGE_ROUTES = {
     supabase,
     st.session_state.get("user_id")
 ),
-    "Challenges": challenges_page,
+    "Challenges": lambda: render_challenges_page(
+    supabase,
+    st.session_state.get("user_id"),
+    is_admin()
+),
     "Action Gallery": action_gallery_page,
     "Leaderboard": leaderboard_page,
     "Notifications Centre": notifications_page,
