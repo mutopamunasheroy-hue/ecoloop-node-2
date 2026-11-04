@@ -3845,7 +3845,67 @@ def notifications_page():
         "Push notifications are not enabled in this version."
     )
 
+# =====================================================
+# UNIVERSAL POINTS SYSTEM
+# =====================================================
 
+def award_points(
+    supabase,
+    user_id,
+    points,
+    activity_type,
+    description,
+    contribution_id=None,
+    quiz_attempt_id=None,
+    group_id=None
+):
+
+    try:
+
+        if not user_id:
+            return {
+                "success": False,
+                "message": "User ID is missing."
+            }
+
+        if points <= 0:
+            return {
+                "success": False,
+                "message": "Points must be greater than zero."
+            }
+
+        transaction = {
+            "user_id": user_id,
+            "points": int(points),
+            "activity_type": activity_type,
+            "description": description
+        }
+
+        if contribution_id:
+            transaction["contribution_id"] = contribution_id
+
+        if quiz_attempt_id:
+            transaction["quiz_attempt_id"] = quiz_attempt_id
+
+        if group_id:
+            transaction["group_id"] = group_id
+
+        supabase.table(
+            "point_transactions"
+        ).insert(transaction).execute()
+
+        return {
+            "success": True,
+            "message": "Points awarded successfully."
+        }
+
+    except Exception as e:
+
+        return {
+            "success": False,
+            "message": str(e)
+}
+        
 # =====================================================
 # PAGE 16 — VERIFY CONTRIBUTIONS
 # =====================================================
