@@ -4206,7 +4206,10 @@ PAGE_ROUTES = {
     "Collection Management": collection_management_page,
     "Environmental Impact": environmental_impact_page,
 
-    "Community Groups": community_groups_page,
+    "Community Groups": lambda: render_community_groups_page(
+    supabase,
+    st.session_state.get("user_id")
+),
     "Challenges": challenges_page,
     "Action Gallery": action_gallery_page,
     "Leaderboard": leaderboard_page,
