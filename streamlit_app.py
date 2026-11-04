@@ -1780,52 +1780,59 @@ def record_waste_page():
 
             else:
 
+                
                 try:
 
                     user_id = st.session_state.get("user_id")
 
-                    contribution_data = {
-                        "user_id": user_id,
-                        "station_code": selected_station_code,
-                        "material_type": material_type,
-                        "weight": float(weight)
-                    }
-
-                    response = (
-                        supabase
-                        .table("waste_contributions")
-                        .insert(contribution_data)
-                        .execute()
-                    )
-
-                    if response.data:
-
-                        st.success(
-                            "Your waste contribution has been submitted!"
-                        )
-
-                        st.info(
-                            "Status: Pending verification. "
-                            "Your contribution will count towards "
-                            "verified impact after approval."
-                        )
-
-                        st.rerun()
+                    if not user_id:
+                        st.error("Your login session could not be identified.")
 
                     else:
 
-                        st.error(
-                            "The contribution could not be confirmed. "
-                            "Please try again."
+                        contribution_data = {
+                            "user_id": user_id,
+                            "station_code": selected_station_code,
+                            "material_type": material_type,
+                            "weight": float(weight)
+                        }
+
+                        response = (
+                            supabase
+                            .table("waste_contributions")
+                            .insert(contribution_data)
+                            .execute()
                         )
+
+                        if response.data:
+
+                            st.success(
+                                "Your waste contribution has been submitted!"
+                            )
+
+                            st.info(
+                                "Status: Pending verification. "
+                                "Your contribution will count towards "
+                                "verified impact after approval."
+                            )
+
+                            st.rerun()
+
+                        else:
+
+                            st.error(
+                                "The contribution could not be confirmed. "
+                                "Please try again."
+                            )
 
                 except Exception as e:
 
-    st.error("Contribution submission failed.")
+                    st.error("Contribution submission failed.")
 
-    st.error(f"Database error: {str(e)}")
+                    st.error(f"Database error: {str(e)}")
 
-    st.exception(e)
+                    st.exception(e)
+
     # -----------------------------------------------
     # VERIFICATION EXPLANATION
     # -----------------------------------------------
