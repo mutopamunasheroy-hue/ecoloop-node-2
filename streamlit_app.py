@@ -3845,6 +3845,7 @@ def notifications_page():
         "Push notifications are not enabled in this version."
     )
 
+
 # =====================================================
 # PAGE 16 — VERIFY CONTRIBUTIONS
 # =====================================================
@@ -3917,18 +3918,20 @@ def verify_contributions_page():
 
             col1, col2 = st.columns(2)
 
-                            
-
             with col1:
+
                 if st.button(
                     "Approve",
                     key=f"approve_{contribution_id}",
                     use_container_width=True
                 ):
-                                        try:
+
+                    try:
                         response = (
                             supabase.table("waste_contributions")
-                            .update({"verification_status": "verified"})
+                            .update({
+                                "verification_status": "verified"
+                            })
                             .eq("id", contribution_id)
                             .eq("verification_status", "pending")
                             .select("id")
@@ -3936,26 +3939,38 @@ def verify_contributions_page():
                         )
 
                         if response.data:
+
                             award_result = award_points(
                                 supabase=supabase,
                                 user_id=contribution.get("user_id"),
                                 points=1,
                                 activity_type="waste_contribution",
-                                description=f"Verified waste contribution: {contribution.get('material_type')} ({contribution.get('weight')} kg)",
+                                description=(
+                                    f"Verified waste contribution: "
+                                    f"{contribution.get('material_type')} "
+                                    f"({contribution.get('weight')} kg)"
+                                ),
                                 contribution_id=contribution_id
                             )
 
                             if award_result["success"]:
-                                st.success("Contribution approved and 1 point awarded.")
+                                st.success(
+                                    "Contribution approved and 1 point awarded."
+                                )
                                 st.rerun()
+
                             else:
-                                st.error("Contribution approved, but points could not be awarded.")
+                                st.error(
+                                    "Contribution approved, but points "
+                                    "could not be awarded."
+                                )
                                 st.error(award_result["message"])
 
                         else:
                             st.error(
                                 "No contribution was updated. "
-                                "Check administrator permissions and database policies."
+                                "Check administrator permissions "
+                                "and database policies."
                             )
 
                     except Exception as e:
