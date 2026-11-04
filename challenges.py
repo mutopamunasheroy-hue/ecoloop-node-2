@@ -203,12 +203,10 @@ def render_challenges_page(supabase, user_id=None, is_admin=False):
             supabase, user_id
         )
 
-    except Exception:
-        st.error(
-            "Could not load challenges. "
-            "Please check the database connection and permissions."
-        )
-        return
+    except Exception as e:
+    st.error("Could not load challenges.")
+    st.exception(e)
+    return
 
     participation_map = {
         str(item["challenge_id"]): item
