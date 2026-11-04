@@ -3151,9 +3151,10 @@ def community_groups_page():
 
         groups = group_response.data or []
 
-    except Exception:
+        except Exception as e:
 
         st.error("Community groups could not be loaded.")
+        st.code(str(e))
         return
 
     if not groups:
