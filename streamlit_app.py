@@ -3917,14 +3917,14 @@ def verify_contributions_page():
 
             col1, col2 = st.columns(2)
 
-                        with col1:
+                            
 
+            with col1:
                 if st.button(
                     "Approve",
                     key=f"approve_{contribution_id}",
                     use_container_width=True
                 ):
-
                     try:
                         response = (
                             supabase.table("waste_contributions")
@@ -3948,13 +3948,11 @@ def verify_contributions_page():
                         st.error(f"Approval error: {e}")
 
             with col2:
-
                 if st.button(
                     "Reject",
                     key=f"reject_{contribution_id}",
                     use_container_width=True
                 ):
-
                     try:
                         response = (
                             supabase.table("waste_contributions")
