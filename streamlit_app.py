@@ -1819,13 +1819,13 @@ def record_waste_page():
                             "Please try again."
                         )
 
-                except Exception:
+                except Exception as e:
 
-                    st.error(
-                        "We could not submit your contribution. "
-                        "Please check your connection and try again."
-                    )
+    st.error("Contribution submission failed.")
 
+    st.error(f"Database error: {str(e)}")
+
+    st.exception(e)
     # -----------------------------------------------
     # VERIFICATION EXPLANATION
     # -----------------------------------------------
