@@ -2405,7 +2405,6 @@ def eco_quiz_page():
     # -----------------------------------------------
 
     try:
-
         quiz_response = (
             supabase
             .table("quizzes")
@@ -2415,10 +2414,11 @@ def eco_quiz_page():
 
         all_quizzes = quiz_response.data or []
 
-   except Exception as e:
-
-    st.error(f"Available quizzes could not be loaded: {e}")
-    return 
+    except Exception as e:
+        st.error(
+            f"Available quizzes could not be loaded: {e}"
+        )
+        return
 
     active_quizzes = [
         quiz for quiz in all_quizzes
@@ -2427,7 +2427,6 @@ def eco_quiz_page():
             quiz.get("active", True)
         )
     ]
-
     if not active_quizzes and not st.session_state["quiz_attempt_id"]:
 
         show_empty_state(
