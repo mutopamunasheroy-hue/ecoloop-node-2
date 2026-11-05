@@ -5,7 +5,7 @@
 
 import streamlit as st
 from datetime import datetime, timezone
-
+from explore_learn import QUIZ_QUESTIONS
 
 NGIH_PILLARS = [
     "Governance & Civic Education",
