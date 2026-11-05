@@ -1,8 +1,10 @@
-ACTION_GALLERY_BUILD = "NOV06_V2"
+
+ACTION_GALLERY_BUILD = "NOV06_V3"
+
 # ============================================================
-# ECOLOOP NODE — ACTION GALLERY
+# ECOLOOP NODE — ACTION GALLERY 2.0
 # Next Gen Impact Hub (NGIH)
-# Complete Community Action Feed
+# Modern Community Social Feed
 # ============================================================
 
 import streamlit as st
@@ -43,11 +45,127 @@ EXTRA_REACTIONS = [
     "🌿", "💪", "✨",
 ]
 
+ALL_REACTIONS = list(REACTIONS.values()) + EXTRA_REACTIONS
+
 MODERATOR_ROLES = (
     "coordinator",
     "admin",
     "super_admin",
 )
+
+
+# ============================================================
+# MODERN GALLERY DESIGN
+# ============================================================
+
+def _inject_gallery_styles():
+    st.markdown(
+        """
+        <style>
+        .gallery-intro {
+            color: var(--text-color);
+            opacity: 0.78;
+            font-size: 0.94rem;
+            margin-top: -8px;
+            margin-bottom: 12px;
+        }
+
+        .gallery-brand {
+            font-size: 0.76rem;
+            opacity: 0.65;
+            letter-spacing: 0.5px;
+            margin-bottom: 14px;
+        }
+
+        .gallery-author {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .gallery-meta {
+            font-size: 0.78rem;
+            opacity: 0.65;
+            margin-bottom: 9px;
+        }
+
+        .gallery-caption {
+            font-size: 0.96rem;
+            line-height: 1.6;
+            margin-top: 8px;
+            margin-bottom: 12px;
+            overflow-wrap: anywhere;
+        }
+
+        .gallery-reaction-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            align-items: center;
+            margin-top: 7px;
+            margin-bottom: 8px;
+            font-size: 0.82rem;
+            opacity: 0.82;
+        }
+
+        .gallery-comment {
+            padding: 9px 0;
+            border-bottom: 1px solid rgba(128,128,128,0.16);
+        }
+
+        .gallery-comment:last-child {
+            border-bottom: none;
+        }
+
+        .gallery-comment-author {
+            font-size: 0.88rem;
+            font-weight: 700;
+        }
+
+        .gallery-comment-time {
+            font-size: 0.72rem;
+            opacity: 0.60;
+        }
+
+        .gallery-comment-text {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+            margin-top: 3px;
+        }
+
+        .gallery-reply {
+            margin-left: 22px;
+            padding-left: 12px;
+            border-left: 2px solid rgba(128,128,128,0.25);
+        }
+
+        .gallery-section-label {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-top: 12px;
+            margin-bottom: 4px;
+        }
+
+        div[data-testid="stPopover"] button {
+            border-radius: 18px;
+        }
+
+        div[data-testid="stExpander"] {
+            border-radius: 12px;
+        }
+
+        div[data-testid="stFileUploader"] {
+            border-radius: 12px;
+        }
+
+        div[data-testid="stForm"] {
+            border-radius: 12px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ============================================================
@@ -232,6 +350,17 @@ def _create_post(
     extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
     storage_path = f"{user_id}/{uuid.uuid4().hex}.{extension}"
 
+    # Convert the interface label to the database value.
+    author_type = (
+        "group"
+        if author_type.lower() in ("group", "community group")
+        else "individual"
+    )
+
+    if author_type == "group" and not group_id:
+        st.error("Please select an approved community group.")
+        return
+
     try:
         supabase.storage.from_(BUCKET).upload(
             storage_path,
@@ -275,9 +404,14 @@ def _create_post(
 def _post_creation_form(supabase, user_id):
     with st.expander("➕ Share a community action", expanded=False):
 
+        st.markdown("**Tell your community what you've done.**")
+
         caption = st.text_area(
-            "Tell the community about your action",
-            placeholder="What have you done for your community or environment?",
+            "Your story",
+            placeholder=(
+                "Share your environmental action, "
+                "community initiative or achievement..."
+            ),
             key="gallery_new_caption",
         )
 
@@ -288,7 +422,7 @@ def _post_creation_form(supabase, user_id):
         )
 
         uploaded_file = st.file_uploader(
-            "Upload a photo or video",
+            "Add a photo or video",
             type=[
                 "jpg", "jpeg", "png", "webp",
                 "mp4", "mov", "webm",
@@ -299,7 +433,7 @@ def _post_creation_form(supabase, user_id):
         groups = _get_groups(supabase, user_id)
 
         author_type = st.radio(
-            "Who is sharing this action?",
+            "Publish as",
             ["Individual", "Community group"],
             horizontal=True,
             key="gallery_author_type",
@@ -310,14 +444,16 @@ def _post_creation_form(supabase, user_id):
         if author_type == "Community group":
             if not groups:
                 st.warning(
-                    "You need to be an approved member of a group "
+                    "You need approved membership in a group "
                     "before publishing as a group."
                 )
             else:
                 selected_group = st.selectbox(
                     "Choose your group",
                     groups,
-                    format_func=lambda item: item.get("name", "Group"),
+                    format_func=lambda item: item.get(
+                        "name", "Community Group"
+                    ),
                     key="gallery_selected_group",
                 )
 
@@ -348,7 +484,7 @@ def _post_creation_form(supabase, user_id):
                     caption,
                     category,
                     uploaded_file,
-                    author_type.lower(),
+                    author_type,
                     group_id,
                     location,
                     social_handle,
@@ -356,7 +492,7 @@ def _post_creation_form(supabase, user_id):
 
 
 # ============================================================
-# REACTIONS
+# REACTIONS — COMPACT SOCIAL MEDIA STYLE
 # ============================================================
 
 def _reaction_counts(supabase, post_id):
@@ -372,6 +508,7 @@ def _reaction_counts(supabase, post_id):
 
         for row in _rows(result):
             reaction = row.get("reaction")
+
             if reaction:
                 counts[reaction] = counts.get(reaction, 0) + 1
 
@@ -379,6 +516,25 @@ def _reaction_counts(supabase, post_id):
 
     except Exception:
         return {}
+
+
+def _get_my_reaction(supabase, post_id, user_id):
+    try:
+        result = (
+            supabase.table("action_post_reactions")
+            .select("reaction")
+            .eq("post_id", post_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+
+        rows = _rows(result)
+
+        return rows[0].get("reaction") if rows else None
+
+    except Exception:
+        return None
 
 
 def _set_reaction(supabase, post_id, user_id, reaction):
@@ -397,14 +553,22 @@ def _set_reaction(supabase, post_id, user_id, reaction):
         if existing_rows:
             old = existing_rows[0]
 
+            # Tapping the same reaction removes it.
             if old.get("reaction") == reaction:
-                supabase.table("action_post_reactions").delete().eq(
-                    "id", old["id"]
-                ).execute()
+                (
+                    supabase.table("action_post_reactions")
+                    .delete()
+                    .eq("id", old["id"])
+                    .execute()
+                )
+
             else:
-                supabase.table("action_post_reactions").update({
-                    "reaction": reaction
-                }).eq("id", old["id"]).execute()
+                (
+                    supabase.table("action_post_reactions")
+                    .update({"reaction": reaction})
+                    .eq("id", old["id"])
+                    .execute()
+                )
 
         else:
             supabase.table("action_post_reactions").insert({
@@ -422,53 +586,68 @@ def _set_reaction(supabase, post_id, user_id, reaction):
 def _show_reactions(supabase, post_id, user_id):
     counts = _reaction_counts(supabase, post_id)
 
-    try:
-        mine = (
-            supabase.table("action_post_reactions")
-            .select("reaction")
-            .eq("post_id", post_id)
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-        )
+    current = _get_my_reaction(
+        supabase,
+        post_id,
+        user_id,
+    )
 
-        mine_rows = _rows(mine)
-        current = mine_rows[0]["reaction"] if mine_rows else None
+    total = sum(counts.values())
 
-    except Exception:
-        current = None
+    # One compact reaction control instead of six separate buttons.
+    label = (
+        f"{current} Reacted"
+        if current
+        else "😊 React"
+    )
 
-    st.caption("React to this action")
+    with st.popover(label):
+        st.markdown("**Choose a reaction**")
 
-    cols = st.columns(6)
+        cols = st.columns(5)
 
-    for index, (key, emoji) in enumerate(REACTIONS.items()):
-        with cols[index]:
-            label = f"{emoji} {counts.get(emoji, 0)}"
+        for index, emoji in enumerate(ALL_REACTIONS):
+            with cols[index % 5]:
+                count = counts.get(emoji, 0)
 
-            if st.button(
-                label,
-                key=f"reaction_{post_id}_{key}",
-                type="primary" if current == emoji else "secondary",
-                use_container_width=True,
-            ):
-                _set_reaction(
-                    supabase, post_id, user_id, emoji
-                )
-
-    with st.popover("More reactions"):
-        extra_cols = st.columns(4)
-
-        for index, emoji in enumerate(EXTRA_REACTIONS):
-            with extra_cols[index % 4]:
                 if st.button(
-                    f"{emoji} {counts.get(emoji, 0)}",
-                    key=f"extra_reaction_{post_id}_{index}",
+                    f"{emoji}\n{count}",
+                    key=f"reaction_{post_id}_{index}",
+                    type=(
+                        "primary"
+                        if current == emoji
+                        else "secondary"
+                    ),
                     use_container_width=True,
                 ):
                     _set_reaction(
-                        supabase, post_id, user_id, emoji
+                        supabase,
+                        post_id,
+                        user_id,
+                        emoji,
                     )
+
+    # Show only reactions that actually exist.
+    active_reactions = [
+        (emoji, count)
+        for emoji, count in counts.items()
+        if count > 0
+    ]
+
+    if active_reactions:
+        summary = "  ".join(
+            f"{emoji} {count}"
+            for emoji, count in active_reactions
+        )
+
+        st.markdown(
+            f'<div class="gallery-reaction-summary">'
+            f'{summary} · {total} reactions'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.caption("Be the first to react.")
 
 
 # ============================================================
@@ -478,14 +657,18 @@ def _show_reactions(supabase, post_id, user_id):
 def _share_post(supabase, post, user_id):
     post_id = post["id"]
 
-    st.caption("Share this community action")
-
-    public_url = os.environ.get("ECLOOP_PUBLIC_URL", "").strip()
+    public_url = os.environ.get(
+        "ECLOOP_PUBLIC_URL", ""
+    ).strip()
 
     if public_url:
-        share_url = f"{public_url.rstrip('/')}/?post={post_id}"
+        share_url = (
+            f"{public_url.rstrip('/')}/?post={post_id}"
+        )
     else:
-        share_url = f"EcoLoop Node — Community Action ID: {post_id}"
+        share_url = (
+            f"EcoLoop Node — Community Action ID: {post_id}"
+        )
 
     share_text = (
         f"{post.get('caption', '')}\n\n"
@@ -498,7 +681,7 @@ def _share_post(supabase, post, user_id):
     )
 
     st.markdown(
-        f"[<icon name='message-circle' /> Share using WhatsApp]({whatsapp_url})"
+        f"[Share using WhatsApp]({whatsapp_url})"
     )
 
     st.code(share_text, language="text")
@@ -506,6 +689,7 @@ def _share_post(supabase, post, user_id):
     if st.button(
         "Record share",
         key=f"record_share_{post_id}",
+        use_container_width=True,
     ):
         try:
             supabase.table("action_post_shares").insert({
@@ -549,7 +733,8 @@ def _repost_post(supabase, post, user_id, user_name):
 
         handles = {
             "original_author_name": names.get(
-                original_author, "EcoLoop Member"
+                original_author,
+                "EcoLoop Member",
             )
         }
 
@@ -587,7 +772,7 @@ def _spam_reason(text, recent_comments):
 
     links = re.findall(
         r"https?://|www\.",
-        content.lower()
+        content.lower(),
     )
 
     if len(links) >= 3:
@@ -597,7 +782,10 @@ def _spam_reason(text, recent_comments):
         return "Repeated characters detected"
 
     for row in recent_comments:
-        if row.get("comment", "").strip().lower() == content.lower():
+        if (
+            row.get("comment", "").strip().lower()
+            == content.lower()
+        ):
             return "Repeated comment detected"
 
     return None
@@ -636,6 +824,46 @@ def _report_item(
             st.error(f"Could not submit report: {error}")
 
 
+def _report_form(
+    supabase,
+    user_id,
+    post_id=None,
+    comment_id=None,
+    key="report",
+):
+    reason = st.selectbox(
+        "Reason for reporting",
+        [
+            "Spam",
+            "Harassment or bullying",
+            "Inappropriate content",
+            "False or misleading information",
+            "Hate or harmful language",
+            "Other",
+        ],
+        key=f"{key}_reason",
+    )
+
+    details = st.text_area(
+        "Additional details (optional)",
+        key=f"{key}_details",
+    )
+
+    if st.button(
+        "Submit report",
+        key=f"{key}_submit",
+        use_container_width=True,
+    ):
+        _report_item(
+            supabase,
+            user_id,
+            reason,
+            post_id=post_id,
+            comment_id=comment_id,
+            details=details,
+        )
+
+
 def _report_controls(
     supabase,
     user_id,
@@ -644,37 +872,13 @@ def _report_controls(
     key="report",
 ):
     with st.popover("🚩 Report"):
-        reason = st.selectbox(
-            "Why are you reporting this?",
-            [
-                "Spam",
-                "Harassment or bullying",
-                "Inappropriate content",
-                "False or misleading information",
-                "Hate or harmful language",
-                "Other",
-            ],
-            key=f"{key}_reason",
+        _report_form(
+            supabase,
+            user_id,
+            post_id,
+            comment_id,
+            key,
         )
-
-        details = st.text_area(
-            "Additional details (optional)",
-            key=f"{key}_details",
-        )
-
-        if st.button(
-            "Submit report",
-            key=f"{key}_submit",
-            use_container_width=True,
-        ):
-            _report_item(
-                supabase,
-                user_id,
-                reason,
-                post_id=post_id,
-                comment_id=comment_id,
-                details=details,
-            )
 
 
 # ============================================================
@@ -729,7 +933,7 @@ def _unhide_comment(supabase, comment_id, user_id):
 
 
 # ============================================================
-# COMMENTS AND REPLIES
+# SUBMIT COMMENTS AND REPLIES
 # ============================================================
 
 def _submit_comment(
@@ -760,7 +964,8 @@ def _submit_comment(
         )
 
         spam_reason = _spam_reason(
-            comment, _rows(recent)
+            comment,
+            _rows(recent),
         )
 
         comment_data = {
@@ -779,7 +984,8 @@ def _submit_comment(
 
         if spam_reason:
             st.info(
-                "Your comment was submitted and flagged for moderator review."
+                "Your comment was submitted and flagged "
+                "for moderator review."
             )
         else:
             st.success("Comment added.")
@@ -824,6 +1030,75 @@ def _moderator_remove_comment(supabase, comment_id):
         st.error(f"Could not remove comment: {error}")
 
 
+# ============================================================
+# INSTAGRAM-STYLE COMMENT OPTIONS
+# ============================================================
+
+def _comment_options(
+    supabase,
+    comment,
+    user_id,
+    user_role,
+):
+    comment_id = comment["id"]
+    author_id = comment.get("user_id")
+
+    with st.popover("⋯"):
+        st.caption("Comment options")
+
+        if author_id == user_id:
+            if st.button(
+                "🗑️ Delete comment",
+                key=f"delete_comment_{comment_id}",
+                use_container_width=True,
+            ):
+                _delete_own_comment(
+                    supabase,
+                    comment_id,
+                    user_id,
+                )
+
+        else:
+            if st.button(
+                "Hide comment",
+                key=f"hide_comment_{comment_id}",
+                use_container_width=True,
+            ):
+                _hide_comment(
+                    supabase,
+                    comment_id,
+                    user_id,
+                )
+
+        st.divider()
+
+        st.markdown("**Report comment**")
+
+        _report_form(
+            supabase,
+            user_id,
+            comment_id=comment_id,
+            key=f"comment_report_{comment_id}",
+        )
+
+        if _is_moderator(user_role):
+            st.divider()
+
+            if st.button(
+                "🛡️ Moderator: remove comment",
+                key=f"moderator_remove_{comment_id}",
+                use_container_width=True,
+            ):
+                _moderator_remove_comment(
+                    supabase,
+                    comment_id,
+                )
+
+
+# ============================================================
+# DISPLAY ONE COMMENT
+# ============================================================
+
 def _show_one_comment(
     supabase,
     comment,
@@ -837,87 +1112,77 @@ def _show_one_comment(
     author_id = comment.get("user_id")
 
     if comment_id in hidden_ids:
-        with st.container(border=True):
-            st.caption("You have hidden this comment.")
+        st.caption("You have hidden this comment.")
 
-            if st.button(
-                "Show comment",
-                key=f"unhide_{comment_id}",
-            ):
-                _unhide_comment(
-                    supabase, comment_id, user_id
-                )
+        if st.button(
+            "Show comment",
+            key=f"unhide_{comment_id}",
+        ):
+            _unhide_comment(
+                supabase,
+                comment_id,
+                user_id,
+            )
 
         return
 
     if comment.get("moderation_status") != "visible":
         return
 
-    with st.container(border=True):
+    # Clean, unboxed comment layout.
+    author_col, menu_col = st.columns([0.88, 0.12])
+
+    with author_col:
         st.markdown(
-            f"**{names.get(author_id, 'EcoLoop Member')}**"
+            f'<div class="gallery-comment-author">'
+            f'{names.get(author_id, "EcoLoop Member")}'
+            f'</div>',
+            unsafe_allow_html=True,
         )
 
-        st.write(comment.get("comment", ""))
-
-        st.caption(
-            _format_timestamp(comment.get("created_at"))
+        st.markdown(
+            f'<div class="gallery-comment-time">'
+            f'{_format_timestamp(comment.get("created_at"))}'
+            f'</div>',
+            unsafe_allow_html=True,
         )
 
-        action_cols = st.columns(3)
+    with menu_col:
+        _comment_options(
+            supabase,
+            comment,
+            user_id,
+            user_role,
+        )
 
-        with action_cols[0]:
-            if author_id == user_id:
-                if st.button(
-                    "Delete",
-                    key=f"delete_comment_{comment_id}",
-                ):
-                    _delete_own_comment(
-                        supabase, comment_id, user_id
-                    )
+    st.markdown(
+        '<div class="gallery-comment-text">',
+        unsafe_allow_html=True,
+    )
 
-        with action_cols[1]:
-            if author_id != user_id:
-                if st.button(
-                    "Hide",
-                    key=f"hide_comment_{comment_id}",
-                ):
-                    _hide_comment(
-                        supabase, comment_id, user_id
-                    )
+    st.write(comment.get("comment", ""))
 
-        with action_cols[2]:
-            _report_controls(
-                supabase,
-                user_id,
-                comment_id=comment_id,
-                key=f"comment_report_{comment_id}",
-            )
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        if _is_moderator(user_role):
-            if st.button(
-                "Moderator: remove comment",
-                key=f"moderator_remove_{comment_id}",
-            ):
-                _moderator_remove_comment(
-                    supabase, comment_id
+    # Replies appear naturally underneath the parent comment.
+    if replies:
+        st.caption(f"↳ {len(replies)} replies")
+
+        for reply in replies:
+            reply_author = reply.get("user_id")
+
+            with st.container():
+                st.markdown(
+                    '<div class="gallery-reply">',
+                    unsafe_allow_html=True,
                 )
 
-        if replies:
-            with st.expander(
-                f"View {len(replies)} replies"
-            ):
-                for reply in replies:
-                    if reply.get("moderation_status") != "visible":
-                        continue
+                reply_cols = st.columns([0.88, 0.12])
 
-                    reply_author = reply.get("user_id")
-
+                with reply_cols[0]:
                     st.markdown(
                         f"**{names.get(reply_author, 'EcoLoop Member')}**"
                     )
-
-                    st.write(reply.get("comment", ""))
 
                     st.caption(
                         _format_timestamp(
@@ -925,46 +1190,47 @@ def _show_one_comment(
                         )
                     )
 
-                    reply_cols = st.columns(2)
+                with reply_cols[1]:
+                    _comment_options(
+                        supabase,
+                        reply,
+                        user_id,
+                        user_role,
+                    )
 
-                    with reply_cols[0]:
-                        if reply_author == user_id:
-                            if st.button(
-                                "Delete reply",
-                                key=f"delete_reply_{reply['id']}",
-                            ):
-                                _delete_own_comment(
-                                    supabase,
-                                    reply["id"],
-                                    user_id,
-                                )
+                st.write(reply.get("comment", ""))
 
-                    with reply_cols[1]:
-                        _report_controls(
-                            supabase,
-                            user_id,
-                            comment_id=reply["id"],
-                            key=f"reply_report_{reply['id']}",
-                        )
-
-        with st.expander("Reply"):
-            reply_text = st.text_area(
-                "Write a reply",
-                key=f"reply_text_{comment_id}",
-            )
-
-            if st.button(
-                "Send reply",
-                key=f"send_reply_{comment_id}",
-            ):
-                _submit_comment(
-                    supabase,
-                    comment.get("post_id"),
-                    user_id,
-                    reply_text,
-                    parent_comment_id=comment_id,
+                st.markdown(
+                    "</div>",
+                    unsafe_allow_html=True,
                 )
 
+    # Reply control directly below the comment.
+    with st.expander("↩ Reply"):
+        reply_text = st.text_area(
+            "Write a reply",
+            key=f"reply_text_{comment_id}",
+            label_visibility="collapsed",
+            placeholder="Write your reply...",
+        )
+
+        if st.button(
+            "Send reply",
+            key=f"send_reply_{comment_id}",
+            type="primary",
+        ):
+            _submit_comment(
+                supabase,
+                comment.get("post_id"),
+                user_id,
+                reply_text,
+                parent_comment_id=comment_id,
+            )
+
+
+# ============================================================
+# COMMENTS SECTION
+# ============================================================
 
 def _show_comments(
     supabase,
@@ -972,7 +1238,10 @@ def _show_comments(
     user_id,
     user_role,
 ):
-    st.markdown("#### 💬 Comments")
+    st.markdown(
+        '<div class="gallery-section-label">💬 Comments</div>',
+        unsafe_allow_html=True,
+    )
 
     try:
         result = (
@@ -1003,17 +1272,29 @@ def _show_comments(
         parent = row.get("parent_comment_id")
 
         if parent:
-            replies_by_parent.setdefault(parent, []).append(row)
+            replies_by_parent.setdefault(
+                parent, []
+            ).append(row)
 
     all_user_ids = [
-        row.get("user_id") for row in comments
+        row.get("user_id")
+        for row in comments
     ]
 
-    names = _profile_names(supabase, all_user_ids)
-    hidden_ids = _hidden_comment_ids(supabase, user_id)
+    names = _profile_names(
+        supabase,
+        all_user_ids,
+    )
+
+    hidden_ids = _hidden_comment_ids(
+        supabase,
+        user_id,
+    )
 
     if not root_comments:
-        st.caption("No comments yet. Start the conversation.")
+        st.caption(
+            "No comments yet. Start the conversation."
+        )
 
     else:
         preview = root_comments[:2]
@@ -1022,7 +1303,9 @@ def _show_comments(
             _show_one_comment(
                 supabase,
                 comment,
-                replies_by_parent.get(comment["id"], []),
+                replies_by_parent.get(
+                    comment["id"], []
+                ),
                 names,
                 user_id,
                 user_role,
@@ -1037,21 +1320,28 @@ def _show_comments(
                     _show_one_comment(
                         supabase,
                         comment,
-                        replies_by_parent.get(comment["id"], []),
+                        replies_by_parent.get(
+                            comment["id"], []
+                        ),
                         names,
                         user_id,
                         user_role,
                         hidden_ids,
                     )
 
-    with st.form(f"new_comment_form_{post_id}"):
+    # Compact comment composer.
+    with st.form(
+        f"new_comment_form_{post_id}",
+        clear_on_submit=True,
+    ):
         new_comment = st.text_input(
-            "Write a comment...",
+            "Add a comment",
             key=f"new_comment_{post_id}",
+            placeholder="Write a comment...",
         )
 
         submitted = st.form_submit_button(
-            "Comment",
+            "Post comment",
             use_container_width=True,
         )
 
@@ -1065,7 +1355,7 @@ def _show_comments(
 
 
 # ============================================================
-# POST MANAGEMENT
+# POST DELETION
 # ============================================================
 
 def _delete_post(supabase, post, user_id):
@@ -1074,6 +1364,7 @@ def _delete_post(supabase, post, user_id):
     try:
         media_path = post.get("image_path")
 
+        # Keep shared media if another post still references it.
         if media_path:
             other_posts = (
                 supabase.table("action_posts")
@@ -1106,6 +1397,10 @@ def _delete_post(supabase, post, user_id):
         st.error(f"Could not delete post: {error}")
 
 
+# ============================================================
+# POST OPTIONS — CLEAN THREE-DOT MENU
+# ============================================================
+
 def _post_tools(
     supabase,
     post,
@@ -1116,12 +1411,24 @@ def _post_tools(
     owner = post.get("user_id") == user_id
     moderator = _is_moderator(user_role)
 
-    if not owner and not moderator:
-        return
+    with st.popover("⋯ Post options"):
 
-    with st.expander("⚙️ Manage post"):
+        st.caption("Post options")
+
+        # Anyone can report a post.
+        st.markdown("**Report this post**")
+
+        _report_form(
+            supabase,
+            user_id,
+            post_id=post_id,
+            key=f"post_report_{post_id}",
+        )
 
         if owner:
+            st.divider()
+            st.markdown("**Edit your post**")
+
             new_caption = st.text_area(
                 "Edit caption",
                 value=post.get("caption", ""),
@@ -1131,6 +1438,7 @@ def _post_tools(
             if st.button(
                 "Save caption",
                 key=f"save_caption_{post_id}",
+                use_container_width=True,
             ):
                 try:
                     (
@@ -1147,12 +1455,51 @@ def _post_tools(
                     st.rerun()
 
                 except Exception as error:
-                    st.error(f"Could not update caption: {error}")
+                    st.error(
+                        f"Could not update caption: {error}"
+                    )
+
+            st.divider()
+
+            public_preview = st.checkbox(
+                "Allow public preview",
+                value=bool(post.get("public_preview")),
+                key=f"preview_{post_id}",
+            )
+
+            if st.button(
+                "Save preview setting",
+                key=f"save_preview_{post_id}",
+                use_container_width=True,
+            ):
+                try:
+                    (
+                        supabase.table("action_posts")
+                        .update({
+                            "public_preview": public_preview
+                        })
+                        .eq("id", post_id)
+                        .eq("user_id", user_id)
+                        .execute()
+                    )
+
+                    st.success(
+                        "Preview setting updated."
+                    )
+                    st.rerun()
+
+                except Exception as error:
+                    st.error(
+                        f"Could not update setting: {error}"
+                    )
 
         if moderator:
+            st.divider()
+
             if st.button(
-                "Remove post from public feed",
+                "🛡️ Remove post from public feed",
                 key=f"remove_post_{post_id}",
+                use_container_width=True,
             ):
                 try:
                     (
@@ -1166,51 +1513,29 @@ def _post_tools(
                     st.rerun()
 
                 except Exception as error:
-                    st.error(f"Could not remove post: {error}")
+                    st.error(
+                        f"Could not remove post: {error}"
+                    )
 
-        if owner:
-            public_preview = st.checkbox(
-                "Allow public preview",
-                value=bool(post.get("public_preview")),
-                key=f"preview_{post_id}",
+        if owner or moderator:
+            st.divider()
+            st.markdown("**Delete post**")
+
+            confirm_delete = st.checkbox(
+                "I understand this permanently deletes the post.",
+                key=f"confirm_delete_{post_id}",
             )
 
             if st.button(
-                "Save preview setting",
-                key=f"save_preview_{post_id}",
+                "🗑️ Delete post",
+                key=f"delete_post_{post_id}",
+                disabled=not confirm_delete,
+                use_container_width=True,
             ):
-                try:
-                    (
-                        supabase.table("action_posts")
-                        .update({
-                            "public_preview": public_preview
-                        })
-                        .eq("id", post_id)
-                        .eq("user_id", user_id)
-                        .execute()
-                    )
-
-                    st.success("Preview setting updated.")
-                    st.rerun()
-
-                except Exception as error:
-                    st.error(f"Could not update setting: {error}")
-
-        st.divider()
-
-        confirm_delete = st.checkbox(
-            "I understand this will permanently delete the post.",
-            key=f"confirm_delete_{post_id}",
-        )
-
-        if st.button(
-            "Delete post",
-            key=f"delete_post_{post_id}",
-            disabled=not confirm_delete,
-        ):
-            if owner or moderator:
                 _delete_post(
-                    supabase, post, user_id
+                    supabase,
+                    post,
+                    user_id,
                 )
 
 
@@ -1225,8 +1550,9 @@ def _moderator_report_queue(
     if not _is_moderator(user_role):
         return
 
-    with st.expander("🛡️ Community moderation reports"):
-
+    with st.expander(
+        "🛡️ Community moderation reports"
+    ):
         try:
             result = (
                 supabase.table("action_gallery_reports")
@@ -1239,11 +1565,15 @@ def _moderator_report_queue(
             reports = _rows(result)
 
         except Exception as error:
-            st.error(f"Could not load reports: {error}")
+            st.error(
+                f"Could not load reports: {error}"
+            )
             return
 
         if not reports:
-            st.success("There are no pending reports.")
+            st.success(
+                "There are no pending reports."
+            )
             return
 
         for report in reports:
@@ -1253,11 +1583,14 @@ def _moderator_report_queue(
                 )
 
                 st.write(
-                    report.get("details") or "No extra details."
+                    report.get("details")
+                    or "No extra details."
                 )
 
                 st.caption(
-                    _format_timestamp(report.get("created_at"))
+                    _format_timestamp(
+                        report.get("created_at")
+                    )
                 )
 
                 if report.get("post_id"):
@@ -1279,6 +1612,9 @@ def _moderator_report_queue(
                             supabase.table("action_gallery_reports")
                             .update({
                                 "status": "reviewed",
+                                "reviewed_by": st.session_state.get(
+                                    "user_id"
+                                ),
                                 "reviewed_at": datetime.now(
                                     timezone.utc
                                 ).isoformat(),
@@ -1301,6 +1637,9 @@ def _moderator_report_queue(
                             supabase.table("action_gallery_reports")
                             .update({
                                 "status": "dismissed",
+                                "reviewed_by": st.session_state.get(
+                                    "user_id"
+                                ),
                                 "reviewed_at": datetime.now(
                                     timezone.utc
                                 ).isoformat(),
@@ -1331,6 +1670,9 @@ def _moderator_report_queue(
                                 supabase.table("action_gallery_reports")
                                 .update({
                                     "status": "action_taken",
+                                    "reviewed_by": st.session_state.get(
+                                        "user_id"
+                                    ),
                                     "reviewed_at": datetime.now(
                                         timezone.utc
                                     ).isoformat(),
@@ -1364,6 +1706,9 @@ def _moderator_report_queue(
                                 supabase.table("action_gallery_reports")
                                 .update({
                                     "status": "action_taken",
+                                    "reviewed_by": st.session_state.get(
+                                        "user_id"
+                                    ),
                                     "reviewed_at": datetime.now(
                                         timezone.utc
                                     ).isoformat(),
@@ -1380,7 +1725,7 @@ def _moderator_report_queue(
 
 
 # ============================================================
-# POST DISPLAY
+# POST DISPLAY — MODERN SOCIAL FEED
 # ============================================================
 
 def _display_post(
@@ -1395,138 +1740,142 @@ def _display_post(
     post_id = post["id"]
     author_id = post.get("user_id")
 
-    with st.container(border=True):
+    author_name = names.get(
+        author_id,
+        "EcoLoop Member",
+    )
 
-        author_name = names.get(
-            author_id,
-            "EcoLoop Member"
+    if post.get("author_type") == "group":
+        author_name = group_names.get(
+            post.get("group_id"),
+            "Community Group",
         )
 
-        if post.get("author_type") == "group":
-            author_name = group_names.get(
-                post.get("group_id"),
-                "Community Group"
-            )
+    # Post header.
+    header_cols = st.columns([0.84, 0.16])
 
-        st.markdown(f"### {author_name}")
-
-        if post.get("is_repost"):
-            original_author = (
-                (post.get("social_handles") or {})
-                .get("original_author_name", "EcoLoop Member")
-            )
-
-            st.caption(
-                f"🔁 Reposted from {original_author}"
-            )
-
-        st.caption(
-            f"{post.get('category', 'Community action')} "
-            f"• {_format_timestamp(post.get('created_at'))}"
+    with header_cols[0]:
+        st.markdown(
+            f'<div class="gallery-author">'
+            f'🌿 {author_name}'
+            f'</div>',
+            unsafe_allow_html=True,
         )
 
-        if post.get("location"):
-            st.caption(f"📍 {post['location']}")
-
-        st.write(post.get("caption", ""))
-
-        media_url = _signed_media_url(
-            supabase,
-            post.get("image_path"),
+        st.markdown(
+            f'<div class="gallery-meta">'
+            f'{post.get("category", "Community action")} '
+            f'· {_format_timestamp(post.get("created_at"))}'
+            f'</div>',
+            unsafe_allow_html=True,
         )
 
-        if media_url:
-            if post.get("media_type") == "video":
-                st.video(media_url)
-            else:
-                st.image(
-                    media_url,
-                    use_container_width=True,
-                )
-
-        elif post.get("image_path"):
-            st.caption("Media is currently unavailable.")
-
-        _record_view(
-            supabase,
-            post_id,
-            user_id,
-        )
-
-        _show_reactions(
-            supabase,
-            post_id,
-            user_id,
-        )
-
-        counts = _reaction_counts(
-            supabase,
-            post_id,
-        )
-
-        st.caption(
-            f"💬 Community reactions: "
-            f"{sum(counts.values())}"
-        )
-
-        action_cols = st.columns(3)
-
-        with action_cols[0]:
-            if post.get("user_id") != user_id:
-                if st.button(
-                    "🔁 Repost",
-                    key=f"repost_{post_id}",
-                    use_container_width=True,
-                ):
-                    _repost_post(
-                        supabase,
-                        post,
-                        user_id,
-                        user_name,
-                    )
-
-        with action_cols[1]:
-            _report_controls(
-                supabase,
-                user_id,
-                post_id=post_id,
-                key=f"post_report_{post_id}",
-            )
-
-        with action_cols[2]:
-            if st.button(
-                "↗ Share",
-                key=f"share_toggle_{post_id}",
-                use_container_width=True,
-            ):
-                st.session_state[
-                    f"show_share_{post_id}"
-                ] = not st.session_state.get(
-                    f"show_share_{post_id}", False
-                )
-
-        if st.session_state.get(
-            f"show_share_{post_id}", False
-        ):
-            _share_post(
-                supabase,
-                post,
-                user_id,
-            )
-
-        _show_comments(
-            supabase,
-            post_id,
-            user_id,
-            user_role,
-        )
-
+    with header_cols[1]:
         _post_tools(
             supabase,
             post,
             user_id,
             user_role,
         )
+
+    if post.get("is_repost"):
+        original_author = (
+            (post.get("social_handles") or {})
+            .get(
+                "original_author_name",
+                "EcoLoop Member",
+            )
+        )
+
+        st.caption(
+            f"🔁 Reposted from {original_author}"
+        )
+
+    if post.get("location"):
+        st.caption(f"📍 {post['location']}")
+
+    st.markdown(
+        f'<div class="gallery-caption">'
+        f'{post.get("caption", "")}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Media.
+    media_url = _signed_media_url(
+        supabase,
+        post.get("image_path"),
+    )
+
+    if media_url:
+        if post.get("media_type") == "video":
+            st.video(media_url)
+        else:
+            st.image(
+                media_url,
+                use_container_width=True,
+            )
+
+    elif post.get("image_path"):
+        st.caption(
+            "Media is currently unavailable."
+        )
+
+    _record_view(
+        supabase,
+        post_id,
+        user_id,
+    )
+
+    # Reactions.
+    _show_reactions(
+        supabase,
+        post_id,
+        user_id,
+    )
+
+    # Compact post actions.
+    action_cols = st.columns(3)
+
+    with action_cols[0]:
+        if author_id != user_id:
+            if st.button(
+                "🔁 Repost",
+                key=f"repost_{post_id}",
+                use_container_width=True,
+            ):
+                _repost_post(
+                    supabase,
+                    post,
+                    user_id,
+                    user_name,
+                )
+
+    with action_cols[1]:
+        with st.popover("↗ Share"):
+            _share_post(
+                supabase,
+                post,
+                user_id,
+            )
+
+    with action_cols[2]:
+        counts = _reaction_counts(
+            supabase,
+            post_id,
+        )
+
+        st.caption(
+            f"💬 {sum(counts.values())} reactions"
+        )
+
+    # Comments.
+    _show_comments(
+        supabase,
+        post_id,
+        user_id,
+        user_role,
+    )
 
 
 # ============================================================
@@ -1539,20 +1888,32 @@ def render_action_gallery(
     user_name="EcoLoop Member",
     user_role="member",
 ):
-    st.caption(f"Action Gallery Build: {ACTION_GALLERY_BUILD}")
-    st.title("🌍 Action Gallery")
-
-    st.write(
-        "Discover community environmental action, "
-        "share your impact and celebrate positive change."
-    )
+    _inject_gallery_styles()
 
     st.caption(
-        "Powered by Next Gen Impact Hub (NGIH)"
+        f"Action Gallery Build: {ACTION_GALLERY_BUILD}"
+    )
+
+    st.title("🌍 Action Gallery")
+
+    st.markdown(
+        '<div class="gallery-intro">'
+        'Discover community environmental action, '
+        'share your impact and celebrate positive change.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<div class="gallery-brand">'
+        'Powered by Next Gen Impact Hub (NGIH)'
+        '</div>',
+        unsafe_allow_html=True,
     )
 
     st.divider()
 
+    # Create a post.
     _post_creation_form(
         supabase,
         user_id,
@@ -1560,6 +1921,7 @@ def render_action_gallery(
 
     st.divider()
 
+    # Feed filters.
     filter_cols = st.columns(2)
 
     with filter_cols[0]:
@@ -1580,6 +1942,7 @@ def render_action_gallery(
             key="gallery_type_filter",
         )
 
+    # Load posts.
     try:
         query = (
             supabase.table("action_posts")
@@ -1610,7 +1973,9 @@ def render_action_gallery(
         posts = _rows(result)
 
     except Exception as error:
-        st.error(f"Could not load the Action Gallery: {error}")
+        st.error(
+            f"Could not load the Action Gallery: {error}"
+        )
         return
 
     if not posts:
@@ -1648,14 +2013,17 @@ def render_action_gallery(
                 )
 
                 group_names = {
-                    row["id"]: row.get("name", "Community Group")
+                    row["id"]: row.get(
+                        "name",
+                        "Community Group",
+                    )
                     for row in _rows(groups)
                 }
 
             except Exception:
                 pass
 
-        for post in posts:
+        for index, post in enumerate(posts):
             _display_post(
                 supabase,
                 post,
@@ -1666,15 +2034,20 @@ def render_action_gallery(
                 group_names,
             )
 
-    st.divider()
+            if index < len(posts) - 1:
+                st.divider()
 
-    _moderator_report_queue(
-        supabase,
-        user_role,
-    )
+    # Moderator tools.
+    if _is_moderator(user_role):
+        st.divider()
+
+        _moderator_report_queue(
+            supabase,
+            user_role,
+        )
 
     st.divider()
 
     st.caption(
         "EcoLoop Node • Next Gen Impact Hub (NGIH)"
-)
+    )
