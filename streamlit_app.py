@@ -622,7 +622,7 @@ NAVIGATION = {
 
     "Learn & Grow": [
         "Explore & Learn",
-        "Eco Quiz"
+        "Eco Quizzes"
     ],
 
     "Account": [
@@ -4002,7 +4002,7 @@ PAGE_ROUTES = {
         )
     ),
 
-    "Eco Quiz": eco_quiz_page,
+    "Eco Quizzes": eco_quiz_page,
 
     "Verify Contributions": verify_contributions_page,
     "Admin Studio": admin_studio_page,
