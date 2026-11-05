@@ -3154,91 +3154,49 @@ def challenges_page():
 
 def action_gallery_page():
 
+    from action_gallery import render_action_gallery
+
     section_heading(
         "Action Gallery",
         "Discover environmental actions and community initiatives."
     )
 
-    try:
-        response = (
-            supabase.table("environmental_actions")
-            .select("*")
-            .execute()
-        )
-
-        actions = response.data or []
-
-    except Exception:
-        st.error("We could not load the Action Gallery.")
+    # Check login
+    if not st.session_state.get("logged_in"):
+        st.warning("Please log in to access Action Gallery.")
         return
 
-    public_actions = []
+    # Get logged-in user
+    user_id = st.session_state.get("user_id")
 
-    for action in actions:
-
-        status = str(
-            action.get("status", "")
-        ).lower()
-
-        verification_status = str(
-            action.get("verification_status", "")
-        ).lower()
-
-        if status in ["approved", "published", "verified"] or \
-           verification_status in ["approved", "verified"]:
-
-            public_actions.append(action)
-
-    if not public_actions:
-
-        show_empty_state(
-            "No approved environmental actions are available yet. "
-            "Check back as more community activities are verified."
-        )
-
+    if not user_id:
+        st.error("Your account information could not be found. Please log in again.")
         return
 
-    st.write(
-        "Here are environmental activities recognised by the EcoLoop community."
+    # Get existing profile information
+    profile = st.session_state.get("profile") or {}
+
+    user_name = (
+        profile.get("full_name")
+        or "EcoLoop Member"
     )
 
-    for action in public_actions:
+    user_role = (
+        profile.get("role")
+        or "member"
+    )
 
-        title = (
-            action.get("title")
-            or action.get("action_name")
-            or action.get("name")
-            or "Community Environmental Action"
+    # Render separate Action Gallery module
+    try:
+        render_action_gallery(
+            supabase=supabase,
+            user_id=user_id,
+            user_name=user_name,
+            user_role=user_role
         )
 
-        description = (
-            action.get("description")
-            or action.get("action_description")
-            or "An environmental action shared by the community."
-        )
-
-        category = (
-            action.get("category")
-            or action.get("action_type")
-            or "Environmental Action"
-        )
-
-        created_at = (
-            action.get("created_at")
-            or action.get("submitted_at")
-        )
-
-        with st.container(border=True):
-
-            st.subheader(f"🌱 {title}")
-
-            st.caption(f"Category: {category}")
-
-            st.write(description)
-
-            if created_at:
-                st.caption(f"Submitted: {created_at}")
-
+    except Exception as error:
+        st.error(f"Action Gallery could not load: {error}")
 # =====================================================
 # PAGE 14 — COLLECTION MANAGEMENT
 # =====================================================
