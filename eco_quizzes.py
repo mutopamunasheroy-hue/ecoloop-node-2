@@ -1193,6 +1193,33 @@ def render_eco_quizzes(supabase, user_id, profile=None):
 
     is_admin = _is_super_admin(profile)
 
+    # IMPORT ORIGINAL NGIH QUIZZES
+    if is_admin:
+        with st.expander("⚙️ Original NGIH Quiz Bank"):
+            st.write(
+                "Load the original 50 questions into the "
+                "four NGIH pillar quiz collections."
+            )
+
+            if st.button(
+                "Import Original 50 Quizzes",
+                key="import_original_50_quizzes",
+                use_container_width=True
+            ):
+                with st.spinner("Importing original quizzes..."):
+                    imported, skipped, error = (
+                        seed_original_eco_quizzes(supabase)
+                    )
+
+                if error:
+                    st.error(error)
+                else:
+                    st.success(
+                        f"Imported {imported} questions. "
+                        f"Skipped {skipped} existing collections."
+                    )
+                    st.rerun()
+
     # --------------------------------------------------------
     # ACTIVE QUIZ
     # --------------------------------------------------------
