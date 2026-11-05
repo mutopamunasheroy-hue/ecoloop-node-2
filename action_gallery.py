@@ -1,3 +1,4 @@
+ACTION_GALLERY_BUILD = "NOV06_V2"
 # ============================================================
 # ECOLOOP NODE — ACTION GALLERY
 # Next Gen Impact Hub (NGIH)
