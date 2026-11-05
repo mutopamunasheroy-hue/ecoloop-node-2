@@ -5,11 +5,12 @@
 
 import streamlit as st
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 # ============================================================
-# 1. THE 50 READING MATERIALS
+# 1. PILLARS AND 50 READING MATERIALS
 # ============================================================
 
 PILLARS = [
@@ -78,7 +79,6 @@ READING_TOPICS = [
     ("Design thinking and problem-solving", PILLARS[3], "Learn a human-centred approach to innovation.", "Design thinking begins by understanding people, defining a problem, developing ideas, testing solutions and improving them through feedback.", "Identify one person you would consult before designing an environmental app."),
     ("Arts, creativity and climate action", PILLARS[3], "Explore how creative work can encourage environmental action.", "Music, visual arts, theatre, photography and design can communicate ideas and encourage participation. Creative messages are strongest when they are accurate and inclusive.", "Suggest a creative campaign to promote responsible waste management.")
 ]
-
 
 LESSONS = []
 
@@ -174,7 +174,37 @@ QUIZ_QUESTIONS = [
 
 
 # ============================================================
-# 3. HELPERS
+# 3. TIME DISPLAY
+# ============================================================
+
+def _format_member_time(timestamp, timezone_name=None):
+    if not timestamp:
+        return "Time unavailable"
+
+    try:
+        value = datetime.fromisoformat(
+            str(timestamp).replace("Z", "+00:00")
+        )
+
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+
+        if timezone_name:
+            try:
+                value = value.astimezone(ZoneInfo(timezone_name))
+            except (ZoneInfoNotFoundError, ValueError):
+                value = value.astimezone(timezone.utc)
+        else:
+            value = value.astimezone(timezone.utc)
+
+        return value.strftime("%d %b %Y · %I:%M %p")
+
+    except Exception:
+        return str(timestamp)
+
+
+# ============================================================
+# 4. GENERAL HELPERS
 # ============================================================
 
 def _safe_name(name):
@@ -196,24 +226,48 @@ def _load_comments(supabase, content_type, content_id):
         return []
 
 
-def _comments_section(supabase, user_id, content_type, content_id,
-                      user_name, group_name=None):
-
+def _comments_section(
+    supabase,
+    user_id,
+    content_type,
+    content_id,
+    user_name,
+    group_name=None,
+    timezone_name=None
+):
     st.markdown("#### 💬 Community discussion")
 
-    comments = _load_comments(supabase, content_type, content_id)
+    comments = _load_comments(
+        supabase,
+        content_type,
+        content_id
+    )
 
     if comments:
         for comment in comments:
             with st.container(border=True):
-                display_name = _safe_name(comment.get("full_name"))
+                display_name = _safe_name(
+                    comment.get("full_name")
+                )
+
                 if comment.get("group_name"):
-                    display_name += f" · {comment['group_name']}"
+                    display_name += (
+                        f" · {comment['group_name']}"
+                    )
+
                 st.markdown(f"**{display_name}**")
                 st.write(comment.get("comment", ""))
-                st.caption(comment.get("created_at", ""))
+
+                st.caption(
+                    _format_member_time(
+                        comment.get("created_at"),
+                        timezone_name
+                    )
+                )
     else:
-        st.caption("No comments yet. Start the conversation!")
+        st.caption(
+            "No comments yet. Start the conversation!"
+        )
 
     comment_text = st.text_area(
         "Share your thoughts",
@@ -221,10 +275,11 @@ def _comments_section(supabase, user_id, content_type, content_id,
         max_chars=1000
     )
 
-    if st.button("Post comment",
-                 key=f"post_{content_type}_{content_id}",
-                 use_container_width=True):
-
+    if st.button(
+        "Post comment",
+        key=f"post_{content_type}_{content_id}",
+        use_container_width=True
+    ):
         if not user_id:
             st.error("Please sign in to comment.")
             return
@@ -241,24 +296,35 @@ def _comments_section(supabase, user_id, content_type, content_id,
             "comment": comment_text.strip()
         }
 
-        # Only use group_name if the existing table supports it.
         if group_name:
             payload["group_name"] = group_name
 
         try:
-            supabase.table("learning_comments").insert(payload).execute()
+            supabase.table(
+                "learning_comments"
+            ).insert(payload).execute()
+
             st.success("Your comment has been shared!")
             st.rerun()
+
         except Exception as e:
-            # Retry without optional group_name for older schemas.
             if "group_name" in str(e).lower():
                 payload.pop("group_name", None)
+
                 try:
-                    supabase.table("learning_comments").insert(payload).execute()
-                    st.success("Your comment has been shared!")
+                    supabase.table(
+                        "learning_comments"
+                    ).insert(payload).execute()
+
+                    st.success(
+                        "Your comment has been shared!"
+                    )
                     st.rerun()
+
                 except Exception as retry_error:
-                    st.error(f"Could not post comment: {retry_error}")
+                    st.error(
+                        f"Could not post comment: {retry_error}"
+                    )
             else:
                 st.error(f"Could not post comment: {e}")
 
@@ -291,6 +357,7 @@ def _get_approved_groups(supabase, user_id):
             .in_("id", group_ids)
             .execute()
         )
+
         return response.data or []
 
     except Exception as e:
@@ -321,18 +388,25 @@ def _group_selector(supabase, user_id, user_name, key):
     if selected is None:
         return None, None
 
-    return selected.get("id"), (
+    group_name = (
         selected.get("group_name")
         or selected.get("name")
         or selected.get("title")
         or "Community Group"
     )
 
+    return selected.get("id"), group_name
 
-def _award_learning_points(supabase, user_id, group_id, lesson_id):
-    """Award five points once per member/group lesson attribution."""
 
-    description = f"Explore & Learn lesson completed: {lesson_id}"
+def _award_learning_points(
+    supabase,
+    user_id,
+    group_id,
+    lesson_id
+):
+    description = (
+        f"Explore & Learn lesson completed: {lesson_id}"
+    )
 
     try:
         existing = (
@@ -365,27 +439,164 @@ def _award_learning_points(supabase, user_id, group_id, lesson_id):
 
     except Exception as e:
         st.warning(
-            "The lesson was recorded, but points could not be confirmed: "
-            f"{e}"
+            "The lesson was recorded, but points could not "
+            f"be confirmed: {e}"
         )
         return False
 
 
 # ============================================================
-# 4. READING LIBRARY
+# 5. READING LIBRARY
 # ============================================================
 
-def _reading_library(supabase, user_id, group_id, user_name):
-
+def _reading_library(
+    supabase,
+    user_id,
+    group_id,
+    user_name,
+    timezone_name=None
+):
     st.subheader("📚 Discover & Learn")
+
     st.write(
-        "Explore 50 short learning materials across all four NGIH pillars."
+        "Explore 50 short learning materials across "
+        "all four NGIH pillars."
     )
 
     activity_group_id, activity_group_name = _group_selector(
-        supabase, user_id, user_name, "learning_group_choice"
+        supabase,
+        user_id,
+        user_name,
+        "learning_group_choice"
     )
 
+    selected_id = st.session_state.get(
+        "selected_learning_lesson"
+    )
+
+    # OPEN LESSON VIEW
+    if selected_id:
+        lesson = next(
+            (
+                item for item in LESSONS
+                if item["id"] == selected_id
+            ),
+            None
+        )
+
+        if lesson:
+            st.button(
+                "← Back to learning library",
+                key="back_lessons",
+                on_click=lambda: st.session_state.pop(
+                    "selected_learning_lesson",
+                    None
+                )
+            )
+
+            st.divider()
+            st.markdown(f"## {lesson['title']}")
+            st.caption(
+                f"{lesson['category']} · "
+                f"{lesson['minutes']} minute read"
+            )
+
+            for heading, paragraph in lesson["content"]:
+                st.markdown(f"### {heading}")
+                st.write(paragraph)
+
+            st.info(
+                f"🌱 **Your action:** {lesson['action']}"
+            )
+
+            if st.button(
+                "✅ Mark lesson as completed",
+                key=f"complete_{lesson['id']}",
+                use_container_width=True
+            ):
+                if not user_id:
+                    st.error(
+                        "Please sign in to record your progress."
+                    )
+                else:
+                    try:
+                        check = (
+                            supabase.table("learning_completions")
+                            .select("id")
+                            .eq("user_id", user_id)
+                            .eq("lesson_id", lesson["id"])
+                        )
+
+                        if activity_group_id:
+                            check = check.eq(
+                                "group_id",
+                                activity_group_id
+                            )
+                        else:
+                            check = check.is_(
+                                "group_id",
+                                "null"
+                            )
+
+                        previous = check.limit(1).execute()
+
+                        if previous.data:
+                            st.info(
+                                "This lesson is already completed "
+                                "for this account."
+                            )
+                        else:
+                            supabase.table(
+                                "learning_completions"
+                            ).insert({
+                                "user_id": user_id,
+                                "group_id": activity_group_id,
+                                "lesson_id": lesson["id"]
+                            }).execute()
+
+                            awarded = _award_learning_points(
+                                supabase,
+                                user_id,
+                                activity_group_id,
+                                lesson["id"]
+                            )
+
+                            st.success(
+                                "Lesson completion recorded!"
+                            )
+
+                            if awarded:
+                                st.success(
+                                    "🌱 5 universal points awarded!"
+                                )
+
+                            st.rerun()
+
+                    except Exception as e:
+                        st.error(
+                            f"Could not record completion: {e}"
+                        )
+
+            _comments_section(
+                supabase,
+                user_id,
+                "lesson",
+                lesson["id"],
+                user_name,
+                activity_group_name,
+                timezone_name
+            )
+
+        else:
+            st.warning("That learning material could not be found.")
+            st.session_state.pop(
+                "selected_learning_lesson",
+                None
+            )
+
+        return
+
+    # LIBRARY VIEW
     categories = ["All categories"] + PILLARS
 
     selected_category = st.selectbox(
@@ -408,21 +619,56 @@ def _reading_library(supabase, user_id, group_id, user_name):
         ]
 
     if search.strip():
+        search_term = search.strip().lower()
+
         lessons = [
             lesson for lesson in lessons
-            if search.lower() in (
-                lesson["title"] + " " + lesson["description"]
+            if search_term in (
+                lesson["title"] + " " +
+                lesson["description"] + " " +
+                lesson["category"]
             ).lower()
         ]
 
-    st.caption(f"{len(lessons)} learning materials available")
+    st.caption(
+        f"{len(lessons)} learning materials available"
+    )
 
-    for lesson in lessons:
+    # Show ten lessons per page.
+    page_size = 10
+    total_pages = max(
+        1,
+        (len(lessons) + page_size - 1) // page_size
+    )
+
+    page_key = "learning_library_page"
+
+    if page_key not in st.session_state:
+        st.session_state[page_key] = 1
+
+    if st.session_state[page_key] > total_pages:
+        st.session_state[page_key] = 1
+
+    current_page = st.session_state[page_key]
+
+    start_index = (current_page - 1) * page_size
+    end_index = start_index + page_size
+
+    visible_lessons = lessons[start_index:end_index]
+
+    if not visible_lessons:
+        st.info("No learning materials match your search.")
+        return
+
+    for lesson in visible_lessons:
         with st.container(border=True):
             st.markdown(f"### {lesson['title']}")
+
             st.caption(
-                f"{lesson['category']} · {lesson['minutes']} minute read"
+                f"{lesson['category']} · "
+                f"{lesson['minutes']} minute read"
             )
+
             st.write(lesson["description"])
 
             if st.button(
@@ -430,102 +676,70 @@ def _reading_library(supabase, user_id, group_id, user_name):
                 key=f"read_{lesson['id']}",
                 use_container_width=True
             ):
-                st.session_state["selected_learning_lesson"] = lesson["id"]
+                st.session_state[
+                    "selected_learning_lesson"
+                ] = lesson["id"]
                 st.rerun()
 
-    selected_id = st.session_state.get("selected_learning_lesson")
+    st.divider()
 
-    if selected_id:
-        lesson = next(
-            (item for item in LESSONS if item["id"] == selected_id),
-            None
+    st.caption(
+        f"Page {current_page} of {total_pages}"
+    )
+
+    previous_col, page_col, next_col = st.columns(
+        [1, 2, 1]
+    )
+
+    with previous_col:
+        if st.button(
+            "← Previous",
+            disabled=current_page <= 1,
+            use_container_width=True
+        ):
+            st.session_state[page_key] -= 1
+            st.rerun()
+
+    with page_col:
+        st.markdown(
+            f"<div style='text-align:center;padding-top:8px'>"
+            f"Showing {start_index + 1}–"
+            f"{min(end_index, len(lessons))} of {len(lessons)}"
+            f"</div>",
+            unsafe_allow_html=True
         )
 
-        if lesson:
-            st.divider()
-            st.markdown(f"## {lesson['title']}")
-            st.caption(lesson["category"])
-
-            for heading, paragraph in lesson["content"]:
-                st.markdown(f"### {heading}")
-                st.write(paragraph)
-
-            st.info(f"🌱 **Your action:** {lesson['action']}")
-
-            if st.button(
-                "✅ Mark lesson as completed",
-                key=f"complete_{lesson['id']}",
-                use_container_width=True
-            ):
-
-                if not user_id:
-                    st.error("Please sign in to record your progress.")
-                else:
-                    try:
-                        # Check whether this user/group already completed it.
-                        check = (
-                            supabase.table("learning_completions")
-                            .select("id")
-                            .eq("user_id", user_id)
-                            .eq("lesson_id", lesson["id"])
-                        )
-
-                        if activity_group_id:
-                            check = check.eq("group_id", activity_group_id)
-                        else:
-                            check = check.is_("group_id", "null")
-
-                        previous = check.limit(1).execute()
-
-                        if previous.data:
-                            st.info("This lesson is already completed for this account.")
-                        else:
-                            supabase.table("learning_completions").insert({
-                                "user_id": user_id,
-                                "group_id": activity_group_id,
-                                "lesson_id": lesson["id"]
-                            }).execute()
-
-                            awarded = _award_learning_points(
-                                supabase,
-                                user_id,
-                                activity_group_id,
-                                lesson["id"]
-                            )
-
-                            st.success("Lesson completion recorded!")
-                            if awarded:
-                                st.success("🌱 5 universal points awarded!")
-                            st.rerun()
-
-                    except Exception as e:
-                        st.error(f"Could not record completion: {e}")
-
-            _comments_section(
-                supabase,
-                user_id,
-                "lesson",
-                lesson["id"],
-                user_name,
-                activity_group_name
-            )
-
-            if st.button("← Back to lessons", key="back_lessons"):
-                st.session_state.pop("selected_learning_lesson", None)
-                st.rerun()
+    with next_col:
+        if st.button(
+            "Next →",
+            disabled=current_page >= total_pages,
+            use_container_width=True
+        ):
+            st.session_state[page_key] += 1
+            st.rerun()
 
 
 # ============================================================
-# 5. QUIZ CENTRE
+# 6. QUIZ CENTRE
 # ============================================================
 
-def _quiz_centre(supabase, user_id, group_id, user_name):
-
+def _quiz_centre(
+    supabase,
+    user_id,
+    group_id,
+    user_name
+):
     st.subheader("🧠 Knowledge Challenge")
-    st.write("Test your knowledge across all four NGIH pillars.")
+
+    st.write(
+        "Test your knowledge across all four NGIH pillars."
+    )
 
     quiz_group_id, quiz_group_name = _group_selector(
-        supabase, user_id, user_name, "quiz_group_choice"
+        supabase,
+        user_id,
+        user_name,
+        "quiz_group_choice"
     )
 
     st.caption(
@@ -542,13 +756,16 @@ def _quiz_centre(supabase, user_id, group_id, user_name):
     answers = st.session_state["explore_quiz_answers"]
 
     for index, question in enumerate(QUIZ_QUESTIONS):
-
         st.markdown(
-            f"**Question {index + 1} of {len(QUIZ_QUESTIONS)}**"
+            f"**Question {index + 1} of "
+            f"{len(QUIZ_QUESTIONS)}**"
         )
+
         st.caption(
-            f"{question['category']} · {question['difficulty']}"
+            f"{question['category']} · "
+            f"{question['difficulty']}"
         )
+
         st.write(question["question"])
 
         selected = st.radio(
@@ -556,117 +773,185 @@ def _quiz_centre(supabase, user_id, group_id, user_name):
             question["options"],
             index=None,
             key=f"explore_answer_{index}",
-            disabled=st.session_state["explore_quiz_submitted"],
+            disabled=st.session_state[
+                "explore_quiz_submitted"
+            ],
             label_visibility="collapsed"
         )
 
         if selected is not None:
-            answers[index] = question["options"].index(selected)
+            answers[index] = question["options"].index(
+                selected
+            )
 
         if st.session_state["explore_quiz_submitted"]:
             correct = question["answer"]
 
             if answers.get(index) == correct:
-                st.success("Correct! " + question["explanation"])
+                st.success(
+                    "Correct! " + question["explanation"]
+                )
             else:
-                st.error("Not quite. " + question["explanation"])
+                st.error(
+                    "Not quite. " + question["explanation"]
+                )
 
         st.divider()
 
     if not st.session_state["explore_quiz_submitted"]:
-
-        if st.button("Submit my answers", use_container_width=True):
-
+        if st.button(
+            "Submit my answers",
+            use_container_width=True
+        ):
             if len(answers) != len(QUIZ_QUESTIONS):
-                st.warning("Please answer all questions first.")
+                st.warning(
+                    "Please answer all questions first."
+                )
             else:
                 score = sum(
                     1
-                    for index, question in enumerate(QUIZ_QUESTIONS)
+                    for index, question in enumerate(
+                        QUIZ_QUESTIONS
+                    )
                     if answers.get(index) == question["answer"]
                 )
 
-                st.session_state["explore_quiz_score"] = score
-                st.session_state["explore_quiz_submitted"] = True
+                st.session_state[
+                    "explore_quiz_score"
+                ] = score
 
-                # Persist the quiz attempt and award points.
+                st.session_state[
+                    "explore_quiz_submitted"
+                ] = True
+
                 if user_id:
                     try:
-                        attempt = supabase.table("quiz_attempts").insert({
-                            "user_id": user_id,
-                            "quiz_id": "explore_learn_50",
-                            "group_id": quiz_group_id,
-                            "score": score,
-                            "total_questions": len(QUIZ_QUESTIONS),
-                            "completed_at": datetime.utcnow().isoformat()
-                        }).execute()
+                        attempt = (
+                            supabase.table("quiz_attempts")
+                            .insert({
+                                "user_id": user_id,
+                                "quiz_id": "explore_learn_50",
+                                "group_id": quiz_group_id,
+                                "score": score,
+                                "total_questions": len(
+                                    QUIZ_QUESTIONS
+                                ),
+                                "completed_at": datetime.now(
+                                    timezone.utc
+                                ).isoformat()
+                            })
+                            .execute()
+                        )
 
                         attempt_data = attempt.data or []
 
                         if attempt_data:
-                            attempt_id = attempt_data[0].get("id")
+                            attempt_id = attempt_data[0].get(
+                                "id"
+                            )
 
-                            # One transaction per quiz attempt.
                             if score > 0 and attempt_id:
-                                supabase.table("point_transactions").insert({
+                                supabase.table(
+                                    "point_transactions"
+                                ).insert({
                                     "user_id": user_id,
                                     "group_id": quiz_group_id,
                                     "activity_type": "quiz",
                                     "points": score,
                                     "description": (
-                                        f"Explore & Learn quiz: "
-                                        f"{score}/{len(QUIZ_QUESTIONS)}"
+                                        "Explore & Learn quiz: "
+                                        f"{score}/"
+                                        f"{len(QUIZ_QUESTIONS)}"
                                     ),
                                     "quiz_attempt_id": attempt_id
                                 }).execute()
 
                     except Exception as e:
                         st.warning(
-                            "Your result is calculated, but the attempt "
-                            f"could not be fully saved: {e}"
+                            "Your result is calculated, but the "
+                            f"attempt could not be fully saved: {e}"
                         )
-
                 else:
-                    st.info("Sign in to save your quiz result and earn points.")
+                    st.info(
+                        "Sign in to save your quiz result "
+                        "and earn points."
+                    )
 
                 st.rerun()
 
     else:
-        score = st.session_state.get("explore_quiz_score", 0)
+        score = st.session_state.get(
+            "explore_quiz_score",
+            0
+        )
 
         st.markdown("### Your results")
-        st.metric("Your score", f"{score} / {len(QUIZ_QUESTIONS)}")
-        st.metric("Points earned", score if user_id else 0)
+
+        st.metric(
+            "Your score",
+            f"{score} / {len(QUIZ_QUESTIONS)}"
+        )
+
+        st.metric(
+            "Points earned",
+            score if user_id else 0
+        )
 
         if score == len(QUIZ_QUESTIONS):
-            st.success("Outstanding! You got every question right.")
+            st.success(
+                "Outstanding! You got every question right."
+            )
         elif score >= 30:
-            st.success("Excellent work! Keep building your knowledge.")
+            st.success(
+                "Excellent work! Keep building your knowledge."
+            )
         elif score >= 20:
             st.success("Good work! Keep learning.")
         else:
-            st.info("Keep learning. You can improve with practice.")
+            st.info(
+                "Keep learning. You can improve with practice."
+            )
 
-        if st.button("Try the quiz again", use_container_width=True):
-            st.session_state["explore_quiz_answers"] = {}
-            st.session_state["explore_quiz_submitted"] = False
-            st.session_state.pop("explore_quiz_score", None)
+        if st.button(
+            "Try the quiz again",
+            use_container_width=True
+        ):
+            st.session_state[
+                "explore_quiz_answers"
+            ] = {}
+
+            st.session_state[
+                "explore_quiz_submitted"
+            ] = False
+
+            st.session_state.pop(
+                "explore_quiz_score",
+                None
+            )
 
             for index in range(len(QUIZ_QUESTIONS)):
-                st.session_state.pop(f"explore_answer_{index}", None)
+                st.session_state.pop(
+                    f"explore_answer_{index}",
+                    None
+                )
 
             st.rerun()
 
 
 # ============================================================
-# 6. RESOURCE LIBRARY AND MEMBER UPLOADS
+# 7. RESOURCE LIBRARY AND MEMBER UPLOADS
 # ============================================================
 
-def _resource_library(supabase, user_id, is_coordinator):
-
+def _resource_library(
+    supabase,
+    user_id,
+    is_coordinator
+):
     st.subheader("🌍 Reading & Resource Library")
+
     st.write(
-        "Explore approved learning materials shared by the EcoLoop community."
+        "Explore approved learning materials shared "
+        "by the EcoLoop community."
     )
 
     try:
@@ -677,21 +962,30 @@ def _resource_library(supabase, user_id, is_coordinator):
             .order("created_at", desc=True)
             .execute()
         )
+
         resources = response.data or []
 
     except Exception as e:
         resources = []
-        st.error(f"Could not load the resource library: {e}")
+        st.error(
+            f"Could not load the resource library: {e}"
+        )
 
     if resources:
         for resource in resources:
             with st.container(border=True):
-
                 st.markdown(
-                    f"### 📖 {resource.get('title', 'Learning resource')}"
+                    f"### 📖 "
+                    f"{resource.get('title', 'Learning resource')}"
                 )
-                st.caption(resource.get("category", "General"))
-                st.write(resource.get("description", ""))
+
+                st.caption(
+                    resource.get("category", "General")
+                )
+
+                st.write(
+                    resource.get("description", "")
+                )
 
                 file_path = resource.get("file_path")
 
@@ -707,15 +1001,23 @@ def _resource_library(supabase, user_id, is_coordinator):
                             "⬇️ Download PDF",
                             data=pdf_bytes,
                             file_name=(
-                                resource.get("title", "EcoLoop resource")
-                                .replace("/", "-") + ".pdf"
+                                resource.get(
+                                    "title",
+                                    "EcoLoop resource"
+                                ).replace("/", "-") + ".pdf"
                             ),
                             mime="application/pdf",
-                            key=f"download_resource_{resource['id']}",
+                            key=(
+                                f"download_resource_"
+                                f"{resource['id']}"
+                            ),
                             use_container_width=True
                         )
+
                     except Exception:
-                        st.warning("This PDF could not be downloaded.")
+                        st.warning(
+                            "This PDF could not be downloaded."
+                        )
 
                 if resource.get("resource_url"):
                     st.link_button(
@@ -725,24 +1027,43 @@ def _resource_library(supabase, user_id, is_coordinator):
                     )
 
                 if resource.get("licence"):
-                    st.caption(f"Licence: {resource['licence']}")
+                    st.caption(
+                        f"Licence: {resource['licence']}"
+                    )
 
     else:
-        st.info("The approved resource library is currently growing.")
+        st.info(
+            "The approved resource library is currently growing."
+        )
 
     st.divider()
+
     st.markdown("### 📤 Contribute a learning resource")
 
-    with st.form("learning_resource_upload", clear_on_submit=True):
-
+    with st.form(
+        "learning_resource_upload",
+        clear_on_submit=True
+    ):
         title = st.text_input("Resource title")
-        description = st.text_area("What will people learn?")
-        category = st.selectbox("Learning category", PILLARS)
-        licence = st.text_input("Copyright / licence information")
+
+        description = st.text_area(
+            "What will people learn?"
+        )
+
+        category = st.selectbox(
+            "Learning category",
+            PILLARS
+        )
+
+        licence = st.text_input(
+            "Copyright / licence information"
+        )
+
         resource_url = st.text_input(
             "Resource link (optional)",
             placeholder="https://..."
         )
+
         uploaded_file = st.file_uploader(
             "Upload a PDF (optional)",
             type=["pdf"]
@@ -754,18 +1075,25 @@ def _resource_library(supabase, user_id, is_coordinator):
         )
 
         if submitted:
-
             if not user_id:
-                st.error("Please sign in before submitting a resource.")
+                st.error(
+                    "Please sign in before submitting a resource."
+                )
 
             elif not title.strip() or not description.strip():
-                st.warning("Please enter a title and description.")
+                st.warning(
+                    "Please enter a title and description."
+                )
 
             elif not licence.strip():
-                st.warning("Please provide copyright or licence information.")
+                st.warning(
+                    "Please provide copyright or licence information."
+                )
 
             elif not resource_url.strip() and uploaded_file is None:
-                st.warning("Please provide a link or upload a PDF.")
+                st.warning(
+                    "Please provide a link or upload a PDF."
+                )
 
             else:
                 file_path = None
@@ -774,7 +1102,8 @@ def _resource_library(supabase, user_id, is_coordinator):
                     if uploaded_file is not None:
                         file_path = (
                             f"{user_id}/"
-                            f"{uuid.uuid4().hex}_{uploaded_file.name}"
+                            f"{uuid.uuid4().hex}_"
+                            f"{uploaded_file.name}"
                         )
 
                         supabase.storage.from_(
@@ -782,33 +1111,43 @@ def _resource_library(supabase, user_id, is_coordinator):
                         ).upload(
                             file_path,
                             uploaded_file.getvalue(),
-                            {"content-type": "application/pdf"}
+                            {
+                                "content-type": "application/pdf"
+                            }
                         )
 
-                    supabase.table("learning_resources").insert({
+                    supabase.table(
+                        "learning_resources"
+                    ).insert({
                         "title": title.strip(),
                         "description": description.strip(),
                         "category": category,
                         "licence": licence.strip(),
-                        "resource_url": resource_url.strip() or None,
+                        "resource_url": (
+                            resource_url.strip() or None
+                        ),
                         "file_path": file_path,
                         "submitted_by": user_id,
                         "status": "pending"
                     }).execute()
 
-                    st.success("Resource submitted for coordinator approval!")
+                    st.success(
+                        "Resource submitted for coordinator approval!"
+                    )
+
                     st.rerun()
 
                 except Exception as e:
-                    st.error(f"Resource submission failed: {e}")
+                    st.error(
+                        f"Resource submission failed: {e}"
+                    )
 
 
 # ============================================================
-# 7. COORDINATOR RESOURCE APPROVAL
+# 8. COORDINATOR RESOURCE APPROVAL
 # ============================================================
 
 def _resource_approval(supabase):
-
     st.subheader("🛡️ Resource Approval Centre")
 
     try:
@@ -819,28 +1158,41 @@ def _resource_approval(supabase):
             .order("created_at", desc=True)
             .execute()
         )
+
         pending = response.data or []
 
     except Exception as e:
-        st.error(f"Could not load pending resources: {e}")
+        st.error(
+            f"Could not load pending resources: {e}"
+        )
         return
 
     if not pending:
-        st.success("There are no resources waiting for approval.")
+        st.success(
+            "There are no resources waiting for approval."
+        )
         return
 
     for resource in pending:
         with st.container(border=True):
+            st.markdown(
+                f"### {resource.get('title')}"
+            )
 
-            st.markdown(f"### {resource.get('title')}")
-            st.write(resource.get("description", ""))
+            st.write(
+                resource.get("description", "")
+            )
+
             st.caption(
                 f"{resource.get('category')} · "
                 f"Licence: {resource.get('licence')}"
             )
 
             if resource.get("resource_url"):
-                st.link_button("Review resource", resource["resource_url"])
+                st.link_button(
+                    "Review resource",
+                    resource["resource_url"]
+                )
 
             if resource.get("file_path"):
                 try:
@@ -849,6 +1201,7 @@ def _resource_approval(supabase):
                         .from_("learning-resources")
                         .download(resource["file_path"])
                     )
+
                     st.download_button(
                         "Download submitted PDF for review",
                         data=pdf_bytes,
@@ -856,8 +1209,11 @@ def _resource_approval(supabase):
                         mime="application/pdf",
                         key=f"review_pdf_{resource['id']}"
                     )
+
                 except Exception:
-                    st.warning("The submitted PDF could not be retrieved.")
+                    st.warning(
+                        "The submitted PDF could not be retrieved."
+                    )
 
             col1, col2 = st.columns(2)
 
@@ -868,14 +1224,22 @@ def _resource_approval(supabase):
                     use_container_width=True
                 ):
                     try:
-                        supabase.table("learning_resources").update({
+                        supabase.table(
+                            "learning_resources"
+                        ).update({
                             "status": "approved"
-                        }).eq("id", resource["id"]).execute()
+                        }).eq(
+                            "id",
+                            resource["id"]
+                        ).execute()
 
                         st.success("Resource approved.")
                         st.rerun()
+
                     except Exception as e:
-                        st.error(f"Approval failed: {e}")
+                        st.error(
+                            f"Approval failed: {e}"
+                        )
 
             with col2:
                 if st.button(
@@ -884,18 +1248,26 @@ def _resource_approval(supabase):
                     use_container_width=True
                 ):
                     try:
-                        supabase.table("learning_resources").update({
+                        supabase.table(
+                            "learning_resources"
+                        ).update({
                             "status": "rejected"
-                        }).eq("id", resource["id"]).execute()
+                        }).eq(
+                            "id",
+                            resource["id"]
+                        ).execute()
 
                         st.warning("Resource rejected.")
                         st.rerun()
+
                     except Exception as e:
-                        st.error(f"Rejection failed: {e}")
+                        st.error(
+                            f"Rejection failed: {e}"
+                        )
 
 
 # ============================================================
-# 8. MAIN EXPLORE & LEARN PAGE
+# 9. MAIN EXPLORE & LEARN PAGE
 # ============================================================
 
 def render_explore_learn(
@@ -904,9 +1276,9 @@ def render_explore_learn(
     user_name="EcoLoop Member",
     group_id=None,
     is_coordinator=False,
-    role=None
+    role=None,
+    timezone_name=None
 ):
-
     st.title("📚 Explore & Learn")
 
     st.write(
@@ -915,11 +1287,10 @@ def render_explore_learn(
     )
 
     st.info(
-        "🌱 Explore knowledge, discover new ideas, test yourself "
-        "and share what you know."
+        "🌱 Explore knowledge, discover new ideas, "
+        "test yourself and share what you know."
     )
 
-    # Accept either the existing boolean or an explicit role.
     privileged_roles = {
         "coordinator",
         "admin",
@@ -928,6 +1299,7 @@ def render_explore_learn(
     }
 
     role_name = str(role or "").strip().lower()
+
     coordinator_access = (
         bool(is_coordinator)
         or role_name in privileged_roles
@@ -944,7 +1316,8 @@ def render_explore_learn(
             supabase,
             user_id,
             group_id,
-            user_name
+            user_name,
+            timezone_name
         )
 
     with tabs[1]:
@@ -964,7 +1337,11 @@ def render_explore_learn(
 
     if coordinator_access:
         st.divider()
-        with st.expander("🛡️ Coordinator Tools", expanded=False):
+
+        with st.expander(
+            "🛡️ Coordinator Tools",
+            expanded=False
+        ):
             _resource_approval(supabase)
 
     st.divider()
