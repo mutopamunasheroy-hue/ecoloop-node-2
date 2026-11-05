@@ -4199,7 +4199,13 @@ PAGE_ROUTES = {
     "Leaderboard": leaderboard_page,
     "Notifications Centre": notifications_page,
 
-    "Explore & Learn": explore_learn_page,
+    "Explore & Learn": lambda: render_explore_learn(
+    supabase,
+    user_id=st.session_state.get("user_id"),
+    user_name=st.session_state.get("full_name") or "EcoLoop Member",
+    group_id=st.session_state.get("group_id"),
+    is_coordinator=is_admin()
+),
     "Eco Quiz": eco_quiz_page,
 
     "Verify Contributions": verify_contributions_page,
