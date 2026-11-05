@@ -165,11 +165,11 @@ def _question_payload_is_valid(questions):
 
 def quiz_centre(supabase, user_id):
 
-    st.subheader("📚 Quiz Centre")
+    st.subheader("📚 Eco Quizzes")
 
     st.write(
-        "Explore environmental and development knowledge "
-        "quizzes from across the four NGIH pillars."
+        "Explore knowledge and test your understanding "
+        "across the four NGIH pillars."
     )
 
     quizzes = _get_quizzes(supabase)
@@ -223,44 +223,91 @@ def quiz_centre(supabase, user_id):
         st.info("No quizzes match these filters.")
         return
 
-    st.caption(f"{len(filtered)} quiz(es) available")
+    pillar_icons = {
+        "Climate Action & Environment": "🌍",
+        "Governance & Civic Education": "🏛️",
+        "Business & Entrepreneurship": "💼",
+        "Technology, Innovation, Media & Arts": "💡"
+    }
+
+    grouped = {
+        pillar: [] for pillar in NGIH_PILLARS
+    }
+
+    other_quizzes = []
 
     for quiz in filtered:
 
-        title = quiz.get("title", "Untitled Quiz")
+        category = quiz.get("category", "General")
 
-        difficulty = _normalise_difficulty(
-            quiz.get("difficulty")
+        if category in grouped:
+            grouped[category].append(quiz)
+        else:
+            other_quizzes.append(quiz)
+
+    def display_quiz_cards(pillar_quizzes):
+
+        for quiz in pillar_quizzes:
+
+            title = quiz.get("title", "Untitled Quiz")
+
+            difficulty = _normalise_difficulty(
+                quiz.get("difficulty")
+            )
+
+            with st.container(border=True):
+
+                st.markdown(f"### {title}")
+
+                st.caption(
+                    f"{_difficulty_badge(difficulty)} "
+                    f"{difficulty}"
+                )
+
+                st.write(
+                    quiz.get(
+                        "description",
+                        "No description available."
+                    )
+                )
+
+                if st.button(
+                    "Start Quiz",
+                    key=f"start_quiz_{quiz['id']}",
+                    use_container_width=True
+                ):
+
+                    st.session_state["eco_active_quiz"] = quiz
+                    st.session_state["eco_quiz_answers"] = {}
+                    st.session_state["eco_quiz_submitted"] = False
+
+                    st.rerun()
+
+    for pillar in NGIH_PILLARS:
+
+        pillar_quizzes = grouped[pillar]
+
+        if not pillar_quizzes:
+            continue
+
+        st.markdown("---")
+
+        st.markdown(
+            f"## {pillar_icons.get(pillar, '📚')} {pillar}"
         )
 
-        with st.container(border=True):
+        st.caption(
+            f"{len(pillar_quizzes)} quiz collection(s)"
+        )
 
-            st.markdown(f"### {title}")
+        display_quiz_cards(pillar_quizzes)
 
-            st.caption(
-                f"{_difficulty_badge(difficulty)} "
-                f"{difficulty}  |  "
-                f"{quiz.get('category', 'General')}"
-            )
+    if other_quizzes:
 
-            st.write(
-                quiz.get(
-                    "description",
-                    "No description available."
-                )
-            )
+        st.markdown("---")
+        st.markdown("## 📚 Other Quizzes")
 
-            if st.button(
-                "Start Quiz",
-                key=f"start_quiz_{quiz['id']}",
-                use_container_width=True
-            ):
-
-                st.session_state["eco_active_quiz"] = quiz
-                st.session_state["eco_quiz_answers"] = {}
-                st.session_state["eco_quiz_submitted"] = False
-
-                st.rerun()
+        display_quiz_cards(other_quizzes)
 
 
 # ============================================================
