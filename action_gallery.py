@@ -1539,6 +1539,7 @@ def render_action_gallery(
     user_name="EcoLoop Member",
     user_role="member",
 ):
+    st.caption(f"Action Gallery Build: {ACTION_GALLERY_BUILD}")
     st.title("🌍 Action Gallery")
 
     st.write(
