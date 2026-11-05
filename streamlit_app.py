@@ -4002,7 +4002,11 @@ PAGE_ROUTES = {
         )
     ),
 
-    "Eco Quizzes": eco_quiz_page,
+    "Eco Quizzes": lambda: render_eco_quizzes(
+    supabase,
+    st.session_state.get("user_id"),
+    st.session_state.get("profile")
+),
 
     "Verify Contributions": verify_contributions_page,
     "Admin Studio": admin_studio_page,
