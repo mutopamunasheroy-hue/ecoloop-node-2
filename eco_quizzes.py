@@ -34,7 +34,11 @@ def _is_super_admin(profile):
 
 def _safe_execute(query):
     try:
-        response = query.execute()
+        response = (
+            query.execute()
+            if hasattr(query, "execute")
+            else query
+        )
         return response.data or []
     except Exception as error:
         st.error(f"Database operation failed: {error}")
