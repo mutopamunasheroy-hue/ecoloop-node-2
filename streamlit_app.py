@@ -2627,10 +2627,10 @@ def eco_quiz_page():
 
         all_quizzes = quiz_response.data or []
 
-    except Exception:
+   except Exception as e:
 
-        st.error("Available quizzes could not be loaded.")
-        return
+    st.error(f"Available quizzes could not be loaded: {e}")
+    return 
 
     active_quizzes = [
         quiz for quiz in all_quizzes
