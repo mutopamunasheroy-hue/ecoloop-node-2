@@ -1,4 +1,3 @@
-
 # ============================================================
 # ECOLOOP NODE — ECO QUIZZES
 # Powered by Next Gen Impact Hub (NGIH)
@@ -17,6 +16,8 @@ NGIH_PILLARS = [
 
 DIFFICULTIES = ["Easy", "Medium", "Hard"]
 
+OPTIONS = ["A", "B", "C", "D"]
+
 
 # ============================================================
 # HELPERS
@@ -29,17 +30,26 @@ def _profile_value(profile, key, default=None):
 
 
 def _is_super_admin(profile):
-    return _profile_value(profile, "role", "") == "super_admin"
+    return (
+        _profile_value(profile, "role", "") == "super_admin"
+    )
 
 
 def _safe_execute(query):
+    """
+    Supports both Supabase query builders and
+    already-executed API responses.
+    """
     try:
-        response = (
-            query.execute()
-            if hasattr(query, "execute")
-            else query
-        )
-        return response.data or []
+        execute_method = getattr(query, "execute", None)
+
+        if callable(execute_method):
+            response = execute_method()
+        else:
+            response = query
+
+        return getattr(response, "data", response) or []
+
     except Exception as error:
         st.error(f"Database operation failed: {error}")
         return None
@@ -50,16 +60,34 @@ def _get_quizzes(supabase):
         supabase.table("quizzes")
         .select("*")
         .eq("is_active", True)
-        .execute()
+        .order("created_at", desc=True)
     )
 
 
+def _normalise_difficulty(difficulty):
+    value = str(difficulty or "").strip().lower()
+
+    mapping = {
+        "easy": "Easy",
+        "beginner": "Easy",
+        "medium": "Medium",
+        "intermediate": "Medium",
+        "hard": "Hard",
+        "advanced": "Hard"
+    }
+
+    return mapping.get(value, "Easy")
+
+
 def _difficulty_badge(difficulty):
+    difficulty = _normalise_difficulty(difficulty)
+
     colours = {
         "Easy": "🟢",
-        "Medium": "🟠",
+        "Medium": "🟡",
         "Hard": "🔴"
     }
+
     return colours.get(difficulty, "⚪")
 
 
@@ -70,6 +98,67 @@ def _get_member_name(profile):
     )
 
 
+def _format_date(value):
+    if not value:
+        return "Not available"
+
+    try:
+        return str(value)[:10]
+    except Exception:
+        return "Not available"
+
+
+def _clear_active_quiz():
+    keys = [
+        "eco_active_quiz",
+        "eco_quiz_answers",
+        "eco_quiz_submitted",
+        "eco_quiz_results",
+        "eco_quiz_score"
+    ]
+
+    for key in keys:
+        st.session_state.pop(key, None)
+
+
+def _normalise_rpc_result(response):
+    """
+    Supabase RPC results may arrive as a dictionary
+    or as a single-item list.
+    """
+    if isinstance(response, list) and response:
+        return response[0]
+
+    return response
+
+
+def _question_payload_is_valid(questions):
+    if not questions:
+        return False
+
+    for question in questions:
+        required = [
+            "question_text",
+            "option_a",
+            "option_b",
+            "option_c",
+            "option_d",
+            "correct_option",
+            "explanation"
+        ]
+
+        if not all(
+            str(question.get(field, "")).strip()
+            for field in required
+        ):
+            return False
+
+        if question["correct_option"] not in OPTIONS:
+            return False
+
+    return True
+
+
 # ============================================================
 # QUIZ CENTRE
 # ============================================================
@@ -77,6 +166,7 @@ def _get_member_name(profile):
 def quiz_centre(supabase, user_id):
 
     st.subheader("📚 Quiz Centre")
+
     st.write(
         "Explore environmental and development knowledge "
         "quizzes from across the four NGIH pillars."
@@ -91,24 +181,33 @@ def quiz_centre(supabase, user_id):
         st.info("No published quizzes are available yet.")
         return
 
-    difficulty_filter = st.selectbox(
-        "Filter by difficulty",
-        ["All"] + DIFFICULTIES,
-        key="eco_quiz_difficulty_filter"
-    )
+    col1, col2 = st.columns(2)
 
-    pillar_filter = st.selectbox(
-        "Filter by NGIH pillar",
-        ["All"] + NGIH_PILLARS,
-        key="eco_quiz_pillar_filter"
-    )
+    with col1:
+        difficulty_filter = st.selectbox(
+            "Filter by difficulty",
+            ["All"] + DIFFICULTIES,
+            key="eco_quiz_difficulty_filter"
+        )
+
+    with col2:
+        pillar_filter = st.selectbox(
+            "Filter by NGIH pillar",
+            ["All"] + NGIH_PILLARS,
+            key="eco_quiz_pillar_filter"
+        )
 
     filtered = []
 
     for quiz in quizzes:
+
+        quiz_difficulty = _normalise_difficulty(
+            quiz.get("difficulty")
+        )
+
         if (
             difficulty_filter != "All"
-            and quiz.get("difficulty") != difficulty_filter
+            and quiz_difficulty != difficulty_filter
         ):
             continue
 
@@ -124,10 +223,15 @@ def quiz_centre(supabase, user_id):
         st.info("No quizzes match these filters.")
         return
 
+    st.caption(f"{len(filtered)} quiz(es) available")
+
     for quiz in filtered:
 
         title = quiz.get("title", "Untitled Quiz")
-        difficulty = quiz.get("difficulty", "Not specified")
+
+        difficulty = _normalise_difficulty(
+            quiz.get("difficulty")
+        )
 
         with st.container(border=True):
 
@@ -140,7 +244,10 @@ def quiz_centre(supabase, user_id):
             )
 
             st.write(
-                quiz.get("description", "No description available.")
+                quiz.get(
+                    "description",
+                    "No description available."
+                )
             )
 
             if st.button(
@@ -148,9 +255,11 @@ def quiz_centre(supabase, user_id):
                 key=f"start_quiz_{quiz['id']}",
                 use_container_width=True
             ):
+
                 st.session_state["eco_active_quiz"] = quiz
                 st.session_state["eco_quiz_answers"] = {}
                 st.session_state["eco_quiz_submitted"] = False
+
                 st.rerun()
 
 
@@ -165,7 +274,13 @@ def take_quiz(supabase, user_id):
     if not quiz:
         return
 
-    st.subheader(f"🧠 {quiz.get('title', 'Quiz')}")
+    st.subheader(
+        f"🧠 {quiz.get('title', 'Eco Quiz')}"
+    )
+
+    # --------------------------------------------------------
+    # LOAD QUESTIONS
+    # --------------------------------------------------------
 
     questions = _safe_execute(
         supabase.table("quiz_questions")
@@ -181,52 +296,65 @@ def take_quiz(supabase, user_id):
         st.warning("This quiz has no questions yet.")
         return
 
-    if st.session_state.get("eco_quiz_submitted"):
+    # --------------------------------------------------------
+    # SHOW RESULTS AFTER SUBMISSION
+    # --------------------------------------------------------
 
-        st.success("Quiz completed!")
+    if st.session_state.get("eco_quiz_submitted"):
 
         results = st.session_state.get(
             "eco_quiz_results", []
         )
 
-        score = sum(
-            1 for result in results
-            if result["correct"]
+        score = st.session_state.get(
+            "eco_quiz_score", 0
         )
+
+        total = len(results)
+
+        st.success("Quiz completed!")
 
         st.metric(
             "Your score",
-            f"{score} / {len(results)}"
+            f"{score} / {total}"
         )
 
-        st.progress(score / len(results))
+        if total:
+            st.progress(score / total)
+
+        percentage = (
+            (score / total) * 100
+            if total else 0
+        )
+
+        st.write(
+            f"**Performance:** {percentage:.1f}%"
+        )
 
         st.markdown("### Your results")
 
         for index, result in enumerate(results, 1):
 
-            if result["correct"]:
-                st.success(
-                    f"Question {index}: Correct"
-                )
+            if result.get("correct"):
+                st.success(f"Question {index}: Correct")
             else:
-                st.error(
-                    f"Question {index}: Incorrect"
-                )
+                st.error(f"Question {index}: Incorrect")
 
-            st.write(result["question"])
+            st.write(result.get("question", ""))
 
             st.write(
-                f"Your answer: {result['selected'] or 'Not answered'}"
+                "Your answer: "
+                + str(result.get("selected") or "Not answered")
             )
 
             st.write(
-                f"Correct answer: {result['correct_answer']}"
+                "Correct answer: "
+                + str(result.get("correct_answer", "Unavailable"))
             )
 
             st.info(
-                result["explanation"] or
-                "No explanation has been provided."
+                result.get("explanation")
+                or "No explanation has been provided."
             )
 
         if st.button(
@@ -238,9 +366,11 @@ def take_quiz(supabase, user_id):
 
         return
 
-    st.write(
-        f"**Questions:** {len(questions)}"
-    )
+    # --------------------------------------------------------
+    # ANSWER FORM
+    # --------------------------------------------------------
+
+    st.write(f"**Questions:** {len(questions)}")
 
     answers = {}
 
@@ -277,88 +407,52 @@ def take_quiz(supabase, user_id):
             use_container_width=True
         )
 
+    # --------------------------------------------------------
+    # SECURE SERVER-SIDE MARKING
+    # --------------------------------------------------------
+
     if submitted:
 
-        answer_keys = _safe_execute(
-            supabase.table("quiz_answer_keys")
-            .select("*")
-            .in_(
-                "question_id",
-                [q["id"] for q in questions]
-            )
-        )
+        with st.spinner("Marking your quiz..."):
 
-        if answer_keys is None:
-            return
+            try:
 
-        key_map = {
-            item["question_id"]: item
-            for item in answer_keys
-        }
+                response = supabase.rpc(
+                    "grade_eco_quiz",
+                    {
+                        "p_quiz_id": quiz["id"],
+                        "p_answers": answers
+                    }
+                ).execute()
 
-        results = []
-
-        for question in questions:
-
-            question_id = question["id"]
-            selected = answers.get(question_id)
-
-            answer_key = key_map.get(question_id, {})
-
-            correct_answer = (
-                answer_key.get("correct_option", "")
-            )
-
-            results.append({
-                "question": question["question_text"],
-                "selected": selected,
-                "correct_answer": correct_answer,
-                "correct": (
-                    selected == correct_answer
-                    and bool(correct_answer)
-                ),
-                "explanation": answer_key.get(
-                    "explanation", ""
+                data = _normalise_rpc_result(
+                    getattr(response, "data", None)
                 )
-            })
 
-        score = sum(
-            1 for result in results
-            if result["correct"]
-        )
+                if not isinstance(data, dict):
+                    st.error(
+                        "The grading service returned an "
+                        "unexpected response."
+                    )
+                    return
 
-        attempt_data = {
-            "user_id": user_id,
-            "quiz_id": quiz["id"],
-            "score": score,
-            "total_questions": len(questions),
-            "completed_at": datetime.now(
-                timezone.utc
-            ).isoformat()
-        }
+                results = data.get("results", [])
+                score = data.get("score", 0)
 
-        saved_attempt = _safe_execute(
-            supabase.table("quiz_attempts")
-            .insert(attempt_data)
-        )
+                if not results:
+                    st.error("No quiz results were returned.")
+                    return
 
-        if saved_attempt is None:
-            return
+                st.session_state["eco_quiz_results"] = results
+                st.session_state["eco_quiz_score"] = score
+                st.session_state["eco_quiz_submitted"] = True
 
-        st.session_state["eco_quiz_results"] = results
-        st.session_state["eco_quiz_submitted"] = True
-        st.rerun()
+                st.rerun()
 
-
-def _clear_active_quiz():
-
-    for key in [
-        "eco_active_quiz",
-        "eco_quiz_answers",
-        "eco_quiz_submitted",
-        "eco_quiz_results"
-    ]:
-        st.session_state.pop(key, None)
+            except Exception as error:
+                st.error(
+                    f"Could not submit quiz: {error}"
+                )
 
 
 # ============================================================
@@ -373,6 +467,17 @@ def create_quiz(supabase, user_id):
         "Create a knowledge quiz and submit it "
         "for Super Admin review."
     )
+
+    question_count = st.number_input(
+        "Number of questions",
+        min_value=1,
+        max_value=30,
+        value=5,
+        step=1,
+        key="eco_new_question_count"
+    )
+
+    questions = []
 
     with st.form("eco_create_quiz_form"):
 
@@ -391,16 +496,6 @@ def create_quiz(supabase, user_id):
             "Difficulty",
             DIFFICULTIES
         )
-
-        question_count = st.number_input(
-            "Number of questions",
-            min_value=1,
-            max_value=30,
-            value=5,
-            step=1
-        )
-
-        questions = []
 
         for index in range(int(question_count)):
 
@@ -433,7 +528,7 @@ def create_quiz(supabase, user_id):
 
             correct_option = st.selectbox(
                 "Correct answer",
-                ["A", "B", "C", "D"],
+                OPTIONS,
                 key=f"create_correct_{index}"
             )
 
@@ -443,13 +538,13 @@ def create_quiz(supabase, user_id):
             )
 
             questions.append({
-                "question_text": question_text,
-                "option_a": option_a,
-                "option_b": option_b,
-                "option_c": option_c,
-                "option_d": option_d,
+                "question_text": question_text.strip(),
+                "option_a": option_a.strip(),
+                "option_b": option_b.strip(),
+                "option_c": option_c.strip(),
+                "option_d": option_d.strip(),
                 "correct_option": correct_option,
-                "explanation": explanation,
+                "explanation": explanation.strip(),
                 "question_order": index + 1,
                 "points": 1
             })
@@ -461,36 +556,42 @@ def create_quiz(supabase, user_id):
 
     if submitted:
 
-        if not title.strip() or not description.strip():
-            st.error("Enter a title and description.")
+        if not title.strip():
+            st.error("Enter a quiz title.")
             return
 
-        for index, question in enumerate(questions, 1):
+        if not description.strip():
+            st.error("Enter a quiz description.")
+            return
 
-            required_fields = [
-                question["question_text"],
-                question["option_a"],
-                question["option_b"],
-                question["option_c"],
-                question["option_d"],
-                question["explanation"]
-            ]
+        if not _question_payload_is_valid(questions):
+            st.error(
+                "Please complete every question, all four options, "
+                "the correct answer and its explanation."
+            )
+            return
 
-            if not all(
-                str(value).strip()
-                for value in required_fields
-            ):
-                st.error(
-                    f"Please complete all fields for Question {index}."
-                )
-                return
+        submission_data = {
+            "user_id": user_id,
+            "title": title.strip(),
+            "description": description.strip(),
+            "category": category,
+            "difficulty": difficulty,
+            "questions": questions,
+            "status": "pending"
+        }
 
-        st.info(
-            "The quiz submission system requires the "
-            "new submission database tables before it "
-            "can save this quiz. We will connect those "
-            "tables in the next setup step."
+        result = _safe_execute(
+            supabase.table("quiz_submissions")
+            .insert(submission_data)
         )
+
+        if result is not None:
+            st.success(
+                "Your quiz has been submitted for "
+                "Super Admin review!"
+            )
+            st.rerun()
 
 
 # ============================================================
@@ -515,7 +616,17 @@ def my_submissions(supabase, user_id):
         st.info("You haven't submitted any quizzes yet.")
         return
 
+    edit_id = st.session_state.get(
+        "eco_edit_submission_id"
+    )
+
     for submission in submissions:
+
+        submission_id = submission["id"]
+
+        status = submission.get(
+            "status", "pending"
+        )
 
         with st.container(border=True):
 
@@ -523,28 +634,284 @@ def my_submissions(supabase, user_id):
                 f"### {submission.get('title', 'Untitled Quiz')}"
             )
 
-            status = submission.get(
-                "status", "pending"
-            )
-
             st.write(f"**Status:** {status.title()}")
 
-            st.write(
-                submission.get("review_notes", "")
+            st.caption(
+                f"{submission.get('category', '')} | "
+                f"{submission.get('difficulty', '')}"
             )
 
-            if status == "rejected":
-                st.warning(
-                    "This submission needs changes before "
-                    "it can be reviewed again."
+            st.caption(
+                f"Submitted: {_format_date(submission.get('created_at'))}"
+            )
+
+            feedback = submission.get("admin_feedback")
+
+            if feedback:
+                st.info(f"Admin feedback: {feedback}")
+
+            if status == "pending":
+                st.info("Your quiz is awaiting review.")
+
+            elif status == "approved":
+                st.success(
+                    "Your quiz has been approved."
                 )
+
+            elif status == "published":
+                st.success(
+                    "Your quiz is published in Quiz Centre."
+                )
+
+            elif status == "rejected":
+
+                st.warning(
+                    "Your quiz needs changes before it can "
+                    "be reviewed again."
+                )
+
+                if st.button(
+                    "Edit and Resubmit",
+                    key=f"edit_submission_{submission_id}",
+                    use_container_width=True
+                ):
+                    st.session_state[
+                        "eco_edit_submission_id"
+                    ] = submission_id
+
+                    st.rerun()
+
+    # --------------------------------------------------------
+    # EDIT SELECTED SUBMISSION
+    # --------------------------------------------------------
+
+    if edit_id:
+
+        submission = next(
+            (
+                item for item in submissions
+                if item["id"] == edit_id
+            ),
+            None
+        )
+
+        if submission and submission.get("status") in [
+            "pending",
+            "rejected"
+        ]:
+
+            st.divider()
+            st.subheader("✏️ Edit Your Quiz")
+
+            existing_questions = submission.get(
+                "questions", []
+            )
+
+            if not isinstance(existing_questions, list):
+                existing_questions = []
+
+            existing_count = max(
+                1, len(existing_questions)
+            )
+
+            edit_question_count = st.number_input(
+                "Number of questions",
+                min_value=1,
+                max_value=30,
+                value=existing_count,
+                step=1,
+                key=f"edit_count_{edit_id}"
+            )
+
+            updated_questions = []
+
+            with st.form(f"edit_quiz_form_{edit_id}"):
+
+                title = st.text_input(
+                    "Quiz title",
+                    value=submission.get("title", "")
+                )
+
+                description = st.text_area(
+                    "Quiz description",
+                    value=submission.get("description", "")
+                )
+
+                current_category = submission.get(
+                    "category", NGIH_PILLARS[0]
+                )
+
+                category_index = (
+                    NGIH_PILLARS.index(current_category)
+                    if current_category in NGIH_PILLARS
+                    else 0
+                )
+
+                category = st.selectbox(
+                    "NGIH pillar",
+                    NGIH_PILLARS,
+                    index=category_index
+                )
+
+                current_difficulty = _normalise_difficulty(
+                    submission.get("difficulty")
+                )
+
+                difficulty_index = DIFFICULTIES.index(
+                    current_difficulty
+                )
+
+                difficulty = st.selectbox(
+                    "Difficulty",
+                    DIFFICULTIES,
+                    index=difficulty_index
+                )
+
+                for index in range(int(edit_question_count)):
+
+                    old = (
+                        existing_questions[index]
+                        if index < len(existing_questions)
+                        else {}
+                    )
+
+                    st.markdown(f"#### Question {index + 1}")
+
+                    question_text = st.text_input(
+                        "Question",
+                        value=old.get("question_text", ""),
+                        key=f"edit_q_{edit_id}_{index}"
+                    )
+
+                    option_a = st.text_input(
+                        "Option A",
+                        value=old.get("option_a", ""),
+                        key=f"edit_a_{edit_id}_{index}"
+                    )
+
+                    option_b = st.text_input(
+                        "Option B",
+                        value=old.get("option_b", ""),
+                        key=f"edit_b_{edit_id}_{index}"
+                    )
+
+                    option_c = st.text_input(
+                        "Option C",
+                        value=old.get("option_c", ""),
+                        key=f"edit_c_{edit_id}_{index}"
+                    )
+
+                    option_d = st.text_input(
+                        "Option D",
+                        value=old.get("option_d", ""),
+                        key=f"edit_d_{edit_id}_{index}"
+                    )
+
+                    old_correct = old.get(
+                        "correct_option", "A"
+                    )
+
+                    correct_index = (
+                        OPTIONS.index(old_correct)
+                        if old_correct in OPTIONS
+                        else 0
+                    )
+
+                    correct_option = st.selectbox(
+                        "Correct answer",
+                        OPTIONS,
+                        index=correct_index,
+                        key=f"edit_correct_{edit_id}_{index}"
+                    )
+
+                    explanation = st.text_area(
+                        "Explanation",
+                        value=old.get("explanation", ""),
+                        key=f"edit_explanation_{edit_id}_{index}"
+                    )
+
+                    updated_questions.append({
+                        "question_text": question_text.strip(),
+                        "option_a": option_a.strip(),
+                        "option_b": option_b.strip(),
+                        "option_c": option_c.strip(),
+                        "option_d": option_d.strip(),
+                        "correct_option": correct_option,
+                        "explanation": explanation.strip(),
+                        "question_order": index + 1,
+                        "points": 1
+                    })
+
+                save_changes = st.form_submit_button(
+                    "Save Changes and Resubmit",
+                    use_container_width=True
+                )
+
+            if save_changes:
+
+                if not title.strip() or not description.strip():
+                    st.error(
+                        "Enter a title and description."
+                    )
+                    return
+
+                if not _question_payload_is_valid(
+                    updated_questions
+                ):
+                    st.error(
+                        "Complete every question, option "
+                        "and explanation before resubmitting."
+                    )
+                    return
+
+                update_data = {
+                    "title": title.strip(),
+                    "description": description.strip(),
+                    "category": category,
+                    "difficulty": difficulty,
+                    "questions": updated_questions,
+                    "status": "pending",
+                    "admin_feedback": None,
+                    "reviewed_by": None,
+                    "reviewed_at": None,
+                    "updated_at": datetime.now(
+                        timezone.utc
+                    ).isoformat()
+                }
+
+                result = _safe_execute(
+                    supabase.table("quiz_submissions")
+                    .update(update_data)
+                    .eq("id", edit_id)
+                    .eq("user_id", user_id)
+                )
+
+                if result is not None:
+                    st.session_state.pop(
+                        "eco_edit_submission_id", None
+                    )
+
+                    st.success(
+                        "Your updated quiz has been resubmitted."
+                    )
+
+                    st.rerun()
+
+            if st.button(
+                "Cancel Editing",
+                key=f"cancel_edit_{edit_id}"
+            ):
+                st.session_state.pop(
+                    "eco_edit_submission_id", None
+                )
+                st.rerun()
 
 
 # ============================================================
 # SUPER ADMIN REVIEW
 # ============================================================
 
-def admin_review(supabase):
+def admin_review(supabase, user_id):
 
     st.subheader("🛡️ Super Admin — Quiz Review")
 
@@ -559,10 +926,18 @@ def admin_review(supabase):
         return
 
     if not submissions:
-        st.success("There are no pending quiz submissions.")
+        st.success(
+            "There are no pending quiz submissions."
+        )
         return
 
+    st.caption(
+        f"{len(submissions)} submission(s) awaiting review"
+    )
+
     for submission in submissions:
+
+        submission_id = submission["id"]
 
         with st.container(border=True):
 
@@ -579,43 +954,123 @@ def admin_review(supabase):
                 f"{submission.get('difficulty', '')}"
             )
 
+            st.caption(
+                f"Submitted: {_format_date(submission.get('created_at'))}"
+            )
+
+            questions = submission.get("questions", [])
+
+            st.write(
+                f"**Number of questions:** {len(questions)}"
+            )
+
+            with st.expander("Review quiz questions"):
+
+                for index, question in enumerate(
+                    questions, 1
+                ):
+
+                    st.markdown(
+                        f"**Question {index}:** "
+                        f"{question.get('question_text', '')}"
+                    )
+
+                    st.write(
+                        f"A. {question.get('option_a', '')}"
+                    )
+                    st.write(
+                        f"B. {question.get('option_b', '')}"
+                    )
+                    st.write(
+                        f"C. {question.get('option_c', '')}"
+                    )
+                    st.write(
+                        f"D. {question.get('option_d', '')}"
+                    )
+
+                    st.write(
+                        "**Correct answer:** "
+                        + str(question.get("correct_option", ""))
+                    )
+
+                    st.info(
+                        question.get("explanation", "")
+                    )
+
             notes = st.text_area(
-                "Review notes",
-                key=f"review_notes_{submission['id']}"
+                "Review feedback",
+                key=f"review_notes_{submission_id}",
+                placeholder="Explain any changes needed if rejecting..."
             )
 
             col1, col2 = st.columns(2)
 
             with col1:
+
                 if st.button(
-                    "Approve",
-                    key=f"approve_{submission['id']}",
+                    "Approve and Publish",
+                    key=f"approve_{submission_id}",
                     use_container_width=True
                 ):
-                    st.info(
-                        "Publishing will be connected once "
-                        "the submission database structure "
-                        "is installed."
-                    )
+
+                    try:
+
+                        response = supabase.rpc(
+                            "publish_quiz_submission",
+                            {
+                                "p_submission_id": submission_id
+                            }
+                        ).execute()
+
+                        st.success(
+                            "Quiz approved and published successfully!"
+                        )
+
+                        st.rerun()
+
+                    except Exception as error:
+                        st.error(
+                            f"Publishing failed: {error}"
+                        )
 
             with col2:
+
                 if st.button(
-                    "Reject",
-                    key=f"reject_{submission['id']}",
+                    "Reject Submission",
+                    key=f"reject_{submission_id}",
                     use_container_width=True
                 ):
-                    result = _safe_execute(
-                        supabase.table("quiz_submissions")
-                        .update({
-                            "status": "rejected",
-                            "review_notes": notes
-                        })
-                        .eq("id", submission["id"])
-                    )
 
-                    if result is not None:
-                        st.success("Submission rejected.")
-                        st.rerun()
+                    if not notes.strip():
+                        st.warning(
+                            "Please provide feedback explaining "
+                            "why this quiz is being rejected."
+                        )
+
+                    else:
+
+                        result = _safe_execute(
+                            supabase.table("quiz_submissions")
+                            .update({
+                                "status": "rejected",
+                                "admin_feedback": notes.strip(),
+                                "reviewed_by": user_id,
+                                "reviewed_at": datetime.now(
+                                    timezone.utc
+                                ).isoformat(),
+                                "updated_at": datetime.now(
+                                    timezone.utc
+                                ).isoformat()
+                            })
+                            .eq("id", submission_id)
+                        )
+
+                        if result is not None:
+                            st.success(
+                                "Submission rejected. "
+                                "The member can now edit and resubmit."
+                            )
+                            st.rerun()
 
 
 # ============================================================
@@ -632,8 +1087,12 @@ def render_eco_quizzes(supabase, user_id, profile=None):
     )
 
     if not user_id:
-        st.warning("Please log in to access Eco Quizzes.")
+        st.warning(
+            "Please log in to access Eco Quizzes."
+        )
         return
+
+    is_admin = _is_super_admin(profile)
 
     # --------------------------------------------------------
     # ACTIVE QUIZ
@@ -651,8 +1110,6 @@ def render_eco_quizzes(supabase, user_id, profile=None):
     # --------------------------------------------------------
     # PAGE SECTIONS
     # --------------------------------------------------------
-
-    is_admin = _is_super_admin(profile)
 
     tab_names = [
         "Quiz Centre",
@@ -676,7 +1133,7 @@ def render_eco_quizzes(supabase, user_id, profile=None):
 
     if is_admin:
         with tabs[3]:
-            admin_review(supabase)
+            admin_review(supabase, user_id)
 
 
 # ============================================================
