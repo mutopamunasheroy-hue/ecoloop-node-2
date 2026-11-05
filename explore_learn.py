@@ -887,7 +887,56 @@ def _reading_library(supabase, user_id, group_id, user_name):
 
     st.subheader("📚 Discover & Learn")
     st.write("Short lessons connecting knowledge to real community action.")
+    # LOAD THE MEMBER'S APPROVED GROUPS
+    approved_groups = []
 
+    if user_id:
+        try:
+            memberships = (
+                supabase.table("group_memberships")
+                .select("group_id")
+                .eq("user_id", user_id)
+                .eq("status", "approved")
+                .execute()
+            )
+
+            group_ids = list({
+                item["group_id"]
+                for item in (memberships.data or [])
+                if item.get("group_id")
+            })
+
+            if group_ids:
+                response = (
+                    supabase.table("community_groups")
+                    .select("*")
+                    .in_("id", group_ids)
+                    .execute()
+                )
+
+                approved_groups = response.data or []
+    # SELECT WHERE THIS LEARNING ACTIVITY COUNTS
+    group_choices = [None] + approved_groups
+
+    selected_group = st.selectbox(
+        "Where should this learning activity count?",
+        options=group_choices,
+        format_func=lambda group: (
+            f"{user_name} (Individual)"
+            if group is None
+            else (
+                group.get("group_name")
+                or group.get("name")
+                or group.get("title")
+                or "Environmental Community Group"
+            )
+        ),
+        key="learning_group_choice"
+    )
+
+    group_id = selected_group.get("id") if selected_group else None
+        except Exception as e:
+            st.warning(f"Could not load your approved groups: {e}")
     categories = [
         "All categories",
         "Climate Action & Environment",
