@@ -1072,7 +1072,106 @@ def admin_review(supabase, user_id):
                             )
                             st.rerun()
 
+# ============================================================
+# IMPORT ORIGINAL NGIH QUIZ BANK
+# ============================================================
 
+from explore_learn import QUIZ_QUESTIONS
+
+
+def seed_original_eco_quizzes(supabase):
+    pillars = [
+        "Climate Action & Environment",
+        "Governance & Civic Education",
+        "Business & Entrepreneurship",
+        "Technology, Innovation, Media & Arts",
+    ]
+
+    letters = ["A", "B", "C", "D"]
+    imported = 0
+    skipped = 0
+
+    for pillar in pillars:
+        bank = [
+            q for q in QUIZ_QUESTIONS
+            if q.get("category") == pillar
+        ]
+
+        if not bank:
+            continue
+
+        title = f"NGIH Original 50 — {pillar}"
+
+        existing = _safe_execute(
+            supabase.table("quizzes")
+            .select("id")
+            .eq("title", title)
+        )
+
+        if existing is None:
+            return imported, skipped, "Could not check existing quizzes."
+
+        if existing:
+            skipped += 1
+            continue
+
+        quiz_result = supabase.table("quizzes").insert({
+            "title": title,
+            "description": (
+                f"Original NGIH quiz collection covering "
+                f"{pillar}. Includes {len(bank)} questions."
+            ),
+            "category": pillar,
+            "difficulty": "Mixed",
+            "is_active": True,
+        }).execute()
+
+        quiz_data = _normalise_rpc_result(quiz_result.data)
+
+        if isinstance(quiz_data, dict):
+            quiz_data = [quiz_data]
+
+        if not quiz_data:
+            return imported, skipped, f"Could not create {pillar} quiz."
+
+        quiz_id = quiz_data[0]["id"]
+
+        question_rows = []
+        answer_rows = []
+
+        for order, item in enumerate(bank, start=1):
+            question_id = str(__import__("uuid").uuid4())
+
+            question_rows.append({
+                "id": question_id,
+                "quiz_id": quiz_id,
+                "question_text": item["question"],
+                "option_a": item["options"][0],
+                "option_b": item["options"][1],
+                "option_c": item["options"][2],
+                "option_d": item["options"][3],
+                "question_order": order,
+                "points": 1,
+            })
+
+            answer_rows.append({
+                "question_id": question_id,
+                "correct_option": letters[item["answer"]],
+                "explanation": item["explanation"],
+            })
+
+        supabase.table("quiz_questions").insert(
+            question_rows
+        ).execute()
+
+        supabase.table("quiz_answer_keys").insert(
+            answer_rows
+        ).execute()
+
+        imported += len(bank)
+
+    return imported, skipped, None
+    
 # ============================================================
 # MAIN ECO QUIZZES PAGE
 # ============================================================
