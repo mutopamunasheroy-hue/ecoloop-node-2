@@ -4187,32 +4187,34 @@ PAGE_ROUTES = {
     "Environmental Impact": environmental_impact_page,
 
     "Community Groups": lambda: render_community_groups_page(
-    supabase,
-    st.session_state.get("user_id")
-),
+        supabase,
+        st.session_state.get("user_id")
+    ),
+
     "Challenges": lambda: render_challenges_page(
-    supabase,
-    st.session_state.get("user_id"),
-    is_admin()
-),
+        supabase,
+        st.session_state.get("user_id"),
+        is_admin()
+    ),
+
     "Action Gallery": action_gallery_page,
     "Leaderboard": leaderboard_page,
     "Notifications Centre": notifications_page,
 
     "Explore & Learn": lambda: render_explore_learn(
-    supabase,
-    user_id=st.session_state.get("user_id"),
-    user_name=(
-        (st.session_state.get("profile") or {}).get("full_name")
-        or "EcoLoop Member"
+        supabase,
+        user_id=st.session_state.get("user_id"),
+        user_name=(
+            (st.session_state.get("profile") or {}).get("full_name")
+            or "EcoLoop Member"
+        ),
+        group_id=None,
+        is_coordinator=(
+            (st.session_state.get("profile") or {}).get("role")
+            in ["coordinator", "admin", "super_admin"]
+        )
     ),
-    group_id=None,
-    is_coordinator=(
-        (st.session_state.get("profile") or {}).get("role")
-        in ["coordinator", "admin", "super_admin"]
-    )
-),
-),
+
     "Eco Quiz": eco_quiz_page,
 
     "Verify Contributions": verify_contributions_page,
@@ -4222,7 +4224,6 @@ PAGE_ROUTES = {
     "My Profile": account_page,
     "About NGIH": about_ngih_page
 }
-
 
 # ---------------------------------------------
 # RENDER NAVIGATION
