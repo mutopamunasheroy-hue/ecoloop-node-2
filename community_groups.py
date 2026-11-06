@@ -1233,6 +1233,8 @@ def render_group_card(group, supabase, user_id, show_join=True):
             st.rerun()
 
 
+
+
 def render_group_admin_members(supabase, group, user_id):
     group_id = group.get("id")
 
@@ -1292,61 +1294,44 @@ def render_group_admin_members(supabase, group, user_id):
                         )
                         st.rerun()
 
-                with right:
-                    if st.button(
-                        "Reject",
-                        key=f"reject_{group_id}_{member_id}",
-                        use_container_width=True
-                    ):
-                        update_group_membership(
-                            supabase,
-                            group_id,
-                            user_id,
-                            member_id,
-                            "rejected"
-                        )
-                        st.rerun()
-    
-            st.info("No new groups found.")
+
+# ==========================================================
+# CREATE GROUP TAB
+# ==========================================================
+
+with tabs[2]:
+    st.markdown("### Create a group")
+
+    with st.form("create_community_group_form"):
+        group_name = st.text_input(
+            "Group name",
+            placeholder="e.g. Bulawayo Climate Action"
+        )
+
+        group_description = st.text_area(
+            "What is this group about?",
+            placeholder="Tell people what your group focuses on."
+        )
+
+        submitted = st.form_submit_button(
+            "Create group",
+            use_container_width=True
+        )
+
+    if submitted:
+        if not group_name.strip():
+            st.warning("Please enter a group name.")
         else:
-            for group in discover:
-                render_group_card(
-                    group,
-                    supabase,
-                    user_id,
-                    show_join=True
-                )
-
-    with tabs[2]:
-        st.markdown("### Create a group")
-
-        with st.form("create_community_group_form"):
-            group_name = st.text_input(
-                "Group name",
-                placeholder="e.g. Bulawayo Climate Action"
-            )
-
-            group_description = st.text_area(
-                "What is this group about?",
-                placeholder="Tell people what your group focuses on."
-            )
-
-            submitted = st.form_submit_button(
-                "Create group",
-                use_container_width=True
-            )
-
-        if submitted:
-            group = create_community_group(
+            created_group = create_community_group(
                 supabase,
                 user_id,
-                group_name,
-                group_description
+                group_name.strip(),
+                group_description.strip()
             )
 
-            if group:
+            if created_group:
                 st.success("Your group has been created.")
-                open_eco_chat("group", group.get("id"))
+                open_eco_chat("group", created_group.get("id"))
                 st.rerun()
 
 # ============================================================
