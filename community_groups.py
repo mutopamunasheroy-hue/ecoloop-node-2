@@ -1409,9 +1409,19 @@ def upload_story_media(supabase, user_id, uploaded_file):
         return None
 
     try:
-        file_bytes = uploaded_file.getvalue()
         extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
-        file_path = f"{user_id}/{uuid.uuid4()}.{extension}"
+
+        allowed = ["jpg", "jpeg", "png", "webp", "mp4", "mov", "webm"]
+
+        if extension not in allowed:
+            st.error("Unsupported story file type.")
+            return None
+
+        file_bytes = uploaded_file.getvalue()
+
+        file_path = (
+            f"stories/{user_id}/{uuid.uuid4().hex}.{extension}"
+        )
 
         content_type = (
             uploaded_file.type
@@ -1433,8 +1443,7 @@ def upload_story_media(supabase, user_id, uploaded_file):
     except Exception as e:
         st.error(f"Could not upload story media: {e}")
         return None
-
-
+        
 def get_story_media_url(supabase, file_path):
     if not file_path:
         return None
@@ -1521,7 +1530,11 @@ def render_story_card(supabase, story, current_user_id):
 
         with col1:
             if avatar:
-                st.image(avatar, width=50)
+                avatar_url = get_story_media_url(supabase, avatar)
+                if avatar_url:
+                    st.image(avatar_url, width=50)
+                else:
+                    st.markdown("### 👤")
             else:
                 st.markdown("### 👤")
 
