@@ -1063,6 +1063,10 @@ def manage_chatroom_requests(supabase, group):
         st.error(f"Could not manage join requests: {e}")
 
 
+# ==========================================================
+# CHATROOMS PAGE — GALLERY PHOTO UPLOAD
+# ==========================================================
+
 def render_chatrooms_page(supabase, user_id):
     st.title("👥 Chatrooms")
     st.caption("Find people, join conversations and build communities.")
@@ -1090,18 +1094,32 @@ def render_chatrooms_page(supabase, user_id):
             creator_id = str(group.get("created_by"))
 
             with st.container(border=True):
-                image_url = group.get("image_url") or ""
+                image_path = group.get("image_url") or ""
 
-                if image_url:
-                    st.image(image_url, use_container_width=True)
+                if image_path and "/" in image_path:
+                    try:
+                        image_url = get_story_media_url(
+                            supabase, image_path
+                        )
+                        if image_url:
+                            st.image(
+                                image_url,
+                                use_container_width=True
+                            )
+                    except Exception:
+                        pass
 
-                st.markdown(f"### {eco_escape(group.get('name'))}")
+                st.markdown(
+                    f"### {eco_escape(group.get('name') or '')}"
+                )
 
                 if group.get("description"):
                     st.write(group.get("description"))
 
                 if group.get("location"):
-                    st.caption(f"📍 {eco_escape(group.get('location'))}")
+                    st.caption(
+                        f"📍 {eco_escape(group.get('location'))}"
+                    )
 
                 if creator_id == str(user_id):
                     st.caption("You created this chatroom.")
@@ -1112,9 +1130,7 @@ def render_chatrooms_page(supabase, user_id):
                         use_container_width=True
                     ):
                         request_chatroom_join(
-                            supabase,
-                            group_id,
-                            user_id
+                            supabase, group_id, user_id
                         )
 
     with tab_mine:
@@ -1130,7 +1146,24 @@ def render_chatrooms_page(supabase, user_id):
             )
 
             with st.container(border=True):
-                st.markdown(f"### {eco_escape(group.get('name'))}")
+                image_path = group.get("image_url") or ""
+
+                if image_path and "/" in image_path:
+                    try:
+                        image_url = get_story_media_url(
+                            supabase, image_path
+                        )
+                        if image_url:
+                            st.image(
+                                image_url,
+                                use_container_width=True
+                            )
+                    except Exception:
+                        pass
+
+                st.markdown(
+                    f"### {eco_escape(group.get('name') or '')}"
+                )
 
                 if group.get("description"):
                     st.write(group.get("description"))
@@ -1153,14 +1186,30 @@ def render_chatrooms_page(supabase, user_id):
                         key=f"eco_leave_room_{group_id}",
                         use_container_width=True
                     ):
-                        if leave_chatroom(supabase, group_id, user_id):
+                        if leave_chatroom(
+                            supabase, group_id, user_id
+                        ):
                             st.rerun()
 
     with tab_create:
+        st.subheader("Create a Chatroom")
+
+        uploaded_photo = st.file_uploader(
+            "Choose a chatroom picture",
+            type=["jpg", "jpeg", "png", "webp"],
+            key="eco_chatroom_photo"
+        )
+
+        if uploaded_photo:
+            st.image(
+                uploaded_photo,
+                caption="Chatroom picture preview",
+                use_container_width=True
+            )
+
         with st.form("eco_create_chatroom_form"):
             name = st.text_input("Chatroom name")
             description = st.text_area("Description")
-            image_url = st.text_input("Chatroom image URL")
             location = st.text_input("Location")
 
             submitted = st.form_submit_button(
@@ -1168,17 +1217,34 @@ def render_chatrooms_page(supabase, user_id):
                 use_container_width=True
             )
 
-            if submitted:
-                if create_chatroom(
+        if submitted:
+            if not name.strip():
+                st.error("Enter a chatroom name.")
+                return
+
+            image_path = ""
+
+            if uploaded_photo:
+                image_path = upload_chatroom_photo(
                     supabase,
                     user_id,
-                    name,
-                    description,
-                    image_url,
-                    location
-                ):
-                    st.rerun()
+                    uploaded_photo
+                )
 
+                if image_path is None:
+                    return
+
+            if create_chatroom(
+                supabase,
+                user_id,
+                name,
+                description,
+                image_path,
+                location
+            ):
+                st.rerun()
+
+            
 # ==========================================================
 # PART 6 — CHATROOM MESSAGES
 # ==========================================================
