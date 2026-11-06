@@ -163,6 +163,31 @@ def get_member_directory(supabase, search=""):
         st.error(f"Could not load members: {e}")
         return []
 
+def init_follow_state():
+    if "eco_following" not in st.session_state:
+        st.session_state["eco_following"] = set()
+
+
+def render_follow_controls(member_id):
+    init_follow_state()
+
+    following = st.session_state["eco_following"]
+    is_following = str(member_id) in following
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if is_following:
+            if st.button("Following", key=f"unfollow_{member_id}"):
+                following.discard(str(member_id))
+                st.rerun()
+        else:
+            if st.button("Follow", key=f"follow_{member_id}"):
+                following.add(str(member_id))
+                st.rerun()
+
+    with col2:
+        st.metric("Following", len(following))
 
 def save_member_profile(
     supabase,
