@@ -61,15 +61,18 @@ def eco_profile(supabase, user_id):
         return {}
 
 
+
 def eco_member_name(supabase, user_id):
-    profile = eco_profile(supabase, user_id)
+    if not user_id:
+        return "EcoLoop Member"
+
+    profile = eco_profile(supabase, user_id) or {}
 
     return (
         profile.get("display_name")
         or profile.get("username")
         or "EcoLoop Member"
     )
-
 
 def eco_show_error(message, error=None):
     st.error(message)
@@ -1239,147 +1242,56 @@ def render_group_admin_members(supabase, group, user_id):
 
     if not members:
         st.caption("No membership records found yet.")
-    else:
-        for membership in members:
-            member_id = membership.get("user_id")
-            status = membership.get("status", "pending")
-            role = membership.get("membership_role", "member")
+        return
 
-            profile = eco_profile(supabase, member_id)
-            member_name = eco_member_name(profile)
+    for membership in members:
+        member_id = membership.get("user_id")
 
-            with st.container(border=True):
-                st.write(f"**{member_name}**")
-                st.caption(f"{role.title()} · {status.title()}")
+        if not member_id:
+            continue
 
-                if status == "pending":
-                    left, right = st.columns(2)
+        status = membership.get("status", "pending")
+        role = membership.get("membership_role", "member")
 
-                    with left:
-                        if st.button(
-                            "Approve",
-                            key=f"approve_{group_id}_{member_id}",
-                            use_container_width=True
-                        ):
-                            update_group_membership(
-                                supabase,
-                                group_id,
-                                user_id,
-                                member_id,
-                                "approved"
-                            )
-                            st.rerun()
+        member_name = eco_member_name(supabase, member_id)
 
-                    with right:
-                        if st.button(
-                            "Reject",
-                            key=f"reject_{group_id}_{member_id}",
-                            use_container_width=True
-                        ):
-                            update_group_membership(
-                                supabase,
-                                group_id,
-                                user_id,
-                                member_id,
-                                "rejected"
-                            )
-                            st.rerun()
+        with st.container(border=True):
+            st.write(f"**{member_name}**")
+            st.caption(f"{role.title()} · {status.title()}")
 
-    st.divider()
-    st.markdown("#### Add someone directly")
+            if status == "pending":
+                left, right = st.columns(2)
 
-    people = get_member_directory(supabase)
-
-    if people:
-        options = {
-            eco_member_name(person): person.get("user_id")
-            for person in people
-            if person.get("user_id")
-            and str(person.get("user_id")) != str(user_id)
-        }
-
-        if options:
-            selected_name = st.selectbox(
-                "Choose a member",
-                list(options.keys()),
-                key=f"add_member_select_{group_id}"
-            )
-
-            if st.button(
-                "Add to group",
-                key=f"add_member_button_{group_id}",
-                use_container_width=True
-            ):
-                add_group_member(
-                    supabase,
-                    group_id,
-                    user_id,
-                    options[selected_name]
-                )
-                st.rerun()
-        else:
-            st.info("No other registered members found.")
-    else:
-        st.info("No member profiles are available yet.")
-
-
-def render_groups_page(supabase, user_id):
-    st.title("Groups")
-    st.caption("Find your people, build communities and connect.")
-
-    tabs = st.tabs([
-        "My Groups",
-        "Discover",
-        "Create Group"
-    ])
-
-    with tabs[0]:
-        my_groups = get_my_groups(supabase, user_id)
-
-        if not my_groups:
-            st.info("You haven't joined any groups yet.")
-        else:
-            for group in my_groups:
-                render_group_card(
-                    group,
-                    supabase,
-                    user_id,
-                    show_join=False
-                )
-
-                if is_group_admin(
-                    supabase,
-                    group.get("id"),
-                    user_id
-                ):
-                    with st.expander(
-                        f"Manage {group.get('name', 'group')}"
+                with left:
+                    if st.button(
+                        "Approve",
+                        key=f"approve_{group_id}_{member_id}",
+                        use_container_width=True
                     ):
-                        render_group_admin_members(
+                        update_group_membership(
                             supabase,
-                            group,
-                            user_id
+                            group_id,
+                            user_id,
+                            member_id,
+                            "approved"
                         )
+                        st.rerun()
 
-    with tabs[1]:
-        search = st.text_input(
-            "Search groups",
-            placeholder="Find a group..."
-        )
-
-        all_groups = get_groups(supabase, search)
-
-        my_ids = {
-            str(group.get("id"))
-            for group in get_my_groups(supabase, user_id)
-        }
-
-        discover = [
-            group for group in all_groups
-            if str(group.get("id")) not in my_ids
-        ]
-
-        if not discover:
+                with right:
+                    if st.button(
+                        "Reject",
+                        key=f"reject_{group_id}_{member_id}",
+                        use_container_width=True
+                    ):
+                        update_group_membership(
+                            supabase,
+                            group_id,
+                            user_id,
+                            member_id,
+                            "rejected"
+                        )
+                        st.rerun()
+    
             st.info("No new groups found.")
         else:
             for group in discover:
