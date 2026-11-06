@@ -109,9 +109,41 @@ def eco_init_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
+
 # ==========================================================
 # PART 2 — MEMBER PROFILES
 # ==========================================================
+
+def upload_profile_photo(supabase, user_id, uploaded_file):
+    if not uploaded_file:
+        return ""
+
+    try:
+        extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
+
+        if extension not in ["jpg", "jpeg", "png", "webp"]:
+            st.error("Please upload a JPG, PNG or WEBP image.")
+            return None
+
+        file_path = (
+            f"profiles/{user_id}/{uuid.uuid4().hex}.{extension}"
+        )
+
+        supabase.storage.from_(MEDIA_BUCKET).upload(
+            file_path,
+            uploaded_file.getvalue(),
+            {
+                "content-type": uploaded_file.type,
+                "upsert": "true",
+            }
+        )
+
+        return file_path
+
+    except Exception as e:
+        st.error(f"Could not upload profile picture: {e}")
+        return None
+
 
 def get_member_directory(supabase, search=""):
     try:
@@ -137,7 +169,7 @@ def save_member_profile(
     user_id,
     display_name,
     username,
-    avatar_url,
+    avatar_path,
     bio,
     location,
     interests,
@@ -166,7 +198,7 @@ def save_member_profile(
             "user_id": str(user_id),
             "display_name": display_name.strip(),
             "username": username,
-            "avatar_url": avatar_url.strip(),
+            "avatar_url": avatar_path,
             "bio": bio.strip(),
             "location": location.strip(),
             "interests": interests.strip(),
@@ -190,7 +222,23 @@ def render_profile_editor(supabase, user_id):
     profile = eco_profile(supabase, user_id)
 
     st.subheader("Your Profile")
-    st.caption("Let other EcoLoop members know who you are.")
+    st.caption("Let other EcoLoop members get to know you.")
+
+    current_avatar = profile.get("avatar_url") or ""
+
+    if current_avatar:
+        avatar_url = get_story_media_url(supabase, current_avatar)
+        if avatar_url:
+            st.image(avatar_url, width=120)
+
+    uploaded_photo = st.file_uploader(
+        "Upload profile picture from your device",
+        type=["jpg", "jpeg", "png", "webp"],
+        key="eco_profile_photo"
+    )
+
+    if uploaded_photo:
+        st.image(uploaded_photo, width=120)
 
     with st.form("eco_profile_form"):
         display_name = st.text_input(
@@ -202,11 +250,6 @@ def render_profile_editor(supabase, user_id):
             "Username",
             value=profile.get("username") or "",
             help="Choose a unique username people can search for."
-        )
-
-        avatar_url = st.text_input(
-            "Profile picture URL",
-            value=profile.get("avatar_url") or ""
         )
 
         bio = st.text_area(
@@ -230,25 +273,129 @@ def render_profile_editor(supabase, user_id):
             use_container_width=True
         )
 
-        if submitted:
-            save_member_profile(
+    if submitted:
+        avatar_path = current_avatar
+
+        if uploaded_photo:
+            new_path = upload_profile_photo(
                 supabase,
                 user_id,
-                display_name,
-                username,
-                avatar_url,
-                bio,
-                location,
-                interests,
+                uploaded_photo
             )
+
+            if new_path is None:
+                return
+
+            if new_path:
+                avatar_path = new_path
+
+        saved = save_member_profile(
+            supabase,
+            user_id,
+            display_name,
+            username,
+            avatar_path,
+            bio,
+            location,
+            interests,
+        )
+
+        if saved:
+            st.rerun()
+
+
+def render_public_profile(supabase, user_id, member):
+    st.button(
+        "← Back to Discover",
+        key="eco_back_to_discover",
+        on_click=lambda: st.session_state.pop(
+            "eco_view_profile_id", None
+        )
+    )
+
+    name = member.get("display_name") or "EcoLoop Member"
+    username = member.get("username") or "member"
+    avatar = member.get("avatar_url") or ""
+    bio = member.get("bio") or ""
+    location = member.get("location") or ""
+    interests = member.get("interests") or ""
+
+    st.subheader("Member Profile")
+
+    if avatar:
+        avatar_url = get_story_media_url(supabase, avatar)
+
+        if avatar_url:
+            st.image(avatar_url, width=150)
+        else:
+            st.markdown("### 👤")
+    else:
+        st.markdown("### 👤")
+
+    st.title(name)
+    st.caption(f"@{username}")
+
+    if location:
+        st.caption(f"📍 {location}")
+
+    st.divider()
+
+    st.markdown("**About**")
+    st.write(bio or "No bio added yet.")
+
+    st.markdown("**Interests**")
+    st.write(interests or "No interests added yet.")
+
+    st.divider()
+
+    if st.button(
+        "Message",
+        key=f"eco_public_profile_message_{member.get('user_id')}",
+        use_container_width=True
+    ):
+        conversation_id = get_or_create_direct_conversation(
+            supabase,
+            user_id,
+            member.get("user_id")
+        )
+
+        if conversation_id:
+            st.session_state["eco_active_conversation"] = conversation_id
+            eco_set_section("Chats")
+            st.rerun()
 
 
 def render_people_directory(supabase, user_id):
+    selected_id = st.session_state.get("eco_view_profile_id")
+
+    if selected_id:
+        try:
+            result = (
+                supabase.table("member_profiles")
+                .select("*")
+                .eq("user_id", str(selected_id))
+                .limit(1)
+                .execute()
+            )
+
+            if result.data:
+                render_public_profile(
+                    supabase,
+                    user_id,
+                    result.data[0]
+                )
+                return
+
+        except Exception as e:
+            st.error(f"Could not open profile: {e}")
+
+        st.session_state.pop("eco_view_profile_id", None)
+
     st.subheader("Discover People")
-    st.caption("Find EcoLoop members by their username.")
+    st.caption("Find people and explore their profiles.")
 
     search = st.text_input(
-        "Search usernames",
+        "Search by username",
         key="eco_people_search"
     )
 
@@ -275,7 +422,15 @@ def render_people_directory(supabase, user_id):
 
             with col1:
                 if avatar:
-                    st.image(avatar, width=65)
+                    avatar_url = get_story_media_url(
+                        supabase,
+                        avatar
+                    )
+
+                    if avatar_url:
+                        st.image(avatar_url, width=70)
+                    else:
+                        st.markdown("### 👤")
                 else:
                     st.markdown("### 👤")
 
@@ -290,22 +445,16 @@ def render_people_directory(supabase, user_id):
                     st.caption(f"📍 {eco_escape(location)}")
 
                 if st.button(
-                    "Message",
-                    key=f"eco_message_member_{member.get('user_id')}",
+                    "View Profile",
+                    key=f"eco_view_profile_{member.get('user_id')}",
                     use_container_width=True
                 ):
-                    conversation_id = get_or_create_direct_conversation(
-                        supabase,
-                        user_id,
-                        member.get("user_id")
+                    st.session_state["eco_view_profile_id"] = (
+                        str(member.get("user_id"))
                     )
-
-                    if conversation_id:
-                        st.session_state["eco_active_conversation"] = (
-                            conversation_id
-                        )
-                        eco_set_section("Chats")
-                        st.rerun()
+                    st.rerun()
+        
+        
 
 # ==========================================================
 # PART 3 — PRIVATE DIRECT CHATS
