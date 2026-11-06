@@ -1,19 +1,80 @@
 import streamlit as st
 import uuid
 import mimetypes
-from datetime import datetime, timezone
-from urllib.parse import quote
+from datetime import datetime, timezone, timedelta
 
 BUCKET = "community-media"
 MAX_FILE_SIZE = 100 * 1024 * 1024
 ADMIN_ROLES = ("admin", "group_admin", "owner", "moderator")
-
 REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👏"]
 
 
-# =========================================================
+# ============================================================
+# ECOLOOP COMMUNITY — DESIGN
+# ============================================================
+
+def community_styles():
+    st.markdown("""
+    <style>
+    .eco-hero {
+        padding: 24px 20px;
+        border-radius: 20px;
+        background: linear-gradient(125deg,#073b35,#087e65,#16a085);
+        color: white;
+        margin-bottom: 18px;
+    }
+    .eco-hero h1 {
+        color: white;
+        font-size: 28px;
+        margin-bottom: 5px;
+    }
+    .eco-hero p {
+        color: #d9fff1;
+        margin: 0;
+    }
+    .eco-card {
+        padding: 17px;
+        border-radius: 17px;
+        background: rgba(20,150,110,.09);
+        border: 1px solid rgba(30,160,120,.25);
+        min-height: 105px;
+        margin-bottom: 8px;
+    }
+    .eco-card-icon {
+        font-size: 27px;
+        margin-bottom: 7px;
+    }
+    .eco-card-title {
+        font-size: 16px;
+        font-weight: 700;
+    }
+    .eco-card-sub {
+        font-size: 12px;
+        opacity: .75;
+    }
+    .eco-section {
+        font-size: 19px;
+        font-weight: 750;
+        margin-top: 18px;
+        margin-bottom: 8px;
+    }
+    .eco-story {
+        padding: 12px 8px;
+        border-radius: 15px;
+        border: 1px solid rgba(20,160,120,.4);
+        text-align: center;
+        min-height: 88px;
+    }
+    .eco-avatar {
+        font-size: 30px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+# ============================================================
 # GENERAL HELPERS
-# =========================================================
+# ============================================================
 
 def rows(response):
     return response.data if response and response.data else []
@@ -23,20 +84,53 @@ def safe_text(value, default=""):
     return str(value or default).strip()
 
 
-def show_error(error, title="Something went wrong"):
-    st.error(f"{title}: {error}")
-
-
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
-def get_user_id():
-    return st.session_state.get("ecoloop_user_id")
+def show_error(error, title="Something went wrong"):
+    st.error(f"{title}: {error}")
 
 
-def set_page(page):
-    st.session_state["ecoloop_community_page"] = page
+def format_time(value):
+    if not value:
+        return ""
+
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        dt = dt.astimezone()
+
+        if dt.date() == datetime.now().astimezone().date():
+            return dt.strftime("%H:%M")
+
+        return dt.strftime("%d %b")
+
+    except Exception:
+        return ""
+
+
+def format_full_time(value):
+    if not value:
+        return ""
+
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return dt.astimezone().strftime("%d %b %Y · %H:%M")
+    except Exception:
+        return ""
+
+
+def safe_query_table(supabase, table, columns="*"):
+    try:
+        return rows(
+            supabase.table(table).select(columns).execute()
+        )
+    except Exception:
+        return []
 
 
 def get_profiles(supabase, user_ids):
@@ -46,9 +140,7 @@ def get_profiles(supabase, user_ids):
         return {}
 
     try:
-        result = supabase.table(
-            "member_profiles"
-        ).select("*").in_(
+        result = supabase.table("member_profiles").select("*").in_(
             "user_id", ids
         ).execute()
 
@@ -56,7 +148,18 @@ def get_profiles(supabase, user_ids):
             str(p["user_id"]): p
             for p in rows(result)
         }
+    except Exception:
+        return {}
 
+
+def get_profile(supabase, user_id):
+    try:
+        result = supabase.table("member_profiles").select("*").eq(
+            "user_id", user_id
+        ).limit(1).execute()
+
+        found = rows(result)
+        return found[0] if found else {}
     except Exception:
         return {}
 
@@ -71,88 +174,6 @@ def profile_name(profile):
         or "EcoLoop Member"
     )
 
-
-def format_time(value):
-    if not value:
-        return ""
-
-    try:
-        dt = datetime.fromisoformat(
-            str(value).replace("Z", "+00:00")
-        )
-
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-
-        dt = dt.astimezone(timezone.utc)
-        current = datetime.now(timezone.utc)
-
-        if dt.date() == current.date():
-            return dt.strftime("%H:%M")
-
-        if dt.year == current.year:
-            return dt.strftime("%d %b")
-
-        return dt.strftime("%d %b %Y")
-
-    except Exception:
-        return ""
-
-
-def format_full_time(value):
-    if not value:
-        return ""
-
-    try:
-        dt = datetime.fromisoformat(
-            str(value).replace("Z", "+00:00")
-        )
-        return dt.astimezone().strftime("%d %b %Y · %H:%M")
-    except Exception:
-        return ""
-
-
-def safe_query_table(supabase, table, columns="*"):
-    try:
-        result = supabase.table(table).select(columns).execute()
-        return rows(result)
-    except Exception:
-        return []
-
-
-def get_group(supabase, group_id):
-    try:
-        result = supabase.table(
-            "community_groups"
-        ).select("*").eq(
-            "id", group_id
-        ).limit(1).execute()
-
-        found = rows(result)
-        return found[0] if found else None
-
-    except Exception:
-        return None
-
-
-def get_community(supabase, community_id):
-    try:
-        result = supabase.table(
-            "communities"
-        ).select("*").eq(
-            "id", community_id
-        ).limit(1).execute()
-
-        found = rows(result)
-        return found[0] if found else None
-
-    except Exception:
-        return None
-
-
-# =========================================================
-# STORAGE
-# =========================================================
 
 def upload_media(supabase, uploaded_file, folder):
     if not uploaded_file:
@@ -178,11 +199,9 @@ def upload_media(supabase, uploaded_file, folder):
                 "upsert": "true"
             }
         )
-
         return path
-
     except Exception as e:
-        show_error(e, "File upload failed")
+        show_error(e, "Upload failed")
         return None
 
 
@@ -194,20 +213,15 @@ def media_url(supabase, path):
         return path
 
     try:
-        result = supabase.storage.from_(
-            BUCKET
-        ).create_signed_url(path, 3600)
-
-        return (
-            result.get("signedURL")
-            or result.get("signedUrl")
+        result = supabase.storage.from_(BUCKET).create_signed_url(
+            path, 3600
         )
-
+        return result.get("signedURL") or result.get("signedUrl")
     except Exception:
         return None
 
 
-def display_attachment(supabase, path, name, file_type):
+def display_attachment(supabase, path, name=None, file_type=None):
     if not path:
         return
 
@@ -217,49 +231,51 @@ def display_attachment(supabase, path, name, file_type):
         st.caption("Attachment unavailable.")
         return
 
-    name = name or "Attachment"
     file_type = file_type or ""
+    name = name or "Attachment"
 
     if file_type.startswith("image/"):
         st.image(url, use_container_width=True)
-
     elif file_type.startswith("video/"):
         st.video(url)
-
     elif file_type.startswith("audio/"):
         st.audio(url)
-
     else:
         st.markdown(f"[📎 {name}]({url})")
 
 
-# =========================================================
-# PROFILE SYSTEM
-# =========================================================
-
-def get_profile(supabase, user_id):
+def get_group(supabase, group_id):
     try:
-        result = supabase.table(
-            "member_profiles"
-        ).select("*").eq(
-            "user_id", user_id
-        ).limit(1).execute()
-
-        found = rows(result)
-        return found[0] if found else {}
-
+        found = rows(
+            supabase.table("community_groups").select("*").eq(
+                "id", group_id
+            ).limit(1).execute()
+        )
+        return found[0] if found else None
     except Exception:
-        return {}
+        return None
 
+
+def get_community(supabase, community_id):
+    try:
+        found = rows(
+            supabase.table("communities").select("*").eq(
+                "id", community_id
+            ).limit(1).execute()
+        )
+        return found[0] if found else None
+    except Exception:
+        return None
+
+
+# ============================================================
+# PROFILE SYSTEM
+# ============================================================
 
 def profile_picture(supabase, profile):
     if not profile:
         return None
-
-    return media_url(
-        supabase,
-        profile.get("avatar_url")
-    )
+    return media_url(supabase, profile.get("avatar_url"))
 
 
 def profile_editor(supabase, user_id):
@@ -269,36 +285,37 @@ def profile_editor(supabase, user_id):
     picture = profile_picture(supabase, profile)
 
     if picture:
-        st.image(picture, width=110)
+        st.image(picture, width=115)
 
     with st.form("ecoloop_community_profile"):
         display_name = st.text_input(
             "Display name",
             value=profile.get("display_name", "")
         )
-
         username = st.text_input(
             "Username",
             value=profile.get("username", "")
         )
-
         bio = st.text_area(
             "About me",
             value=profile.get("bio", "")
         )
-
         location = st.text_input(
             "Location",
             value=profile.get("location", "")
         )
-
         interests = st.text_input(
             "Interests",
             value=profile.get("interests", "")
         )
+        avatar = st.file_uploader(
+            "Upload profile picture",
+            type=["png", "jpg", "jpeg"],
+            key="community_profile_avatar"
+        )
 
         avatar_url = st.text_input(
-            "Profile picture URL",
+            "Or enter picture URL",
             value=profile.get("avatar_url", "")
         )
 
@@ -308,10 +325,15 @@ def profile_editor(supabase, user_id):
         )
 
         if submitted:
+            if avatar:
+                path = upload_media(
+                    supabase, avatar, f"profiles/{user_id}"
+                )
+                if path:
+                    avatar_url = path
+
             try:
-                supabase.table(
-                    "member_profiles"
-                ).upsert({
+                supabase.table("member_profiles").upsert({
                     "user_id": user_id,
                     "display_name": display_name.strip(),
                     "username": username.strip(),
@@ -324,7 +346,6 @@ def profile_editor(supabase, user_id):
 
                 st.success("Profile updated.")
                 st.rerun()
-
             except Exception as e:
                 show_error(e, "Could not update profile")
 
@@ -354,423 +375,262 @@ def member_profile_card(supabase, user_id):
             if profile.get("bio"):
                 st.write(profile["bio"])
 
+# ============================================================
+# PART 2 — GROUPS, MEMBERSHIPS AND GROUP MESSAGING
+# ============================================================
 
-# =========================================================
-# GROUP MEMBERSHIP AND ADMINISTRATION
-# =========================================================
-
-def is_member(supabase, group_id, user_id):
-    group = get_group(supabase, group_id)
-
-    if group and str(group.get("created_by")) == str(user_id):
-        return True
-
+def get_group_membership(supabase, group_id, user_id):
     try:
-        result = supabase.table(
-            "group_memberships"
-        ).select("id").eq(
-            "group_id", group_id
-        ).eq(
-            "user_id", user_id
-        ).eq(
-            "status", "approved"
-        ).limit(1).execute()
-
-        return bool(rows(result))
-
+        result = (
+            supabase.table("group_memberships")
+            .select("*")
+            .eq("group_id", group_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
     except Exception:
-        return False
+        return None
 
 
-def is_admin(supabase, group_id, user_id):
-    group = get_group(supabase, group_id)
-
-    if group and str(group.get("created_by")) == str(user_id):
-        return True
-
+def get_group_members(supabase, group_id):
     try:
-        result = supabase.table(
-            "group_memberships"
-        ).select("membership_role").eq(
-            "group_id", group_id
-        ).eq(
-            "user_id", user_id
-        ).eq(
-            "status", "approved"
-        ).limit(1).execute()
-
-        found = rows(result)
-
-        if found:
-            return safe_text(
-                found[0].get("membership_role")
-            ).lower() in ADMIN_ROLES
-
-    except Exception:
-        pass
-
-    return False
-
-
-def get_memberships(supabase, group_id):
-    try:
-        result = supabase.table(
-            "group_memberships"
-        ).select("*").eq(
-            "group_id", group_id
-        ).order("joined_at").execute()
-
-        return rows(result)
-
+        result = (
+            supabase.table("group_memberships")
+            .select("*")
+            .eq("group_id", group_id)
+            .eq("status", "approved")
+            .eq("group_id", group_id)
+            .execute()
+        )
+        return result.data or []
     except Exception:
         return []
 
 
-def get_approved_members(supabase, group_id):
-    return [
-        m for m in get_memberships(supabase, group_id)
-        if m.get("status") == "approved"
-    ]
+def is_group_admin(supabase, group_id, user_id):
+    membership = get_group_membership(supabase, group_id, user_id)
+
+    if not membership:
+        return False
+
+    return (
+        membership.get("status") == "approved"
+        and membership.get("membership_role") in ["admin", "creator", "owner"]
+    )
 
 
-def request_to_join(supabase, group_id, user_id):
+def load_communities(supabase):
     try:
-        existing = supabase.table(
-            "group_memberships"
-        ).select("id,status").eq(
-            "group_id", group_id
-        ).eq(
-            "user_id", user_id
-        ).limit(1).execute()
+        result = (
+            supabase.table("communities")
+            .select("*")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return result.data or []
+    except Exception:
+        return []
 
-        found = rows(existing)
 
-        if found:
-            status = found[0].get("status")
+def load_groups(supabase, community_id=None):
+    try:
+        query = (
+            supabase.table("community_groups")
+            .select("*")
+            .order("created_at", desc=True)
+        )
 
-            if status == "approved":
-                st.info("You are already a member.")
-            elif status == "pending":
-                st.info("Your request is awaiting approval.")
-            else:
-                st.info("A membership record already exists.")
+        if community_id:
+            query = query.eq("community_id", community_id)
 
-            return
+        result = query.execute()
+        return result.data or []
+    except Exception:
+        return []
 
-        supabase.table(
-            "group_memberships"
-        ).insert({
+
+def create_community(supabase, user_id, name, description, location=""):
+    try:
+        result = (
+            supabase.table("communities")
+            .insert({
+                "name": name.strip(),
+                "description": description.strip(),
+                "location": location.strip(),
+                "created_by": user_id
+            })
+            .execute()
+        )
+
+        return bool(result.data), result.data
+    except Exception as error:
+        st.error(f"Could not create community: {error}")
+        return False, None
+
+
+def create_group(
+    supabase,
+    user_id,
+    name,
+    description,
+    community_id=None,
+    location=""
+):
+    try:
+        payload = {
+            "name": name.strip(),
+            "description": description.strip(),
+            "created_by": user_id,
+            "location": location.strip()
+        }
+
+        if community_id:
+            payload["community_id"] = community_id
+
+        result = (
+            supabase.table("community_groups")
+            .insert(payload)
+            .execute()
+        )
+
+        if not result.data:
+            return False, None
+
+        group = result.data[0]
+
+        supabase.table("group_memberships").insert({
+            "group_id": group["id"],
+            "user_id": user_id,
+            "membership_role": "admin",
+            "status": "approved"
+        }).execute()
+
+        return True, group
+
+    except Exception as error:
+        st.error(f"Could not create group: {error}")
+        return False, None
+
+
+def request_group_membership(supabase, group_id, user_id):
+    existing = get_group_membership(supabase, group_id, user_id)
+
+    if existing:
+        return False, "You already have a membership request or membership."
+
+    try:
+        supabase.table("group_memberships").insert({
             "group_id": group_id,
             "user_id": user_id,
             "membership_role": "member",
             "status": "pending"
         }).execute()
 
-        st.success("Your request has been submitted.")
-        st.rerun()
-
-    except Exception as e:
-        show_error(e, "Could not request membership")
+        return True, "Your request has been sent."
+    except Exception as error:
+        return False, str(error)
 
 
-# =========================================================
-# COMMUNITIES
-# =========================================================
-
-def load_communities(supabase):
+def approve_group_member(supabase, membership_id):
     try:
-        result = supabase.table(
-            "communities"
-        ).select("*").order(
-            "created_at", desc=True
+        supabase.table("group_memberships").update({
+            "status": "approved"
+        }).eq("id", membership_id).execute()
+
+        return True
+    except Exception as error:
+        st.error(f"Could not approve member: {error}")
+        return False
+
+
+def remove_group_member(supabase, membership_id):
+    try:
+        supabase.table("group_memberships").delete().eq(
+            "id", membership_id
         ).execute()
 
-        return rows(result)
-
-    except Exception as e:
-        show_error(e, "Could not load communities")
-        return []
-
-
-def create_community(supabase, user_id):
-    with st.expander("＋ Create a community"):
-        with st.form("create_ecoloop_community"):
-            name = st.text_input("Community name")
-            description = st.text_area("Description")
-            location = st.text_input("Location")
-
-            submitted = st.form_submit_button(
-                "Create community",
-                use_container_width=True
-            )
-
-            if submitted:
-                if not name.strip():
-                    st.warning("Enter a community name.")
-                    return
-
-                try:
-                    supabase.table(
-                        "communities"
-                    ).insert({
-                        "name": name.strip(),
-                        "description": description.strip(),
-                        "location": location.strip(),
-                        "created_by": user_id
-                    }).execute()
-
-                    st.success("Community created.")
-                    st.rerun()
-
-                except Exception as e:
-                    show_error(e, "Community creation failed")
+        return True
+    except Exception as error:
+        st.error(f"Could not remove member: {error}")
+        return False
 
 
-def create_group(supabase, user_id):
-    communities = load_communities(supabase)
-
-    options = {"No community": None}
-
-    for community in communities:
-        options[community["name"]] = community["id"]
-
-    with st.expander("＋ Create a group"):
-        with st.form("ecoloop_create_group"):
-            name = st.text_input("Group name")
-            description = st.text_area("Group description")
-            location = st.text_input("Location")
-
-            selected = st.selectbox(
-                "Community",
-                list(options.keys())
-            )
-
-            image = st.file_uploader(
-                "Group picture",
-                type=["png", "jpg", "jpeg"]
-            )
-
-            submitted = st.form_submit_button(
-                "Create group",
-                use_container_width=True
-            )
-
-            if submitted:
-                if not name.strip():
-                    st.warning("Enter a group name.")
-                    return
-
-                data = {
-                    "name": name.strip(),
-                    "description": description.strip(),
-                    "location": location.strip(),
-                    "created_by": user_id
-                }
-
-                if options[selected]:
-                    data["community_id"] = options[selected]
-
-                try:
-                    result = supabase.table(
-                        "community_groups"
-                    ).insert(data).execute()
-
-                    created = rows(result)
-
-                    if not created:
-                        st.error("Could not retrieve the new group.")
-                        return
-
-                    group_id = created[0]["id"]
-
-                    if image:
-                        path = upload_media(
-                            supabase,
-                            image,
-                            f"{group_id}/{user_id}"
-                        )
-
-                        if path:
-                            supabase.table(
-                                "community_groups"
-                            ).update({
-                                "image_url": path
-                            }).eq("id", group_id).execute()
-
-                    try:
-                        supabase.table(
-                            "group_memberships"
-                        ).insert({
-                            "group_id": group_id,
-                            "user_id": user_id,
-                            "membership_role": "admin",
-                            "status": "approved"
-                        }).execute()
-                    except Exception:
-                        pass
-
-                    st.session_state["ecoloop_open_group_id"] = str(group_id)
-                    st.success("Group created.")
-                    st.rerun()
-
-                except Exception as e:
-                    show_error(e, "Group creation failed")
-
-
-def load_groups(supabase):
+def load_group_messages(supabase, group_id, limit=100):
     try:
-        result = supabase.table(
-            "community_groups"
-        ).select("*").order(
-            "created_at", desc=True
-        ).execute()
-
-        return rows(result)
-
+        result = (
+            supabase.table("group_messages")
+            .select("*")
+            .eq("group_id", group_id)
+            .order("created_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
     except Exception:
         return []
 
 
-def get_my_groups(supabase, user_id):
-    return [
-        group for group in load_groups(supabase)
-        if is_member(supabase, group["id"], user_id)
-    ]
-
-
-def get_community_groups(supabase, community_id):
+def mark_group_as_read(supabase, group_id, user_id):
     try:
-        result = supabase.table(
-            "community_groups"
-        ).select("*").eq(
-            "community_id", community_id
-        ).order("created_at", desc=True).execute()
-
-        return rows(result)
-
-    except Exception:
-        return []
-
-
-# =========================================================
-# GROUP MESSAGES
-# =========================================================
-
-def get_messages(supabase, group_id, limit=200):
-    try:
-        result = supabase.table(
-            "group_messages"
-        ).select("*").eq(
-            "group_id", group_id
-        ).order(
-            "created_at", desc=True
-        ).limit(limit).execute()
-
-        return list(reversed(rows(result)))
-
-    except Exception as e:
-        show_error(e, "Could not load group messages")
-        return []
-
-
-def get_latest_message(supabase, group_id):
-    try:
-        result = supabase.table(
-            "group_messages"
-        ).select("*").eq(
-            "group_id", group_id
-        ).order(
-            "created_at", desc=True
-        ).limit(1).execute()
-
-        found = rows(result)
-        return found[0] if found else None
-
-    except Exception:
-        return None
-
-
-def message_preview(message):
-    if not message:
-        return "No messages yet"
-
-    text = safe_text(message.get("message_text"))
-
-    if message.get("attachment_name"):
-        text = (
-            text + " · 📎 " + message["attachment_name"]
-            if text else "📎 " + message["attachment_name"]
+        existing = (
+            supabase.table("group_read_status")
+            .select("id")
+            .eq("group_id", group_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
         )
 
-    if not text:
-        text = "Sent an attachment"
+        from datetime import datetime, timezone
 
-    return text[:65] + ("..." if len(text) > 65 else "")
+        now = datetime.now(timezone.utc).isoformat()
 
-
-def get_group_last_read(supabase, group_id, user_id):
-    try:
-        result = supabase.table(
-            "group_read_status"
-        ).select("last_read_at").eq(
-            "group_id", group_id
-        ).eq(
-            "user_id", user_id
-        ).limit(1).execute()
-
-        found = rows(result)
-
-        if found:
-            return found[0].get("last_read_at")
+        if existing.data:
+            supabase.table("group_read_status").update({
+                "last_read_at": now
+            }).eq("id", existing.data[0]["id"]).execute()
+        else:
+            supabase.table("group_read_status").insert({
+                "group_id": group_id,
+                "user_id": user_id,
+                "last_read_at": now
+            }).execute()
 
     except Exception:
         pass
 
-    return None
 
-
-def mark_group_read(supabase, group_id, user_id):
+def get_group_unread_count(supabase, group_id, user_id):
     try:
-        supabase.table(
-            "group_read_status"
-        ).upsert({
-            "group_id": group_id,
-            "user_id": user_id,
-            "last_read_at": now_iso()
-        }, on_conflict="group_id,user_id").execute()
-
-    except Exception:
-        st.session_state[
-            f"ecoloop_last_read_{group_id}_{user_id}"
-        ] = now_iso()
-
-
-def get_group_unread(supabase, group_id, user_id):
-    last_read = get_group_last_read(
-        supabase, group_id, user_id
-    )
-
-    if not last_read:
-        last_read = st.session_state.get(
-            f"ecoloop_last_read_{group_id}_{user_id}"
+        status = (
+            supabase.table("group_read_status")
+            .select("last_read_at")
+            .eq("group_id", group_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
         )
 
-    if not last_read:
-        return 0
+        if not status.data:
+            return len(load_group_messages(supabase, group_id))
 
-    try:
-        result = supabase.table(
-            "group_messages"
-        ).select("id,sender_id").eq(
-            "group_id", group_id
-        ).gt(
-            "created_at", last_read
-        ).execute()
+        last_read = status.data[0].get("last_read_at")
 
-        return sum(
-            1 for m in rows(result)
-            if str(m.get("sender_id")) != str(user_id)
+        if not last_read:
+            return 0
+
+        result = (
+            supabase.table("group_messages")
+            .select("id", count="exact")
+            .eq("group_id", group_id)
+            .gt("created_at", last_read)
+            .neq("sender_id", user_id)
+            .execute()
         )
+
+        return result.count or 0
 
     except Exception:
         return 0
@@ -781,1874 +641,1426 @@ def send_group_message(
     group_id,
     user_id,
     message_text,
-    uploaded_file=None,
-    reply_to_id=None,
-    forwarded_from=None
+    attachment_path=None,
+    attachment_name=None,
+    attachment_type=None
 ):
-    message_text = safe_text(message_text)
+    try:
+        payload = {
+            "group_id": group_id,
+            "sender_id": user_id,
+            "message_text": message_text.strip()
+        }
 
-    if not message_text and not uploaded_file:
-        st.warning("Write a message or attach a file.")
-        return False
+        if attachment_path:
+            payload["attachment_path"] = attachment_path
+            payload["attachment_name"] = attachment_name
+            payload["attachment_type"] = attachment_type
 
-    data = {
-        "group_id": group_id,
-        "sender_id": user_id,
-        "message_text": message_text
-    }
-
-    if reply_to_id:
-        data["reply_to_id"] = reply_to_id
-
-    if forwarded_from:
-        data["forwarded_from"] = forwarded_from
-
-    if uploaded_file:
-        path = upload_media(
-            supabase,
-            uploaded_file,
-            f"{group_id}/{user_id}"
+        result = (
+            supabase.table("group_messages")
+            .insert(payload)
+            .execute()
         )
 
-        if not path:
-            return False
+        return bool(result.data)
 
-        data.update({
-            "attachment_path": path,
-            "attachment_name": uploaded_file.name,
-            "attachment_type": (
-                uploaded_file.type
-                or mimetypes.guess_type(uploaded_file.name)[0]
-                or "application/octet-stream"
-            )
-        })
-
-    try:
-        supabase.table(
-            "group_messages"
-        ).insert(data).execute()
-
-        mark_group_read(supabase, group_id, user_id)
-        return True
-
-    except Exception as e:
-        if reply_to_id or forwarded_from:
-            st.warning(
-                "This message option needs its database field. "
-                "We'll add that in the final SQL setup."
-            )
-        else:
-            show_error(e, "Message could not be sent")
-
+    except Exception as error:
+        st.error(f"Message could not be sent: {error}")
         return False
 
 
-# =========================================================
-# MESSAGE REACTIONS
-# =========================================================
-
-def get_group_reactions(supabase, message_id):
+def add_group_reaction(supabase, message_id, user_id, reaction):
     try:
-        result = supabase.table(
-            "group_message_reactions"
-        ).select("*").eq(
-            "message_id", message_id
-        ).execute()
+        supabase.table("group_message_reactions").insert({
+            "message_id": message_id,
+            "user_id": user_id,
+            "reaction": reaction
+        }).execute()
 
-        return rows(result)
+        return True
+
+    except Exception:
+        return False
+
+
+def load_group_reactions(supabase, message_id):
+    try:
+        result = (
+            supabase.table("group_message_reactions")
+            .select("*")
+            .eq("message_id", message_id)
+            .execute()
+        )
+
+        return result.data or []
 
     except Exception:
         return []
 
 
-def reaction_controls(supabase, message_id, user_id):
-    reactions = get_group_reactions(supabase, message_id)
+def render_group_message(supabase, message, user_id):
+    sender_id = message.get("sender_id")
+    own_message = sender_id == user_id
 
-    if reactions:
-        summary = {}
+    profile = get_member_profile(supabase, sender_id)
 
-        for item in reactions:
-            emoji = item.get("reaction", "")
-            summary[emoji] = summary.get(emoji, 0) + 1
+    sender_name = (
+        profile.get("display_name")
+        or profile.get("username")
+        or "EcoLoop member"
+    ) if profile else "EcoLoop member"
 
-        st.caption(
-            "   ".join(
-                f"{emoji} {count}"
-                for emoji, count in summary.items()
-            )
-        )
+    message_text = message.get("message_text") or ""
+    created_at = message.get("created_at", "")
 
-    with st.popover("React"):
-        selected = st.selectbox(
-            "Choose a reaction",
-            REACTIONS,
-            key=f"reaction_select_{message_id}"
-        )
+    with st.container(border=True):
+        header_col, time_col = st.columns([4, 2])
 
-        if st.button(
-            "Send reaction",
-            key=f"reaction_send_{message_id}"
-        ):
-            try:
-                supabase.table(
-                    "group_message_reactions"
-                ).upsert({
-                    "message_id": message_id,
-                    "user_id": user_id,
-                    "reaction": selected
-                }).execute()
-
-                st.rerun()
-
-            except Exception:
-                st.info(
-                    "Reactions will become available after "
-                    "the Community database update."
-                )
-
-
-# =========================================================
-# GROUP MESSAGE DISPLAY
-# =========================================================
-
-def display_group_messages(supabase, messages, user_id):
-    sender_ids = [
-        m.get("sender_id")
-        for m in messages
-        if m.get("sender_id")
-    ]
-
-    profiles = get_profiles(supabase, sender_ids)
-
-    for message in messages:
-        sender_id = str(message.get("sender_id", ""))
-        profile = profiles.get(sender_id)
-        mine = sender_id == str(user_id)
-
-        with st.container(border=True):
-            if mine:
-                st.caption("**You** · " + format_time(message.get("created_at")))
+        with header_col:
+            if own_message:
+                st.caption("You")
             else:
-                st.caption(
-                    f"**{profile_name(profile)}** · "
-                    f"{format_time(message.get('created_at'))}"
-                )
+                st.caption(sender_name)
 
-            if message.get("forwarded_from"):
-                st.caption("↪ Forwarded")
+        with time_col:
+            st.caption(created_at[:16].replace("T", " ") if created_at else "")
 
-            if message.get("reply_to_id"):
-                st.caption("↩ Reply to an earlier message")
+        if message_text:
+            st.write(message_text)
 
-            if message.get("deleted_at"):
-                st.caption("This message was deleted.")
-            elif message.get("message_text"):
-                st.write(message["message_text"])
+        attachment_path = message.get("attachment_path")
 
-            display_attachment(
-                supabase,
-                message.get("attachment_path"),
+        if attachment_path:
+            render_community_attachment(
+                attachment_path,
                 message.get("attachment_name"),
                 message.get("attachment_type")
             )
 
-            if message.get("is_pinned"):
-                st.caption("📌 Pinned message")
-
-            reaction_controls(
-                supabase,
-                message.get("id"),
-                user_id
-            )
-
-            with st.expander("Message options"):
-                if st.button(
-                    "↩ Reply to this message",
-                    key=f"reply_{message['id']}"
-                ):
-                    st.session_state[
-                        f"reply_to_{message.get('group_id')}"
-                    ] = message["id"]
-                    st.rerun()
-
-                if st.button(
-                    "↪ Forward this message",
-                    key=f"forward_{message['id']}"
-                ):
-                    st.session_state[
-                        "ecoloop_forward_message"
-                    ] = message
-                    st.rerun()
-
-                if mine:
-                    if st.button(
-                        "Delete message",
-                        key=f"delete_message_{message['id']}"
-                    ):
-                        try:
-                            supabase.table(
-                                "group_messages"
-                            ).update({
-                                "deleted_at": now_iso(),
-                                "message_text": "Message deleted"
-                            }).eq(
-                                "id", message["id"]
-                            ).eq(
-                                "sender_id", user_id
-                            ).execute()
-
-                            st.rerun()
-
-                        except Exception:
-                            st.info(
-                                "Message deletion needs the "
-                                "database update."
-                            )
-
-                if is_admin(
-                    supabase,
-                    message.get("group_id"),
-                    user_id
-                ):
-                    if st.button(
-                        "Pin message",
-                        key=f"pin_{message['id']}"
-                    ):
-                        try:
-                            supabase.table(
-                                "group_messages"
-                            ).update({
-                                "is_pinned": True,
-                                "pinned_by": user_id,
-                                "pinned_at": now_iso()
-                            }).eq(
-                                "id", message["id"]
-                            ).execute()
-
-                            st.rerun()
-
-                        except Exception as e:
-                            show_error(e, "Could not pin message")
-
-
-# =========================================================
-# GROUP CHAT COMPOSER
-# =========================================================
-
-def group_chat_composer(supabase, group_id, user_id):
-    reply_key = f"reply_to_{group_id}"
-    reply_id = st.session_state.get(reply_key)
-
-    if reply_id:
-        st.info("↩ Replying to a message")
-
-        if st.button("Cancel reply", key=f"cancel_reply_{group_id}"):
-            st.session_state[reply_key] = None
-            st.rerun()
-
-    with st.form(
-        f"group_chat_form_{group_id}",
-        clear_on_submit=True
-    ):
-        message_text = st.text_area(
-            "Message",
-            placeholder="Type a message...",
-            label_visibility="collapsed"
+        reactions = load_group_reactions(
+            supabase,
+            message.get("id")
         )
 
-        uploaded_file = st.file_uploader(
-            "Attach photo, video, audio or document",
-            key=f"group_upload_{group_id}"
+        if reactions:
+            reaction_counts = {}
+
+            for item in reactions:
+                emoji = item.get("reaction", "👍")
+                reaction_counts[emoji] = reaction_counts.get(emoji, 0) + 1
+
+            st.caption(
+                "   ".join(
+                    f"{emoji} {count}"
+                    for emoji, count in reaction_counts.items()
+                )
+            )
+
+        reaction_col1, reaction_col2, reaction_col3 = st.columns(3)
+
+        for column, emoji in zip(
+            [reaction_col1, reaction_col2, reaction_col3],
+            ["👍", "❤️", "😂"]
+        ):
+            with column:
+                if st.button(
+                    emoji,
+                    key=f"group_reaction_{message.get('id')}_{emoji}"
+                ):
+                    add_group_reaction(
+                        supabase,
+                        message.get("id"),
+                        user_id,
+                        emoji
+                    )
+                    st.rerun()
+
+
+def render_group_chat_composer(supabase, group_id, user_id):
+    with st.form(
+        key=f"group_message_form_{group_id}",
+        clear_on_submit=True
+    ):
+        message = st.text_area(
+            "Message",
+            placeholder="Write a message...",
+            label_visibility="collapsed",
+            height=80
+        )
+
+        attachment = st.file_uploader(
+            "Attach a file",
+            key=f"group_attachment_{group_id}"
         )
 
         submitted = st.form_submit_button(
-            "Send ➤",
+            "Send message",
             use_container_width=True
         )
 
         if submitted:
-            success = send_group_message(
-                supabase,
-                group_id,
-                user_id,
-                message_text,
-                uploaded_file,
-                reply_to_id=reply_id
-            )
+            attachment_path = None
+            attachment_name = None
+            attachment_type = None
 
-            if success:
-                st.session_state[reply_key] = None
-                st.rerun()
+            if attachment:
+                uploaded = upload_community_media(
+                    supabase,
+                    attachment,
+                    user_id
+                )
 
+                if uploaded:
+                    attachment_path = uploaded
+                    attachment_name = attachment.name
+                    attachment_type = attachment.type
 
-def chat_area(supabase, group_id, user_id):
-    col1, col2 = st.columns([3, 1])
+            if message.strip() or attachment_path:
+                success = send_group_message(
+                    supabase,
+                    group_id,
+                    user_id,
+                    message,
+                    attachment_path,
+                    attachment_name,
+                    attachment_type
+                )
 
-    with col1:
-        st.subheader("Messages")
+                if success:
+                    st.rerun()
 
-    with col2:
-        if st.button("↻ Refresh", key=f"refresh_group_{group_id}"):
-            st.rerun()
+# ============================================================
+# PART 3 — GROUP PROFILES, ADMIN TOOLS AND PRIVATE CHATS
+# ============================================================
 
-    messages = get_messages(supabase, group_id)
-
-    if messages:
-        display_group_messages(
-            supabase,
-            messages,
-            user_id
-        )
-    else:
-        st.info("No messages yet. Start the conversation!")
-
-    st.divider()
-
-    group_chat_composer(
-        supabase,
-        group_id,
-        user_id
-    )
-
-
-# =========================================================
-# GROUP MEMBERS PAGE
-# =========================================================
-
-def group_members(supabase, group_id, user_id):
+def render_group_members(supabase, group_id, user_id):
     st.subheader("Group members")
 
-    admin = is_admin(supabase, group_id, user_id)
-    memberships = get_memberships(supabase, group_id)
+    members = get_group_members(supabase, group_id)
 
-    profiles = get_profiles(
-        supabase,
-        [m.get("user_id") for m in memberships]
+    if not members:
+        st.info("No approved members yet.")
+        return
+
+    current_user_admin = is_group_admin(
+        supabase, group_id, user_id
     )
 
-    approved = [
-        m for m in memberships
-        if m.get("status") == "approved"
-    ]
+    for member in members:
+        member_id = member.get("user_id")
+        profile = get_member_profile(supabase, member_id)
 
-    pending = [
-        m for m in memberships
-        if m.get("status") == "pending"
-    ]
+        name = (
+            profile.get("display_name")
+            or profile.get("username")
+            or "EcoLoop member"
+        ) if profile else "EcoLoop member"
 
-    st.caption(
-        f"{len(approved)} members · {len(pending)} pending requests"
-    )
-
-    if admin and pending:
-        st.markdown("### Membership requests")
-
-        for member in pending:
-            profile = profiles.get(str(member.get("user_id")))
-
-            with st.container(border=True):
-                st.write(f"**{profile_name(profile)}**")
-
-                left, right = st.columns(2)
-
-                with left:
-                    if st.button(
-                        "Approve",
-                        key=f"approve_{member['id']}"
-                    ):
-                        try:
-                            supabase.table(
-                                "group_memberships"
-                            ).update({
-                                "status": "approved"
-                            }).eq(
-                                "id", member["id"]
-                            ).execute()
-
-                            st.success("Member approved.")
-                            st.rerun()
-
-                        except Exception as e:
-                            show_error(e, "Approval failed")
-
-                with right:
-                    if st.button(
-                        "Reject",
-                        key=f"reject_{member['id']}"
-                    ):
-                        try:
-                            supabase.table(
-                                "group_memberships"
-                            ).delete().eq(
-                                "id", member["id"]
-                            ).execute()
-
-                            st.rerun()
-
-                        except Exception as e:
-                            show_error(e, "Rejection failed")
-
-    st.markdown("### Members")
-
-    group = get_group(supabase, group_id)
-    owner_id = str(group.get("created_by")) if group else ""
-
-    for member in approved:
-        member_id = str(member.get("user_id"))
-        profile = profiles.get(member_id)
         role = member.get("membership_role", "member")
 
         with st.container(border=True):
-            col1, col2 = st.columns([1, 4])
+            col1, col2 = st.columns([4, 1])
 
             with col1:
-                picture = profile_picture(supabase, profile)
-
-                if picture:
-                    st.image(picture, width=55)
-                else:
-                    st.markdown("## 👤")
-
-            with col2:
-                st.write(f"**{profile_name(profile)}**")
+                st.write(f"**{name}**")
                 st.caption(role.title())
 
-            if admin and member_id != owner_id and member_id != str(user_id):
-                if role not in ADMIN_ROLES:
+            with col2:
+                if current_user_admin and member_id != user_id:
                     if st.button(
-                        "Make admin",
-                        key=f"promote_{member['id']}"
+                        "Remove",
+                        key=f"remove_member_{member.get('id')}"
                     ):
-                        try:
-                            supabase.table(
-                                "group_memberships"
-                            ).update({
-                                "membership_role": "admin"
-                            }).eq(
-                                "id", member["id"]
-                            ).execute()
-
+                        if remove_group_member(
+                            supabase, member.get("id")
+                        ):
+                            st.success("Member removed.")
                             st.rerun()
 
-                        except Exception as e:
-                            show_error(e, "Could not promote member")
 
-                if st.button(
-                    "Remove member",
-                    key=f"remove_{member['id']}"
-                ):
-                    try:
-                        supabase.table(
-                            "group_memberships"
-                        ).delete().eq(
-                            "id", member["id"]
-                        ).execute()
+def render_group_admin_requests(supabase, group_id):
+    st.subheader("Membership requests")
 
-                        st.rerun()
+    try:
+        result = (
+            supabase.table("group_memberships")
+            .select("*")
+            .eq("group_id", group_id)
+            .eq("status", "pending")
+            .execute()
+        )
 
-                    except Exception as e:
-                        show_error(e, "Could not remove member")
+        requests = result.data or []
 
-    if admin:
-        st.divider()
-        st.markdown("### Add a member")
-
-        with st.form(f"add_member_{group_id}"):
-            new_user_id = st.text_input("Member's EcoLoop user ID")
-
-            submitted = st.form_submit_button("Add member")
-
-            if submitted:
-                try:
-                    supabase.table(
-                        "group_memberships"
-                    ).insert({
-                        "group_id": group_id,
-                        "user_id": new_user_id.strip(),
-                        "membership_role": "member",
-                        "status": "approved"
-                    }).execute()
-
-                    st.success("Member added.")
-                    st.rerun()
-
-                except Exception as e:
-                    show_error(e, "Could not add member")
-
-
-# =========================================================
-# GROUP INFORMATION
-# =========================================================
-
-def group_profile(supabase, group, user_id):
-    group_id = group["id"]
-    admin = is_admin(supabase, group_id, user_id)
-
-    st.subheader("Group information")
-
-    picture = media_url(supabase, group.get("image_url"))
-
-    if picture:
-        st.image(picture, width=150)
-    else:
-        st.markdown("## 👥")
-
-    st.markdown(f"### {group.get('name', 'Group')}")
-    st.write(group.get("description") or "No description.")
-
-    if group.get("location"):
-        st.caption("📍 " + group["location"])
-
-    st.caption(
-        f"👥 {len(get_approved_members(supabase, group_id))} members"
-    )
-
-    if not admin:
+    except Exception:
+        st.warning("Could not load membership requests.")
         return
 
-    st.divider()
-    st.markdown("### Edit group")
-
-    with st.form(f"edit_group_{group_id}"):
-        name = st.text_input(
-            "Group name",
-            value=group.get("name", "")
-        )
-
-        description = st.text_area(
-            "Description",
-            value=group.get("description", "")
-        )
-
-        location = st.text_input(
-            "Location",
-            value=group.get("location", "")
-        )
-
-        image = st.file_uploader(
-            "New group picture",
-            type=["png", "jpg", "jpeg"],
-            key=f"edit_group_picture_{group_id}"
-        )
-
-        submitted = st.form_submit_button("Save changes")
-
-        if submitted:
-            data = {
-                "name": name.strip(),
-                "description": description.strip(),
-                "location": location.strip()
-            }
-
-            if image:
-                path = upload_media(
-                    supabase,
-                    image,
-                    f"{group_id}/{user_id}"
-                )
-
-                if not path:
-                    return
-
-                data["image_url"] = path
-
-            try:
-                supabase.table(
-                    "community_groups"
-                ).update(data).eq(
-                    "id", group_id
-                ).execute()
-
-                st.success("Group updated.")
-                st.rerun()
-
-            except Exception as e:
-                show_error(e, "Could not update group")
-
-
-# =========================================================
-# INVITATIONS
-# =========================================================
-
-def group_invitations(supabase, group_id, user_id):
-    st.subheader("Invitations")
-
-    if not is_admin(supabase, group_id, user_id):
-        st.info("Only group admins can create invitations.")
+    if not requests:
+        st.caption("There are no pending requests.")
         return
 
-    if st.button(
-        "＋ Create invitation",
-        key=f"create_invite_{group_id}"
-    ):
-        code = uuid.uuid4().hex[:12].upper()
-
-        try:
-            supabase.table(
-                "community_invites"
-            ).insert({
-                "invite_code": code,
-                "target_type": "group",
-                "target_id": group_id,
-                "created_by": user_id,
-                "is_active": True,
-                "max_uses": 50,
-                "uses": 0
-            }).execute()
-
-            st.session_state[
-                f"invite_code_{group_id}"
-            ] = code
-
-            st.rerun()
-
-        except Exception as e:
-            show_error(e, "Could not create invitation")
-
-    code = st.session_state.get(
-        f"invite_code_{group_id}"
-    )
-
-    if code:
-        st.success("Invitation created.")
-        st.code(code)
-
-        st.caption(
-            "Share this code with people who want to join."
+    for request in requests:
+        profile = get_member_profile(
+            supabase, request.get("user_id")
         )
 
-
-def redeem_invitation(supabase, user_id, code=None):
-    st.subheader("Join a group")
-
-    if not code:
-        code = st.text_input("Invitation code").strip().upper()
-
-    if st.button("Find invitation", use_container_width=True):
-        if not code:
-            st.warning("Enter an invitation code.")
-            return
-
-        try:
-            result = supabase.table(
-                "community_invites"
-            ).select("*").eq(
-                "invite_code", code
-            ).eq(
-                "is_active", True
-            ).limit(1).execute()
-
-            found = rows(result)
-
-            if not found:
-                st.error("Invitation unavailable.")
-                return
-
-            invite = found[0]
-
-            if invite.get("target_type") != "group":
-                st.error("This invitation is not for a group.")
-                return
-
-            group = get_group(supabase, invite.get("target_id"))
-
-            if not group:
-                st.error("Group not found.")
-                return
-
-            if is_member(supabase, group["id"], user_id):
-                st.success("You are already a member.")
-                return
-
-            request_to_join(
-                supabase,
-                group["id"],
-                user_id
-            )
-
-        except Exception as e:
-            show_error(e, "Could not retrieve invitation")
-
-
-# =========================================================
-# GROUP MEETINGS
-# =========================================================
-
-def group_meetings(group_id):
-    st.subheader("Group meetings")
-
-    st.write(
-        "Create an external video meeting room for your group."
-    )
-
-    if st.button(
-        "＋ Create meeting room",
-        key=f"meeting_{group_id}"
-    ):
-        room = (
-            "EcoLoop-"
-            + str(group_id).replace("-", "")[:12]
-            + "-"
-            + uuid.uuid4().hex[:8]
-        )
-
-        st.session_state[
-            f"meeting_url_{group_id}"
-        ] = "https://meet.jit.si/" + quote(room)
-
-    url = st.session_state.get(
-        f"meeting_url_{group_id}"
-    )
-
-    if url:
-        st.link_button(
-            "Join video meeting",
-            url,
-            use_container_width=True
-        )
-
-        st.caption("Video meetings are hosted by Jitsi.")
-
-
-# =========================================================
-# GROUP CHAT WORKSPACE
-# =========================================================
-
-def group_workspace(supabase, group_id, user_id):
-    group = get_group(supabase, group_id)
-
-    if not group:
-        st.error("Group not found.")
-        return
-
-    if not is_member(supabase, group_id, user_id):
-        st.error("You are not an approved member of this group.")
-        return
-
-    picture = media_url(supabase, group.get("image_url"))
-
-    back, image_col, heading = st.columns([1, 1, 5])
-
-    with back:
-        if st.button("←", key=f"back_group_{group_id}"):
-            st.session_state["ecoloop_open_group_id"] = None
-            st.session_state["ecoloop_group_info_open"] = False
-            st.rerun()
-
-    with image_col:
-        if picture:
-            st.image(picture, width=50)
-        else:
-            st.markdown("## 👥")
-
-    with heading:
-        if st.button(
-            group.get("name", "Group"),
-            key=f"group_title_{group_id}"
-        ):
-            st.session_state["ecoloop_group_info_open"] = (
-                not st.session_state.get("ecoloop_group_info_open", False)
-            )
-            st.rerun()
-
-        st.caption(
-            f"{len(get_approved_members(supabase, group_id))} members"
-        )
-
-    if st.session_state.get("ecoloop_group_info_open"):
-        tabs = st.tabs([
-            "Information",
-            "Members",
-            "Invitations",
-            "Meetings"
-        ])
-
-        with tabs[0]:
-            group_profile(supabase, group, user_id)
-
-        with tabs[1]:
-            group_members(supabase, group_id, user_id)
-
-        with tabs[2]:
-            group_invitations(supabase, group_id, user_id)
-
-        with tabs[3]:
-            group_meetings(group_id)
-
-    else:
-        chat_area(supabase, group_id, user_id)
-
-        if st.button(
-            "ⓘ Group information",
-            key=f"group_info_button_{group_id}",
-            use_container_width=True
-        ):
-            st.session_state["ecoloop_group_info_open"] = True
-            st.rerun()
-
-    mark_group_read(supabase, group_id, user_id)
-
-
-# =========================================================
-# WHATSAPP-STYLE GROUP CONVERSATION LIST
-# =========================================================
-
-def my_groups_page(supabase, user_id):
-    st.subheader("Chats · Groups")
-
-    groups = get_my_groups(supabase, user_id)
-
-    if not groups:
-        st.info("You haven't joined any groups yet.")
-        return
-
-    for group in groups:
-        group_id = group["id"]
-        latest = get_latest_message(supabase, group_id)
-        count = get_group_unread(supabase, group_id, user_id)
-
-        profile = None
-
-        if latest and latest.get("sender_id"):
-            profile = get_profiles(
-                supabase,
-                [latest["sender_id"]]
-            ).get(str(latest["sender_id"]))
-
-        picture = media_url(
-            supabase,
-            group.get("image_url")
-        )
+        name = (
+            profile.get("display_name")
+            or profile.get("username")
+            or "New member"
+        ) if profile else "New member"
 
         with st.container(border=True):
-            left, middle, right = st.columns([1, 4, 1])
-
-            with left:
-                if picture:
-                    st.image(picture, width=60)
-                else:
-                    st.markdown("## 👥")
-
-            with middle:
-                st.markdown(f"**{group.get('name', 'Group')}**")
-
-                if latest:
-                    st.caption(
-                        f"{profile_name(profile)}: "
-                        f"{message_preview(latest)}"
-                    )
-                else:
-                    st.caption("Start the conversation")
-
-            with right:
-                if latest:
-                    st.caption(format_time(latest.get("created_at")))
-
-                if count:
-                    st.success(str(count))
+            st.write(f"**{name}**")
 
             if st.button(
-                "Open conversation",
-                key=f"open_group_{group_id}",
+                "Approve request",
+                key=f"approve_request_{request.get('id')}",
                 use_container_width=True
             ):
-                st.session_state["ecoloop_open_group_id"] = str(group_id)
-                st.session_state["ecoloop_group_info_open"] = False
-                st.rerun()
+                if approve_group_member(
+                    supabase, request.get("id")
+                ):
+                    st.success("Member approved.")
+                    st.rerun()
 
 
-# =========================================================
-# DISCOVER GROUPS
-# =========================================================
+def render_group_profile(supabase, group, user_id):
+    group_id = group.get("id")
 
-def discover_groups_page(supabase, user_id):
-    st.subheader("Discover groups")
+    st.subheader(group.get("name", "Group"))
 
-    search = st.text_input(
-        "🔎 Search groups",
-        placeholder="Group name, topic or location..."
-    ).lower()
-
-    communities = load_communities(supabase)
-
-    community_names = ["All communities"] + [
-        c.get("name", "Community")
-        for c in communities
-    ]
-
-    selected = st.selectbox(
-        "Community filter",
-        community_names
-    )
-
-    create_group(supabase, user_id)
-
-    community_lookup = {
-        str(c["id"]): c.get("name", "")
-        for c in communities
-    }
-
-    for group in load_groups(supabase):
-        community_name = community_lookup.get(
-            str(group.get("community_id")), ""
+    if group.get("image_url"):
+        st.image(
+            group["image_url"],
+            use_container_width=True
         )
 
-        searchable = " ".join([
-            safe_text(group.get("name")),
-            safe_text(group.get("description")),
-            safe_text(group.get("location")),
-            community_name
-        ]).lower()
+    st.write(group.get("description") or "No description added.")
 
-        if search and search not in searchable:
-            continue
+    if group.get("location"):
+        st.caption(f"📍 {group['location']}")
 
-        if selected != "All communities" and community_name != selected:
-            continue
+    members = get_group_members(supabase, group_id)
 
-        group_id = group["id"]
-        picture = media_url(supabase, group.get("image_url"))
+    st.caption(f"👥 {len(members)} approved members")
 
-        with st.container(border=True):
-            if picture:
-                st.image(picture, width=90)
+    membership = get_group_membership(
+        supabase, group_id, user_id
+    )
 
-            st.markdown(f"**{group.get('name', 'Group')}**")
-            st.write(group.get("description") or "No description.")
+    if not membership:
+        if st.button(
+            "Join group",
+            key=f"join_group_{group_id}",
+            use_container_width=True
+        ):
+            success, message = request_group_membership(
+                supabase, group_id, user_id
+            )
 
-            if community_name:
-                st.caption("🌍 " + community_name)
-
-            if group.get("location"):
-                st.caption("📍 " + group["location"])
-
-            if is_member(supabase, group_id, user_id):
-                if st.button(
-                    "Open group",
-                    key=f"discover_open_{group_id}"
-                ):
-                    st.session_state["ecoloop_open_group_id"] = str(group_id)
-                    st.rerun()
+            if success:
+                st.success(message)
             else:
-                if st.button(
-                    "Request to join",
-                    key=f"discover_join_{group_id}"
-                ):
-                    request_to_join(supabase, group_id, user_id)
+                st.info(message)
 
+            st.rerun()
 
-# =========================================================
-# CHANNELS
-# =========================================================
-
-def load_channels(supabase, community_id):
-    try:
-        result = supabase.table(
-            "community_channels"
-        ).select("*").eq(
-            "community_id", community_id
-        ).eq(
-            "is_active", True
-        ).order("created_at", desc=True).execute()
-
-        return rows(result)
-
-    except Exception:
-        return []
-
-
-def get_channel_messages(supabase, channel_id, limit=100):
-    try:
-        result = supabase.table(
-            "channel_messages"
-        ).select("*").eq(
-            "channel_id", channel_id
-        ).order(
-            "created_at", desc=True
-        ).limit(limit).execute()
-
-        return list(reversed(rows(result)))
-
-    except Exception:
-        return []
-
-
-def channel_last_read(supabase, channel_id, user_id):
-    try:
-        result = supabase.table(
-            "channel_read_status"
-        ).select("last_read_at").eq(
-            "channel_id", channel_id
-        ).eq(
-            "user_id", user_id
-        ).limit(1).execute()
-
-        found = rows(result)
-        return found[0].get("last_read_at") if found else None
-
-    except Exception:
-        return None
-
-
-def mark_channel_read(supabase, channel_id, user_id):
-    try:
-        supabase.table(
-            "channel_read_status"
-        ).upsert({
-            "channel_id": channel_id,
-            "user_id": user_id,
-            "last_read_at": now_iso()
-        }, on_conflict="channel_id,user_id").execute()
-
-    except Exception:
-        pass
-
-
-def channel_unread_count(supabase, channel_id, user_id):
-    last_read = channel_last_read(
-        supabase, channel_id, user_id
-    )
-
-    if not last_read:
-        return 0
-
-    try:
-        result = supabase.table(
-            "channel_messages"
-        ).select("id,sender_id").eq(
-            "channel_id", channel_id
-        ).gt(
-            "created_at", last_read
-        ).execute()
-
-        return sum(
-            1 for m in rows(result)
-            if str(m.get("sender_id")) != str(user_id)
-        )
-
-    except Exception:
-        return 0
-
-
-def create_channel(supabase, community, user_id):
-    if str(community.get("created_by")) != str(user_id):
         return
 
-    community_id = community["id"]
-
-    with st.expander("＋ Create announcement channel"):
-        with st.form(f"create_channel_{community_id}"):
-            name = st.text_input("Channel name")
-            description = st.text_area("Channel description")
-
-            submitted = st.form_submit_button("Create channel")
-
-            if submitted:
-                try:
-                    supabase.table(
-                        "community_channels"
-                    ).insert({
-                        "community_id": community_id,
-                        "name": name.strip(),
-                        "description": description.strip(),
-                        "created_by": user_id,
-                        "is_active": True
-                    }).execute()
-
-                    st.success("Channel created.")
-                    st.rerun()
-
-                except Exception as e:
-                    show_error(e, "Channel creation failed")
-
-
-def channel_workspace(supabase, channel, user_id):
-    st.subheader("📢 " + channel.get("name", "Channel"))
-    st.caption(channel.get("description") or "Community announcements")
-
-    messages = get_channel_messages(
-        supabase,
-        channel["id"]
-    )
-
-    profiles = get_profiles(
-        supabase,
-        [m.get("sender_id") for m in messages]
-    )
-
-    for message in messages:
-        profile = profiles.get(str(message.get("sender_id")))
-
-        with st.container(border=True):
-            st.caption(
-                f"**{profile_name(profile)}** · "
-                f"{format_time(message.get('created_at'))}"
-            )
-
-            st.write(message.get("message_text", ""))
-
-    if str(channel.get("created_by")) == str(user_id):
-        st.divider()
-
-        with st.form(f"channel_post_{channel['id']}"):
-            post = st.text_area(
-                "Write an announcement",
-                placeholder="Share an update with the community..."
-            )
-
-            submitted = st.form_submit_button(
-                "Publish announcement",
-                use_container_width=True
-            )
-
-            if submitted:
-                if not post.strip():
-                    st.warning("Write an announcement.")
-                else:
-                    try:
-                        supabase.table(
-                            "channel_messages"
-                        ).insert({
-                            "channel_id": channel["id"],
-                            "sender_id": user_id,
-                            "message_text": post.strip()
-                        }).execute()
-
-                        st.success("Announcement published.")
-                        st.rerun()
-
-                    except Exception as e:
-                        show_error(e, "Could not publish announcement")
-    else:
-        st.caption("Only the channel creator can publish announcements.")
-
-    mark_channel_read(supabase, channel["id"], user_id)
-
-
-# =========================================================
-# COMMUNITIES PAGE
-# =========================================================
-
-def communities_page(supabase, user_id):
-    st.subheader("Communities")
-
-    communities = load_communities(supabase)
-
-    if not communities:
-        st.info("No communities have been created yet.")
+    if membership.get("status") == "pending":
+        st.info("Your membership request is awaiting approval.")
         return
 
-    for community in communities:
-        community_id = community["id"]
+    if membership.get("status") != "approved":
+        st.info("You are not an approved member of this group.")
+        return
 
-        with st.container(border=True):
-            st.markdown(f"### 🌍 {community.get('name', 'Community')}")
-            st.write(community.get("description") or "No description.")
+    st.success("You are a member of this group.")
 
-            if community.get("location"):
-                st.caption("📍 " + community["location"])
 
-            groups = get_community_groups(
-                supabase,
-                community_id
+def render_group_workspace(supabase, group, user_id):
+    group_id = group.get("id")
+
+    st.markdown(f"## {group.get('name', 'Group')}")
+
+    description = group.get("description") or ""
+    if description:
+        st.caption(description)
+
+    tab_chat, tab_members, tab_admin = st.tabs([
+        "💬 Chat",
+        "👥 Members",
+        "⚙️ Manage"
+    ])
+
+    with tab_chat:
+        mark_group_as_read(supabase, group_id, user_id)
+
+        messages = load_group_messages(supabase, group_id)
+
+        if not messages:
+            st.info("No messages yet. Start the conversation.")
+
+        for message in messages:
+            render_group_message(
+                supabase, message, user_id
             )
 
-            channels = load_channels(
-                supabase,
-                community_id
+        render_group_chat_composer(
+            supabase, group_id, user_id
+        )
+
+    with tab_members:
+        render_group_members(
+            supabase, group_id, user_id
+        )
+
+    with tab_admin:
+        if is_group_admin(supabase, group_id, user_id):
+            render_group_admin_requests(
+                supabase, group_id
             )
-
-            st.caption(
-                f"👥 {len(groups)} groups · "
-                f"📢 {len(channels)} channels"
-            )
-
-            create_channel(
-                supabase,
-                community,
-                user_id
-            )
-
-            group_tab, channel_tab = st.tabs([
-                "Groups",
-                "Channels"
-            ])
-
-            with group_tab:
-                for group in groups:
-                    st.write("👥 **" + group.get("name", "Group") + "**")
-
-                    if is_member(supabase, group["id"], user_id):
-                        if st.button(
-                            "Open group",
-                            key=f"community_open_{group['id']}"
-                        ):
-                            st.session_state["ecoloop_open_group_id"] = str(group["id"])
-                            st.rerun()
-                    else:
-                        if st.button(
-                            "Request to join",
-                            key=f"community_join_{group['id']}"
-                        ):
-                            request_to_join(
-                                supabase,
-                                group["id"],
-                                user_id
-                            )
-
-            with channel_tab:
-                for channel in channels:
-                    count = channel_unread_count(
-                        supabase,
-                        channel["id"],
-                        user_id
-                    )
-
-                    st.markdown(
-                        f"**📢 {channel.get('name', 'Channel')}**"
-                    )
-
-                    if channel.get("description"):
-                        st.caption(channel["description"])
-
-                    if count:
-                        st.success(f"{count} unread announcements")
-
-                    if st.button(
-                        "Open channel",
-                        key=f"open_channel_{channel['id']}"
-                    ):
-                        st.session_state[
-                            "ecoloop_open_channel_id"
-                        ] = str(channel["id"])
-                        st.rerun()
+        else:
+            st.info("Group management is available to admins.")
 
 
-# =========================================================
-# PRIVATE ONE-TO-ONE CHATS
-# =========================================================
+# ============================================================
+# PRIVATE CONVERSATIONS
+# ============================================================
 
-def ordered_pair(user_a, user_b):
-    return sorted([str(user_a), str(user_b)])
-
-
-def load_direct_conversations(supabase, user_id):
+def get_direct_conversation(
+    supabase, user_one, user_two
+):
     try:
-        first = supabase.table(
-            "direct_conversations"
-        ).select("*").eq(
-            "participant_one", user_id
-        ).execute()
+        result = (
+            supabase.table("direct_conversations")
+            .select("*")
+            .or_(
+                f"and(participant_one.eq.{user_one},"
+                f"participant_two.eq.{user_two}),"
+                f"and(participant_one.eq.{user_two},"
+                f"participant_two.eq.{user_one})"
+            )
+            .limit(1)
+            .execute()
+        )
 
-        second = supabase.table(
-            "direct_conversations"
-        ).select("*").eq(
-            "participant_two", user_id
-        ).execute()
-
-        combined = rows(first) + rows(second)
-
-        unique = {}
-
-        for conversation in combined:
-            unique[str(conversation["id"])] = conversation
-
-        return list(unique.values())
+        return result.data[0] if result.data else None
 
     except Exception:
-        return []
-
-
-def get_or_create_direct_conversation(supabase, user_id, other_user_id):
-    if str(user_id) == str(other_user_id):
-        st.warning("You cannot start a chat with yourself.")
-        return None
-
-    one, two = ordered_pair(user_id, other_user_id)
-
-    try:
-        result = supabase.table(
-            "direct_conversations"
-        ).select("*").eq(
-            "participant_one", one
-        ).eq(
-            "participant_two", two
-        ).limit(1).execute()
-
-        found = rows(result)
-
-        if found:
-            return found[0]
-
-        result = supabase.table(
-            "direct_conversations"
-        ).insert({
-            "participant_one": one,
-            "participant_two": two,
-            "created_by": user_id
-        }).execute()
-
-        created = rows(result)
-
-        return created[0] if created else None
-
-    except Exception as e:
-        show_error(
-            e,
-            "Private chats need the additional database setup."
-        )
         return None
 
 
-def get_direct_messages(supabase, conversation_id, limit=200):
-    try:
-        result = supabase.table(
-            "direct_messages"
-        ).select("*").eq(
-            "conversation_id", conversation_id
-        ).order(
-            "created_at", desc=True
-        ).limit(limit).execute()
+def create_direct_conversation(
+    supabase, user_one, user_two
+):
+    existing = get_direct_conversation(
+        supabase, user_one, user_two
+    )
 
-        return list(reversed(rows(result)))
+    if existing:
+        return existing
+
+    try:
+        result = (
+            supabase.table("direct_conversations")
+            .insert({
+                "participant_one": user_one,
+                "participant_two": user_two,
+                "created_by": user_one
+            })
+            .execute()
+        )
+
+        return result.data[0] if result.data else None
+
+    except Exception as error:
+        st.error(f"Could not start conversation: {error}")
+        return None
+
+
+def load_direct_messages(
+    supabase, conversation_id, limit=100
+):
+    try:
+        result = (
+            supabase.table("direct_messages")
+            .select("*")
+            .eq("conversation_id", conversation_id)
+            .order("created_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+
+        return result.data or []
 
     except Exception:
         return []
-
-
-def get_direct_unread(supabase, conversation_id, user_id):
-    try:
-        status = supabase.table(
-            "direct_read_status"
-        ).select("last_read_at").eq(
-            "conversation_id", conversation_id
-        ).eq(
-            "user_id", user_id
-        ).limit(1).execute()
-
-        found = rows(status)
-        if not found:
-            return 0
-
-        last_read = found[0]["last_read_at"]
-
-        messages = supabase.table(
-            "direct_messages"
-        ).select("id,sender_id").eq(
-            "conversation_id", conversation_id
-        ).gt(
-            "created_at", last_read
-        ).execute()
-
-        return sum(
-            1 for m in rows(messages)
-            if str(m.get("sender_id")) != str(user_id)
-        )
-
-    except Exception:
-        return 0
-
-
-def mark_direct_read(supabase, conversation_id, user_id):
-    try:
-        supabase.table(
-            "direct_read_status"
-        ).upsert({
-            "conversation_id": conversation_id,
-            "user_id": user_id,
-            "last_read_at": now_iso()
-        }, on_conflict="conversation_id,user_id").execute()
-
-    except Exception:
-        pass
 
 
 def send_direct_message(
     supabase,
     conversation_id,
     user_id,
-    message_text,
-    uploaded_file=None
+    message_text
 ):
-    message_text = safe_text(message_text)
-
-    if not message_text and not uploaded_file:
-        st.warning("Write a message or attach a file.")
-        return False
-
-    data = {
-        "conversation_id": conversation_id,
-        "sender_id": user_id,
-        "message_text": message_text
-    }
-
-    if uploaded_file:
-        path = upload_media(
-            supabase,
-            uploaded_file,
-            f"direct/{conversation_id}/{user_id}"
-        )
-
-        if not path:
-            return False
-
-        data.update({
-            "attachment_path": path,
-            "attachment_name": uploaded_file.name,
-            "attachment_type": uploaded_file.type
-        })
-
     try:
-        supabase.table(
-            "direct_messages"
-        ).insert(data).execute()
-
-        mark_direct_read(
-            supabase,
-            conversation_id,
-            user_id
+        result = (
+            supabase.table("direct_messages")
+            .insert({
+                "conversation_id": conversation_id,
+                "sender_id": user_id,
+                "message_text": message_text.strip()
+            })
+            .execute()
         )
 
-        return True
+        return bool(result.data)
 
-    except Exception as e:
-        show_error(e, "Private message could not be sent")
+    except Exception as error:
+        st.error(f"Message could not be sent: {error}")
         return False
 
 
-def direct_chat_workspace(supabase, conversation, user_id):
-    conversation_id = conversation["id"]
+def mark_direct_as_read(
+    supabase, conversation_id, user_id
+):
+    try:
+        from datetime import datetime, timezone
 
-    one = str(conversation["participant_one"])
-    two = str(conversation["participant_two"])
+        now = datetime.now(timezone.utc).isoformat()
 
-    other_id = two if one == str(user_id) else one
+        existing = (
+            supabase.table("direct_read_status")
+            .select("id")
+            .eq("conversation_id", conversation_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
 
-    profile = get_profile(supabase, other_id)
-    picture = profile_picture(supabase, profile)
+        if existing.data:
+            supabase.table("direct_read_status").update({
+                "last_read_at": now
+            }).eq("id", existing.data[0]["id"]).execute()
 
-    back, image_col, heading = st.columns([1, 1, 5])
-
-    with back:
-        if st.button("←", key=f"direct_back_{conversation_id}"):
-            st.session_state["ecoloop_open_direct_id"] = None
-            st.rerun()
-
-    with image_col:
-        if picture:
-            st.image(picture, width=50)
         else:
-            st.markdown("## 👤")
+            supabase.table("direct_read_status").insert({
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+                "last_read_at": now
+            }).execute()
 
-    with heading:
-        st.markdown(f"**{profile_name(profile)}**")
+    except Exception:
+        pass
 
-        if profile.get("username"):
-            st.caption("@" + profile["username"])
 
-    st.divider()
+def get_direct_unread_count(
+    supabase, conversation_id, user_id
+):
+    try:
+        status = (
+            supabase.table("direct_read_status")
+            .select("last_read_at")
+            .eq("conversation_id", conversation_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
 
-    messages = get_direct_messages(
-        supabase,
-        conversation_id
-    )
-
-    profiles = get_profiles(
-        supabase,
-        [m.get("sender_id") for m in messages]
-    )
-
-    for message in messages:
-        mine = str(message.get("sender_id")) == str(user_id)
-        sender_profile = profiles.get(str(message.get("sender_id")))
-
-        with st.container(border=True):
-            st.caption(
-                ("You" if mine else profile_name(sender_profile))
-                + " · "
-                + format_time(message.get("created_at"))
+        if not status.data:
+            messages = load_direct_messages(
+                supabase, conversation_id
+            )
+            return sum(
+                1 for message in messages
+                if message.get("sender_id") != user_id
             )
 
-            if message.get("deleted_at"):
-                st.caption("Message deleted.")
-            else:
-                st.write(message.get("message_text") or "")
+        last_read = status.data[0].get("last_read_at")
 
-                display_attachment(
-                    supabase,
-                    message.get("attachment_path"),
-                    message.get("attachment_name"),
-                    message.get("attachment_type")
-                )
+        if not last_read:
+            return 0
 
-    st.divider()
-
-    with st.form(
-        f"direct_form_{conversation_id}",
-        clear_on_submit=True
-    ):
-        text = st.text_area(
-            "Message",
-            placeholder="Type a private message...",
-            label_visibility="collapsed"
+        result = (
+            supabase.table("direct_messages")
+            .select("id", count="exact")
+            .eq("conversation_id", conversation_id)
+            .gt("created_at", last_read)
+            .neq("sender_id", user_id)
+            .execute()
         )
 
-        upload = st.file_uploader(
-            "Attach media or document",
-            key=f"direct_upload_{conversation_id}"
+        return result.count or 0
+
+    except Exception:
+        return 0
+
+
+def render_direct_message(
+    supabase, message, user_id
+):
+    own_message = message.get("sender_id") == user_id
+
+    profile = get_member_profile(
+        supabase, message.get("sender_id")
+    )
+
+    sender_name = (
+        profile.get("display_name")
+        or profile.get("username")
+        or "EcoLoop member"
+    ) if profile else "EcoLoop member"
+
+    timestamp = message.get("created_at", "")
+
+    with st.container(border=True):
+        if own_message:
+            st.caption("You")
+        else:
+            st.caption(sender_name)
+
+        st.write(message.get("message_text") or "")
+
+        if timestamp:
+            st.caption(
+                timestamp[:16].replace("T", " ")
+            )
+
+
+def render_direct_chat_composer(
+    supabase, conversation_id, user_id
+):
+    with st.form(
+        key=f"direct_message_form_{conversation_id}",
+        clear_on_submit=True
+    ):
+        message = st.text_area(
+            "Message",
+            placeholder="Write a message...",
+            label_visibility="collapsed",
+            height=75
         )
 
         submitted = st.form_submit_button(
-            "Send ➤",
+            "Send",
             use_container_width=True
         )
 
-        if submitted:
+        if submitted and message.strip():
             if send_direct_message(
                 supabase,
                 conversation_id,
                 user_id,
-                text,
-                upload
+                message
             ):
                 st.rerun()
 
-    mark_direct_read(
-        supabase,
-        conversation_id,
-        user_id
+
+def render_direct_chat(
+    supabase, conversation, user_id, other_user_id
+):
+    conversation_id = conversation.get("id")
+
+    profile = get_member_profile(
+        supabase, other_user_id
     )
 
+    other_name = (
+        profile.get("display_name")
+        or profile.get("username")
+        or "EcoLoop member"
+    ) if profile else "EcoLoop member"
 
-def direct_chats_page(supabase, user_id):
-    st.subheader("Private chats")
+    st.markdown(f"### 💬 {other_name}")
 
-    with st.expander("＋ Start a new chat", expanded=False):
-        with st.form("start_private_chat"):
-            other_user_id = st.text_input(
-                "Enter the other member's EcoLoop user ID"
+    if profile and profile.get("avatar_url"):
+        st.image(
+            profile["avatar_url"],
+            width=75
+        )
+
+    mark_direct_as_read(
+        supabase, conversation_id, user_id
+    )
+
+    messages = load_direct_messages(
+        supabase, conversation_id
+    )
+
+    if not messages:
+        st.info("This conversation is empty. Say hello!")
+
+    for message in messages:
+        render_direct_message(
+            supabase, message, user_id
+        )
+
+    render_direct_chat_composer(
+        supabase, conversation_id, user_id
+            )
+
+# ============================================================
+# PART 4 — COMMUNITY HOME, CHAT LIST, CHANNELS AND STORIES
+# ============================================================
+
+def get_other_conversation_user(conversation, user_id):
+    if conversation.get("participant_one") == user_id:
+        return conversation.get("participant_two")
+
+    return conversation.get("participant_one")
+
+
+def load_user_conversations(supabase, user_id):
+    try:
+        result = (
+            supabase.table("direct_conversations")
+            .select("*")
+            .or_(
+                f"participant_one.eq.{user_id},"
+                f"participant_two.eq.{user_id}"
+            )
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        return result.data or []
+
+    except Exception:
+        return []
+
+
+def get_last_direct_message(supabase, conversation_id):
+    try:
+        result = (
+            supabase.table("direct_messages")
+            .select("*")
+            .eq("conversation_id", conversation_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        return result.data[0] if result.data else None
+
+    except Exception:
+        return None
+
+
+def get_last_group_message(supabase, group_id):
+    try:
+        result = (
+            supabase.table("group_messages")
+            .select("*")
+            .eq("group_id", group_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        return result.data[0] if result.data else None
+
+    except Exception:
+        return None
+
+
+def format_chat_time(timestamp):
+    if not timestamp:
+        return ""
+
+    try:
+        from datetime import datetime
+
+        value = datetime.fromisoformat(
+            timestamp.replace("Z", "+00:00")
+        )
+
+        return value.strftime("%H:%M")
+
+    except Exception:
+        return timestamp[:10]
+
+
+def render_direct_chat_list(supabase, user_id):
+    conversations = load_user_conversations(
+        supabase, user_id
+    )
+
+    if not conversations:
+        st.info(
+            "Your private conversations will appear here. "
+            "Find a member and start chatting."
+        )
+        return
+
+    for conversation in conversations:
+        other_id = get_other_conversation_user(
+            conversation, user_id
+        )
+
+        if not other_id:
+            continue
+
+        profile = get_member_profile(
+            supabase, other_id
+        )
+
+        name = (
+            profile.get("display_name")
+            or profile.get("username")
+            or "EcoLoop member"
+        ) if profile else "EcoLoop member"
+
+        last_message = get_last_direct_message(
+            supabase, conversation.get("id")
+        )
+
+        preview = (
+            last_message.get("message_text")
+            if last_message else "Start a conversation"
+        )
+
+        unread = get_direct_unread_count(
+            supabase, conversation.get("id"), user_id
+        )
+
+        avatar = (
+            profile.get("avatar_url")
+            if profile else None
+        )
+
+        with st.container(border=True):
+            col1, col2, col3 = st.columns([1, 4, 1])
+
+            with col1:
+                if avatar:
+                    st.image(avatar, width=48)
+                else:
+                    st.markdown("👤")
+
+            with col2:
+                st.markdown(f"**{name}**")
+                st.caption(str(preview or "")[:65])
+
+            with col3:
+                if unread:
+                    st.markdown(f"**{unread}**")
+
+                if st.button(
+                    "Open",
+                    key=f"open_direct_{conversation.get('id')}"
+                ):
+                    st.session_state["community_active_chat"] = {
+                        "type": "direct",
+                        "conversation": conversation,
+                        "other_user_id": other_id
+                    }
+                    st.rerun()
+
+
+def render_group_chat_list(supabase, user_id):
+    try:
+        result = (
+            supabase.table("group_memberships")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("status", "approved")
+            .execute()
+        )
+
+        memberships = result.data or []
+
+    except Exception:
+        st.warning("Could not load your groups.")
+        return
+
+    if not memberships:
+        st.info("Groups you join will appear here.")
+        return
+
+    for membership in memberships:
+        group_id = membership.get("group_id")
+
+        try:
+            group_result = (
+                supabase.table("community_groups")
+                .select("*")
+                .eq("id", group_id)
+                .limit(1)
+                .execute()
+            )
+
+            group = (
+                group_result.data[0]
+                if group_result.data else None
+            )
+
+        except Exception:
+            group = None
+
+        if not group:
+            continue
+
+        last_message = get_last_group_message(
+            supabase, group_id
+        )
+
+        preview = (
+            last_message.get("message_text")
+            if last_message else "No messages yet"
+        )
+
+        unread = get_group_unread_count(
+            supabase, group_id, user_id
+        )
+
+        with st.container(border=True):
+            col1, col2, col3 = st.columns([1, 4, 1])
+
+            with col1:
+                if group.get("image_url"):
+                    st.image(
+                        group["image_url"],
+                        width=48
+                    )
+                else:
+                    st.markdown("👥")
+
+            with col2:
+                st.markdown(
+                    f"**{group.get('name', 'Group')}**"
+                )
+                st.caption(str(preview or "")[:65])
+
+            with col3:
+                if unread:
+                    st.markdown(f"**{unread}**")
+
+                if st.button(
+                    "Open",
+                    key=f"open_group_{group_id}"
+                ):
+                    st.session_state[
+                        "community_active_group"
+                    ] = group
+                    st.rerun()
+
+
+def render_chats_page(supabase, user_id):
+    st.markdown("## 💬 Chats")
+
+    active_chat = st.session_state.get(
+        "community_active_chat"
+    )
+
+    if active_chat:
+        if st.button("← Back to chats"):
+            st.session_state.pop(
+                "community_active_chat", None
+            )
+            st.rerun()
+
+        if active_chat.get("type") == "direct":
+            render_direct_chat(
+                supabase,
+                active_chat["conversation"],
+                user_id,
+                active_chat["other_user_id"]
+            )
+
+        return
+
+    direct_tab, group_tab = st.tabs([
+        "Private chats",
+        "Group chats"
+    ])
+
+    with direct_tab:
+        render_direct_chat_list(supabase, user_id)
+
+    with group_tab:
+        render_group_chat_list(supabase, user_id)
+
+
+def render_groups_page(supabase, user_id):
+    st.markdown("## 👥 Groups")
+
+    active_group = st.session_state.get(
+        "community_active_group"
+    )
+
+    if active_group:
+        if st.button("← Back to groups"):
+            st.session_state.pop(
+                "community_active_group", None
+            )
+            st.rerun()
+
+        membership = get_group_membership(
+            supabase, active_group.get("id"), user_id
+        )
+
+        if membership and membership.get("status") == "approved":
+            render_group_workspace(
+                supabase, active_group, user_id
+            )
+        else:
+            render_group_profile(
+                supabase, active_group, user_id
+            )
+
+        return
+
+    create_tab, discover_tab, my_tab = st.tabs([
+        "Create group",
+        "Discover groups",
+        "My groups"
+    ])
+
+    with create_tab:
+        st.write("Create a space for people with shared interests.")
+
+        with st.form("create_ecoloop_group"):
+            name = st.text_input("Group name")
+            description = st.text_area("Description")
+            location = st.text_input("Location")
+
+            communities = load_communities(supabase)
+
+            community_options = {
+                "No community": None
+            }
+
+            for community in communities:
+                community_options[
+                    community.get("name", "Community")
+                ] = community.get("id")
+
+            selected_community = st.selectbox(
+                "Connect to a community",
+                list(community_options.keys())
             )
 
             submitted = st.form_submit_button(
-                "Start conversation",
+                "Create group",
                 use_container_width=True
             )
 
             if submitted:
-                if not other_user_id.strip():
-                    st.warning("Enter a member user ID.")
+                if not name.strip():
+                    st.warning("Enter a group name.")
                 else:
-                    conversation = get_or_create_direct_conversation(
+                    success, group = create_group(
                         supabase,
                         user_id,
-                        other_user_id.strip()
+                        name,
+                        description,
+                        community_options[selected_community],
+                        location
                     )
 
-                    if conversation:
-                        st.session_state[
-                            "ecoloop_open_direct_id"
-                        ] = str(conversation["id"])
+                    if success:
+                        st.success("Your group has been created.")
                         st.rerun()
 
-    conversations = load_direct_conversations(
-        supabase,
-        user_id
-    )
+    with discover_tab:
+        groups = load_groups(supabase)
 
-    if not conversations:
-        st.info("Your private conversations will appear here.")
-        return
+        if not groups:
+            st.info("No groups have been created yet.")
 
-    for conversation in conversations:
-        one = str(conversation["participant_one"])
-        two = str(conversation["participant_two"])
-
-        other_id = two if one == str(user_id) else one
-
-        profile = get_profile(supabase, other_id)
-        picture = profile_picture(supabase, profile)
-
-        messages = get_direct_messages(
-            supabase,
-            conversation["id"],
-            1
-        )
-
-        latest = messages[-1] if messages else None
-
-        count = get_direct_unread(
-            supabase,
-            conversation["id"],
-            user_id
-        )
-
-        with st.container(border=True):
-            left, middle, right = st.columns([1, 4, 1])
-
-            with left:
-                if picture:
-                    st.image(picture, width=55)
-                else:
-                    st.markdown("## 👤")
-
-            with middle:
-                st.markdown(f"**{profile_name(profile)}**")
-                st.caption(
-                    message_preview(latest)
-                    if latest else "Start a conversation"
+        for group in groups:
+            with st.container(border=True):
+                st.markdown(
+                    f"**{group.get('name', 'Group')}**"
                 )
 
-            with right:
-                if count:
-                    st.success(str(count))
+                st.write(
+                    group.get("description")
+                    or "No description available."
+                )
 
-            if st.button(
-                "Open chat",
-                key=f"open_direct_{conversation['id']}",
-                use_container_width=True
-            ):
-                st.session_state[
-                    "ecoloop_open_direct_id"
-                ] = str(conversation["id"])
-                st.rerun()
+                if st.button(
+                    "View group",
+                    key=f"discover_group_{group.get('id')}",
+                    use_container_width=True
+                ):
+                    st.session_state[
+                        "community_active_group"
+                    ] = group
+                    st.rerun()
+
+    with my_tab:
+        render_group_chat_list(supabase, user_id)
 
 
-# =========================================================
-# COMMUNITY HOME AND NAVIGATION
-# =========================================================
+# ============================================================
+# COMMUNITIES
+# ============================================================
 
-def render_community_groups_page(supabase, user_id):
+def render_communities_page(supabase, user_id):
+    st.markdown("## 🌍 Communities")
 
-    if not user_id:
-        st.warning("Please sign in to access EcoLoop Community.")
-        return
-
-    st.session_state["ecoloop_user_id"] = user_id
-
-    # ---------------------------------------------
-    # PRIVATE CHAT OPEN
-    # ---------------------------------------------
-
-    direct_id = st.session_state.get(
-        "ecoloop_open_direct_id"
-    )
-
-    if direct_id:
-        conversations = load_direct_conversations(
-            supabase,
-            user_id
-        )
-
-        conversation = next(
-            (
-                c for c in conversations
-                if str(c.get("id")) == str(direct_id)
-            ),
-            None
-        )
-
-        if conversation:
-            direct_chat_workspace(
-                supabase,
-                conversation,
-                user_id
-            )
-        else:
-            st.error("Private conversation unavailable.")
-            st.session_state["ecoloop_open_direct_id"] = None
-
-        return
-
-    # ---------------------------------------------
-    # GROUP CHAT OPEN
-    # ---------------------------------------------
-
-    group_id = st.session_state.get(
-        "ecoloop_open_group_id"
-    )
-
-    if group_id:
-        group_workspace(
-            supabase,
-            group_id,
-            user_id
-        )
-        return
-
-    # ---------------------------------------------
-    # CHANNEL OPEN
-    # ---------------------------------------------
-
-    channel_id = st.session_state.get(
-        "ecoloop_open_channel_id"
-    )
-
-    if channel_id:
-        channels = safe_query_table(
-            supabase,
-            "community_channels"
-        )
-
-        channel = next(
-            (
-                c for c in channels
-                if str(c.get("id")) == str(channel_id)
-            ),
-            None
-        )
-
-        if channel:
-            if st.button("← Back to Community"):
-                st.session_state["ecoloop_open_channel_id"] = None
-                st.rerun()
-
-            channel_workspace(
-                supabase,
-                channel,
-                user_id
-            )
-        else:
-            st.error("Channel unavailable.")
-            st.session_state["ecoloop_open_channel_id"] = None
-
-        return
-
-    # ---------------------------------------------
-    # INVITATION LINK
-    # ---------------------------------------------
-
-    invite_code = st.query_params.get("invite")
-
-    if invite_code:
-        st.title("🔗 EcoLoop invitation")
-
-        redeem_invitation(
-            supabase,
-            user_id,
-            str(invite_code).upper()
-        )
-
-        if st.button("Back to Community"):
-            st.query_params.clear()
-            st.rerun()
-
-        return
-
-    # ---------------------------------------------
-    # MAIN COMMUNITY HOME
-    # ---------------------------------------------
-
-    st.title("🌍 EcoLoop Community")
-    st.caption("Connect · Share · Learn · Take action")
-
-    groups = get_my_groups(supabase, user_id)
-
-    unread_total = sum(
-        get_group_unread(supabase, g["id"], user_id)
-        for g in groups
-    )
-
-    if unread_total:
-        st.info(f"💬 {unread_total} unread group messages")
-
-    tabs = st.tabs([
-        "💬 Chats",
-        "👥 Groups",
-        "🌍 Communities",
-        "📢 Channels",
-        "👤 Profile",
-        "🔗 Join"
+    create_tab, explore_tab = st.tabs([
+        "Create community",
+        "Explore communities"
     ])
 
-    # CHATS
-    with tabs[0]:
-        chat_type = st.radio(
-            "Conversation type",
-            ["All chats", "Private chats", "Group chats"],
-            horizontal=True,
-            key="community_chat_filter"
-        )
+    with create_tab:
+        with st.form("create_ecoloop_community"):
+            name = st.text_input("Community name")
+            description = st.text_area("What is this community about?")
+            location = st.text_input("Location")
 
-        if chat_type in ["All chats", "Private chats"]:
-            direct_chats_page(
-                supabase,
-                user_id
+            submitted = st.form_submit_button(
+                "Create community",
+                use_container_width=True
             )
 
-        if chat_type in ["All chats", "Group chats"]:
-            st.divider()
-            my_groups_page(
-                supabase,
-                user_id
-            )
+            if submitted:
+                if not name.strip():
+                    st.warning("Enter a community name.")
+                else:
+                    success, data = create_community(
+                        supabase,
+                        user_id,
+                        name,
+                        description,
+                        location
+                    )
 
-    # GROUPS
-    with tabs[1]:
-        discover_groups_page(
-            supabase,
-            user_id
-        )
+                    if success:
+                        st.success("Community created.")
+                        st.rerun()
 
-    # COMMUNITIES
-    with tabs[2]:
-        create_community(
-            supabase,
-            user_id
-        )
-
-        communities_page(
-            supabase,
-            user_id
-        )
-
-    # CHANNELS
-    with tabs[3]:
+    with explore_tab:
         communities = load_communities(supabase)
 
         if not communities:
-            st.info("Create or join a community to access its channels.")
+            st.info("No communities available yet.")
 
         for community in communities:
-            st.markdown(f"### 🌍 {community.get('name', 'Community')}")
+            with st.container(border=True):
+                if community.get("image_url"):
+                    st.image(
+                        community["image_url"],
+                        use_container_width=True
+                    )
 
-            for channel in load_channels(supabase, community["id"]):
-                count = channel_unread_count(
-                    supabase,
-                    channel["id"],
-                    user_id
+                st.markdown(
+                    f"**{community.get('name', 'Community')}**"
                 )
 
-                with st.container(border=True):
-                    st.markdown(
-                        f"**📢 {channel.get('name', 'Channel')}**"
-                    )
+                st.write(
+                    community.get("description")
+                    or "No description added."
+                )
 
+                if community.get("location"):
                     st.caption(
-                        channel.get("description") or "Announcements"
+                        f"📍 {community['location']}"
                     )
 
-                    if count:
-                        st.success(f"{count} unread")
+                community_groups = load_groups(
+                    supabase,
+                    community.get("id")
+                )
 
-                    if st.button(
-                        "Open channel",
-                        key=f"channel_home_{channel['id']}"
-                    ):
-                        st.session_state[
-                            "ecoloop_open_channel_id"
-                        ] = str(channel["id"])
-                        st.rerun()
+                st.caption(
+                    f"{len(community_groups)} groups"
+                )
 
-    # PROFILE
-    with tabs[4]:
-        profile_editor(
-            supabase,
-            user_id
+                if st.button(
+                    "View its groups",
+                    key=f"community_groups_{community.get('id')}"
+                ):
+                    st.session_state[
+                        "community_selected_community"
+                    ] = community
+                    st.rerun()
+
+        selected = st.session_state.get(
+            "community_selected_community"
         )
 
-    # JOIN
-    with tabs[5]:
-        redeem_invitation(
-            supabase,
-            user_id
+        if selected:
+            st.divider()
+            st.subheader(
+                f"Groups in {selected.get('name')}"
+            )
+
+            if st.button("← Back to communities"):
+                st.session_state.pop(
+                    "community_selected_community", None
+                )
+                st.rerun()
+
+            for group in load_groups(
+                supabase, selected.get("id")
+            ):
+                with st.container(border=True):
+                    st.markdown(
+                        f"**{group.get('name', 'Group')}**"
+                    )
+                    st.write(
+                        group.get("description") or ""
+                    )
+
+                    if st.button(
+                        "Open group",
+                        key=f"community_open_group_{group.get('id')}"
+                    ):
+                        st.session_state[
+                            "community_active_group"
+                        ] = group
+                        st.session_state[
+                            "community_page"
+                        ] = "Groups"
+                        st.rerun()
+
+
+# ============================================================
+# CHANNELS
+# ============================================================
+
+def load_community_channels(supabase, community_id=None):
+    try:
+        query = (
+            supabase.table("community_channels")
+            .select("*")
+            .eq("is_active", True)
+            .order("created_at", desc=True)
+        )
+
+        if community_id:
+            query = query.eq("community_id", community_id)
+
+        result = query.execute()
+        return result.data or []
+
+    except Exception:
+        return []
+
+
+def load_channel_messages(supabase, channel_id):
+    try:
+        result = (
+            supabase.table("channel_messages")
+            .select("*")
+            .eq("channel_id", channel_id)
+            .order("created_at", desc=False)
+            .limit(100)
+            .execute()
+        )
+
+        return result.data or []
+
+    except Exception:
+        return []
+
+
+def send_channel_message(
+    supabase, channel_id, user_id, message_text
+):
+    try:
+        supabase.table("channel_messages").insert({
+            "channel_id": channel_id,
+            "sender_id": user_id,
+            "message_text": message_text.strip()
+        }).execute()
+
+        return True
+
+    except Exception as error:
+        st.error(f"Could not publish announcement: {error}")
+        return False
+
+
+def render_channels_page(supabase, user_id):
+    st.markdown("## 📢 Channels")
+    st.caption(
+        "Announcements and updates from EcoLoop communities."
+    )
+
+    channels = load_community_channels(supabase)
+
+    if not channels:
+        st.info("No channels are available yet.")
+        return
+
+    for channel in channels:
+        channel_id = channel.get("id")
+
+        with st.expander(
+            f"📢 {channel.get('name', 'Channel')}"
+        ):
+            st.write(
+                channel.get("description") or ""
+            )
+
+            messages = load_channel_messages(
+                supabase, channel_id
+            )
+
+            if not messages:
+                st.caption("No announcements yet.")
+
+            for message in messages:
+                profile = get_member_profile(
+                    supabase,
+                    message.get("sender_id")
+                )
+
+                sender = (
+                    profile.get("display_name")
+                    or profile.get("username")
+                    or "Community admin"
+                ) if profile else "Community admin"
+
+                with st.container(border=True):
+                    st.caption(sender)
+                    st.write(
+                        message.get("message_text") or ""
+                    )
+
+                    timestamp = message.get("created_at", "")
+                    if timestamp:
+                        st.caption(
+                            timestamp[:16].replace("T", " ")
+                        )
+
+            if channel.get("created_by") == user_id:
+                with st.form(
+                    f"channel_post_{channel_id}",
+                    clear_on_submit=True
+                ):
+                    announcement = st.text_area(
+                        "Publish an announcement"
+                    )
+
+                    submitted = st.form_submit_button(
+                        "Publish",
+                        use_container_width=True
+                    )
+
+                    if submitted and announcement.strip():
+                        if send_channel_message(
+                            supabase,
+                            channel_id,
+                            user_id,
+                            announcement
+                        ):
+                            st.success("Announcement published.")
+                            st.rerun()
+
+
+# ============================================================
+# COMMUNITY HOME — OPENING CARDS
+# ============================================================
+
+def render_community_home():
+    st.markdown("## Welcome to EcoLoop Community")
+    st.caption(
+        "Connect, share ideas, learn and take action together."
+    )
+
+    cards = [
+        ("💬", "Chats", "Private and group conversations"),
+        ("👥", "Groups", "Find people with shared interests"),
+        ("🌍", "Communities", "Join wider community spaces"),
+        ("📢", "Channels", "Read community announcements")
+    ]
+
+    for row_start in range(0, len(cards), 2):
+        columns = st.columns(2)
+
+        for column, card in zip(
+            columns, cards[row_start:row_start + 2]
+        ):
+            emoji, title, description = card
+
+            with column:
+                with st.container(border=True):
+                    st.markdown(f"## {emoji}")
+                    st.markdown(f"**{title}**")
+                    st.caption(description)
+
+                    if st.button(
+                        f"Open {title}",
+                        key=f"community_home_{title}",
+                        use_container_width=True
+                    ):
+                        st.session_state[
+                            "community_page"
+                        ] = title
+                        st.rerun()
+
+
+# ============================================================
+# FINAL PAGE ENTRY POINT
+# ============================================================
+
+def render_community_groups_page(supabase, user_id):
+    if "community_page" not in st.session_state:
+        st.session_state["community_page"] = "Home"
+
+    st.markdown(
+        """
+        <div class="community-header">
+            <h1>EcoLoop Community</h1>
+            <p>Connect • Share • Collaborate • Take Action</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    pages = [
+        "Home",
+        "Chats",
+        "Groups",
+        "Communities",
+        "Channels"
+    ]
+
+    selected_page = st.session_state.get(
+        "community_page", "Home"
+    )
+
+    if selected_page not in pages:
+        selected_page = "Home"
+
+    selected_page = st.radio(
+        "Community navigation",
+        pages,
+        index=pages.index(selected_page),
+        horizontal=True,
+        key="community_navigation"
+    )
+
+    st.session_state["community_page"] = selected_page
+
+    st.divider()
+
+    if selected_page == "Home":
+        render_community_home()
+
+    elif selected_page == "Chats":
+        render_chats_page(supabase, user_id)
+
+    elif selected_page == "Groups":
+        render_groups_page(supabase, user_id)
+
+    elif selected_page == "Communities":
+        render_communities_page(supabase, user_id)
+
+    elif selected_page == "Channels":
+        render_channels_page(supabase, user_id)
+
+    st.divider()
+
+    st.caption(
+        "Powered by Next Gen Impact Hub (NGIH)"
         )
