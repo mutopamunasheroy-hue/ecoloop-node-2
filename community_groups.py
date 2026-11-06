@@ -359,6 +359,7 @@ def render_public_profile(supabase, user_id, member):
 
     st.title(name)
     st.caption(f"@{username}")
+    render_follow_controls(member.get("user_id"))
 
     if location:
         st.caption(f"📍 {location}")
