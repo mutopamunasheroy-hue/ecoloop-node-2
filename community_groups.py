@@ -1291,6 +1291,21 @@ def render_group_admin_members(supabase, group, user_id):
                             "rejected"
                         )
                         st.rerun()
+
+                with right:
+                    if st.button(
+                        "Reject",
+                        key=f"reject_{group_id}_{member_id}",
+                        use_container_width=True
+                    ):
+                        update_group_membership(
+                            supabase,
+                            group_id,
+                            user_id,
+                            member_id,
+                            "rejected"
+                        )
+                        st.rerun()
     
             st.info("No new groups found.")
         else:
