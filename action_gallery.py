@@ -651,40 +651,87 @@ def _show_reactions(supabase, post_id, user_id):
 
 
 # ============================================================
-# SHARING
+# UNIVERSAL SHARING
 # ============================================================
 
 def _share_post(supabase, post, user_id):
     post_id = post["id"]
 
     public_url = os.environ.get(
-        "ECLOOP_PUBLIC_URL", ""
+        "ECLOOP_PUBLIC_URL",
+        "https://ecoloop-node-2-g2jtmgyszhvgynvmnzuo7d.streamlit.app"
     ).strip()
 
-    if public_url:
-        share_url = (
-            f"{public_url.rstrip('/')}/?post={post_id}"
-        )
-    else:
-        share_url = (
-            f"EcoLoop Node — Community Action ID: {post_id}"
-        )
-
-    share_text = (
-        f"{post.get('caption', '')}\n\n"
-        f"Shared from EcoLoop Node — NGIH\n"
-        f"{share_url}"
+    share_url = (
+        f"{public_url.rstrip('/')}/?post={post_id}"
     )
 
+    caption = post.get("caption", "").strip()
+
+    share_text = (
+        f"{caption}\n\n"
+        f"Shared from EcoLoop Node — NGIH\n\n"
+        f"Explore this community action:\n"
+        f"{share_url}\n\n"
+        f"Community Action ID: {post_id}"
+    )
+
+    encoded_url = quote(share_url, safe="")
+    encoded_text = quote(share_text, safe="")
+    encoded_caption = quote(caption, safe="")
+
     whatsapp_url = (
-        "https://wa.me/?text=" + quote(share_text)
+        f"https://wa.me/?text={encoded_text}"
+    )
+
+    facebook_url = (
+        "https://www.facebook.com/sharer/sharer.php"
+        f"?u={encoded_url}"
+    )
+
+    telegram_url = (
+        "https://t.me/share/url"
+        f"?url={encoded_url}"
+        f"&text={encoded_caption}"
+    )
+
+    x_url = (
+        "https://twitter.com/intent/tweet"
+        f"?text={encoded_caption}"
+        f"&url={encoded_url}"
+    )
+
+    email_url = (
+        "mailto:?subject="
+        f"{quote('EcoLoop Node Community Action')}"
+        f"&body={encoded_text}"
+    )
+
+    st.markdown("### ↗ Share this action")
+    st.caption(
+        "Help spread environmental action across your networks."
     )
 
     st.markdown(
-        f"[Share using WhatsApp]({whatsapp_url})"
+        f"📱 [WhatsApp]({whatsapp_url})"
+        "  ·  "
+        f"📘 [Facebook]({facebook_url})"
+        "  ·  "
+        f"✈️ [Telegram]({telegram_url})"
     )
 
-    st.code(share_text, language="text")
+    st.markdown(
+        f"𝕏 [Share on X]({x_url})"
+        "  ·  "
+        f"✉️ [Email]({email_url})"
+    )
+
+    st.markdown("**Copy and share this EcoLoop link anywhere:**")
+    st.code(share_url, language="text")
+
+    st.caption(
+        f"Community Action ID: {post_id}"
+    )
 
     if st.button(
         "Record share",
@@ -702,19 +749,23 @@ def _share_post(supabase, post, user_id):
         except Exception as error:
             st.error(f"Could not record share: {error}")
 
-
 # ============================================================
 # REPOSTING
 # ============================================================
 
 def _repost_post(supabase, post, user_id, user_name):
-    post_id = post["id"]
+    post_id = post.get("id")
+
+    if not post_id:
+        st.error("This action could not be identified.")
+        return
 
     if post.get("is_repost"):
-        st.info("This is already a repost.")
+        st.info("You cannot repost an action that is already a repost.")
         return
 
     try:
+        # Check whether this user has already reposted this action.
         existing = (
             supabase.table("action_posts")
             .select("id")
@@ -728,6 +779,7 @@ def _repost_post(supabase, post, user_id, user_name):
             st.info("You have already reposted this action.")
             return
 
+        # Get the original author's name.
         original_author = post.get("user_id")
         names = _profile_names(supabase, [original_author])
 
@@ -735,25 +787,36 @@ def _repost_post(supabase, post, user_id, user_name):
             "original_author_name": names.get(
                 original_author,
                 "EcoLoop Member",
-            )
+            ),
+            "reposted_by": user_name,
         }
 
-        supabase.table("action_posts").insert({
-            "user_id": user_id,
-            "author_type": "individual",
-            "caption": post.get("caption", ""),
-            "category": post.get("category", "Other"),
-            "image_path": post.get("image_path"),
-            "media_type": post.get("media_type"),
-            "location": post.get("location"),
-            "social_handles": handles,
-            "status": "published",
-            "public_preview": False,
-            "is_repost": True,
-            "original_post_id": post_id,
-        }).execute()
+        # Create the repost in the user's feed.
+        result = (
+            supabase.table("action_posts")
+            .insert({
+                "user_id": user_id,
+                "group_id": None,
+                "author_type": "individual",
+                "caption": post.get("caption", ""),
+                "category": post.get("category", "Other"),
+                "image_path": post.get("image_path"),
+                "media_type": post.get("media_type"),
+                "location": post.get("location"),
+                "social_handles": handles,
+                "status": "published",
+                "public_preview": False,
+                "is_repost": True,
+                "original_post_id": post_id,
+            })
+            .execute()
+        )
 
-        st.success("Action reposted to your feed.")
+        if not _rows(result):
+            st.error("The repost could not be confirmed. Please try again.")
+            return
+
+        st.success("Successfully reposted to your feed!")
         st.rerun()
 
     except Exception as error:
@@ -1751,7 +1814,34 @@ def _display_post(
             "Community Group",
         )
 
-    # Post header.
+    # Check repost eligibility.
+    is_own_post = str(author_id) == str(user_id)
+    is_repost = bool(post.get("is_repost"))
+
+    already_reposted = False
+
+    if not is_own_post and not is_repost:
+        try:
+            existing_repost = (
+                supabase.table("action_posts")
+                .select("id")
+                .eq("user_id", user_id)
+                .eq("original_post_id", post_id)
+                .limit(1)
+                .execute()
+            )
+
+            already_reposted = bool(
+                _rows(existing_repost)
+            )
+
+        except Exception:
+            already_reposted = False
+
+    # --------------------------------------------------------
+    # POST HEADER
+    # --------------------------------------------------------
+
     header_cols = st.columns([0.84, 0.16])
 
     with header_cols[0]:
@@ -1778,7 +1868,11 @@ def _display_post(
             user_role,
         )
 
-    if post.get("is_repost"):
+    # --------------------------------------------------------
+    # REPOST INFORMATION
+    # --------------------------------------------------------
+
+    if is_repost:
         original_author = (
             (post.get("social_handles") or {})
             .get(
@@ -1794,6 +1888,10 @@ def _display_post(
     if post.get("location"):
         st.caption(f"📍 {post['location']}")
 
+    # --------------------------------------------------------
+    # CAPTION
+    # --------------------------------------------------------
+
     st.markdown(
         f'<div class="gallery-caption">'
         f'{post.get("caption", "")}'
@@ -1801,7 +1899,10 @@ def _display_post(
         unsafe_allow_html=True,
     )
 
-    # Media.
+    # --------------------------------------------------------
+    # MEDIA
+    # --------------------------------------------------------
+
     media_url = _signed_media_url(
         supabase,
         post.get("image_path"),
@@ -1821,28 +1922,72 @@ def _display_post(
             "Media is currently unavailable."
         )
 
+    # --------------------------------------------------------
+    # RECORD VIEW
+    # --------------------------------------------------------
+
     _record_view(
         supabase,
         post_id,
         user_id,
     )
 
-    # Reactions.
+    # --------------------------------------------------------
+    # REACTIONS
+    # --------------------------------------------------------
+
     _show_reactions(
         supabase,
         post_id,
         user_id,
     )
 
-    # Compact post actions.
-    action_cols = st.columns(3)
+    counts = _reaction_counts(
+        supabase,
+        post_id,
+    )
 
+    total_reactions = sum(counts.values())
+
+    # --------------------------------------------------------
+    # SOCIAL ACTIONS
+    # --------------------------------------------------------
+
+    action_cols = st.columns([1.2, 1, 1])
+
+    # REPOST
     with action_cols[0]:
-        if author_id != user_id:
+
+        if is_own_post:
+            st.button(
+                "Your post",
+                key=f"repost_{post_id}",
+                disabled=True,
+                use_container_width=True,
+            )
+
+        elif is_repost:
+            st.button(
+                "Already a repost",
+                key=f"repost_{post_id}",
+                disabled=True,
+                use_container_width=True,
+            )
+
+        elif already_reposted:
+            st.button(
+                "✓ Reposted",
+                key=f"repost_{post_id}",
+                disabled=True,
+                use_container_width=True,
+            )
+
+        else:
             if st.button(
                 "🔁 Repost",
                 key=f"repost_{post_id}",
                 use_container_width=True,
+                type="secondary",
             ):
                 _repost_post(
                     supabase,
@@ -1851,31 +1996,38 @@ def _display_post(
                     user_name,
                 )
 
+    # SHARE
     with action_cols[1]:
-        with st.popover("↗ Share"):
+        with st.popover(
+            "↗ Share",
+            use_container_width=True,
+        ):
             _share_post(
                 supabase,
                 post,
                 user_id,
             )
 
+    # REACTION COUNT
     with action_cols[2]:
-        counts = _reaction_counts(
-            supabase,
-            post_id,
-        )
-
         st.caption(
-            f"💬 {sum(counts.values())} reactions"
+            f"💬 {total_reactions} reactions"
         )
 
-    # Comments.
+    # --------------------------------------------------------
+    # COMMENTS
+    # --------------------------------------------------------
+
     _show_comments(
         supabase,
         post_id,
         user_id,
         user_role,
     )
+
+    st.divider()
+    
+    
 
 
 # ============================================================
