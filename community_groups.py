@@ -1235,7 +1235,7 @@ def render_community_groups_page(supabase, user_id):
     # Open one group separately from the group listing.
     open_group_id = st.session_state.get("ecoloop_open_group_id")
 
-if open_group_id:
+   if open_group_id:
     group_workspace(supabase, open_group_id, user_id)
     st.stop()
 
