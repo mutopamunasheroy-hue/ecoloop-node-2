@@ -772,25 +772,33 @@ def get_unified_chat_items(supabase, user_id):
 # 13. OPEN A CONVERSATION
 # ============================================================
 
-def open_eco_chat(item):
+def open_eco_chat(item, group_id=None):
 
-    if item["type"] == "private":
+    if isinstance(item, dict):
 
-        st.session_state["eco_active_direct_chat"] = item["id"]
+        if item.get("type") == "private":
 
-        st.session_state["eco_active_chat_user"] = (
-            item["other_user_id"]
-        )
+            st.session_state["eco_active_direct_chat"] = item["id"]
+            st.session_state["eco_active_chat_user"] = item["other_user_id"]
+            st.session_state["eco_active_group"] = None
 
-        st.session_state.pop("eco_active_group", None)
+        elif item.get("type") == "group":
+
+            st.session_state["eco_active_group"] = item["id"]
+            st.session_state["eco_active_direct_chat"] = None
+            st.session_state["eco_active_chat_user"] = None
+
+    elif item == "group" and group_id:
+
+        st.session_state["eco_active_group"] = group_id
+        st.session_state["eco_active_direct_chat"] = None
+        st.session_state["eco_active_chat_user"] = None
 
     else:
+        st.error("Could not open this conversation.")
+        return
 
-        st.session_state["eco_active_group"] = item["id"]
-
-        st.session_state.pop("eco_active_direct_chat", None)
-        st.session_state.pop("eco_active_chat_user", None)
-
+    st.session_state["eco_community_section"] = "Chats"
     st.rerun()
 
 
