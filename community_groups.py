@@ -1295,44 +1295,48 @@ def render_group_admin_members(supabase, group, user_id):
                         st.rerun()
 
 
+
+
 # ==========================================================
 # CREATE GROUP TAB
 # ==========================================================
 
-with tabs[2]:
-    st.markdown("### Create a group")
+def render_create_group_tab(supabase, user_id, tab):
+    with tab:
+        st.markdown("### Create a group")
 
-    with st.form("create_community_group_form"):
-        group_name = st.text_input(
-            "Group name",
-            placeholder="e.g. Bulawayo Climate Action"
-        )
-
-        group_description = st.text_area(
-            "What is this group about?",
-            placeholder="Tell people what your group focuses on."
-        )
-
-        submitted = st.form_submit_button(
-            "Create group",
-            use_container_width=True
-        )
-
-    if submitted:
-        if not group_name.strip():
-            st.warning("Please enter a group name.")
-        else:
-            created_group = create_community_group(
-                supabase,
-                user_id,
-                group_name.strip(),
-                group_description.strip()
+        with st.form("create_community_group_form"):
+            group_name = st.text_input(
+                "Group name",
+                placeholder="e.g. Bulawayo Climate Action"
             )
 
-            if created_group:
-                st.success("Your group has been created.")
-                open_eco_chat("group", created_group.get("id"))
-                st.rerun()
+            group_description = st.text_area(
+                "What is this group about?",
+                placeholder="Tell people what your group focuses on."
+            )
+
+            submitted = st.form_submit_button(
+                "Create group",
+                use_container_width=True
+            )
+
+        if submitted:
+            if not group_name.strip():
+                st.warning("Please enter a group name.")
+            else:
+                created_group = create_community_group(
+                    supabase,
+                    user_id,
+                    group_name.strip(),
+                    group_description.strip()
+                )
+
+                if created_group:
+                    st.success("Your group has been created.")
+                    open_eco_chat("group", created_group.get("id"))
+                    st.rerun()
+
 
 # ============================================================
 # PART 5 — GROUP CHAT
@@ -1379,9 +1383,7 @@ def render_group_chat(supabase, group, user_id):
     group_id = group.get("id")
     group_name = group.get("name", "Group chat")
 
-    st.markdown(
-        f"## 👥 {eco_escape(group_name)}"
-    )
+    st.markdown(f"## 👥 {eco_escape(group_name)}")
 
     if group.get("description"):
         st.caption(group.get("description"))
@@ -1414,11 +1416,10 @@ def render_group_chat(supabase, group, user_id):
 
     for message in messages:
         sender_id = message.get("sender_id")
-        text = message.get("message_text", "")
+        message_text = message.get("message_text", "")
         created_at = message.get("created_at", "")
 
-        profile = eco_profile(supabase, sender_id)
-        sender_name = eco_member_name(profile)
+        sender_name = eco_member_name(supabase, sender_id)
 
         is_mine = str(sender_id) == str(user_id)
 
@@ -1429,14 +1430,17 @@ def render_group_chat(supabase, group, user_id):
             if not is_mine:
                 st.caption(sender_name)
 
-            st.write(text)
+            st.write(message_text)
 
             if created_at:
                 st.caption(str(created_at)[:16].replace("T", " "))
 
     st.divider()
 
-    with st.form(f"group_message_form_{group_id}", clear_on_submit=True):
+    with st.form(
+        f"group_message_form_{group_id}",
+        clear_on_submit=True
+    ):
         message_text = st.text_area(
             "Message",
             placeholder=f"Message {group_name}...",
