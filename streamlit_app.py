@@ -2805,19 +2805,12 @@ def eco_quiz_page():
         "Your answers are checked securely by the EcoLoop "
         "Node database."
     )
-
+            
 # =====================================================
 # PAGE 11 — COMMUNITY GROUPS
 # =====================================================
 
 def community_groups_page():
-
-    st.title("🤝 Community Groups")
-
-    st.write(
-        "Connect with people, schools and organisations "
-        "working towards environmental protection."
-    )
 
     if not supabase:
         st.error("The database connection is unavailable.")
@@ -2828,198 +2821,12 @@ def community_groups_page():
 
     user_id = st.session_state.get("user_id")
 
-    # -----------------------------------------------
-    # LOAD COMMUNITY GROUPS
-    # -----------------------------------------------
-
-    try:
-
-        group_response = (
-            supabase
-            .table("community_groups")
-            .select("*")
-            .execute()
-        )
-
-        groups = group_response.data or []
-
-    except Exception as e:
-
-        st.error("Community groups could not be loaded.")
-        st.code(str(e))
+    if not user_id:
+        st.error("Please sign in to access the Community Hub.")
         return
 
-    if not groups:
-
-        show_empty_state(
-            "There are no community groups available yet."
-        )
-        return
-
-    # -----------------------------------------------
-    # LOAD MEMBER'S EXISTING MEMBERSHIPS
-    # -----------------------------------------------
-
-    try:
-
-        membership_response = (
-            supabase
-            .table("group_memberships")
-            .select("*")
-            .eq("user_id", user_id)
-            .execute()
-        )
-
-        memberships = membership_response.data or []
-
-    except Exception:
-
-        st.error("Your membership information could not be loaded.")
-        return
-
-    membership_by_group = {}
-
-    for membership in memberships:
-
-        group_id = membership.get("group_id")
-
-        if group_id:
-            membership_by_group[group_id] = membership
-
-    # -----------------------------------------------
-    # GROUP SUMMARY
-    # -----------------------------------------------
-
-    st.subheader("Explore Environmental Groups")
-
-    st.caption(
-        f"{len(groups)} registered community group(s)"
-    )
-
-    # -----------------------------------------------
-    # DISPLAY GROUPS
-    # -----------------------------------------------
-
-    for group in groups:
-
-        group_id = group.get("id")
-
-        if not group_id:
-            continue
-
-        group_name = (
-            group.get("group_name")
-            or group.get("name")
-            or group.get("title")
-            or "Environmental Community Group"
-        )
-
-        description = (
-            group.get("description")
-            or group.get("group_description")
-            or "A community working towards environmental action."
-        )
-
-        membership = membership_by_group.get(group_id)
-
-        with st.container(border=True):
-
-            st.subheader(f"🌱 {group_name}")
-
-            st.write(description)
-
-            if group.get("location"):
-                st.caption(
-                    f"📍 {group.get('location')}"
-                )
-
-            st.divider()
-
-            # ---------------------------------------
-            # EXISTING MEMBERSHIP
-            # ---------------------------------------
-
-            if membership:
-
-                status = membership.get(
-                    "status",
-                    "unknown"
-                )
-
-                if status == "approved":
-
-                    st.success(
-                        "You are an approved member of this group."
-                    )
-
-                elif status == "pending":
-
-                    st.info(
-                        "Your membership request is awaiting approval."
-                    )
-
-                elif status == "rejected":
-
-                    st.warning(
-                        "Your previous membership request was not approved."
-                    )
-
-                else:
-
-                    st.caption(
-                        f"Membership status: {status}"
-                    )
-
-            else:
-
-                # -----------------------------------
-                # REQUEST MEMBERSHIP
-                # -----------------------------------
-
-                if st.button(
-                    "Request to Join",
-                    key=f"join_group_{group_id}",
-                    use_container_width=True
-                ):
-
-                    try:
-
-                        supabase.table(
-                            "group_memberships"
-                        ).insert({
-                            "group_id": group_id,
-                            "user_id": user_id,
-                            "status": "pending"
-                        }).execute()
-
-                        st.success(
-                            "Your membership request has been submitted."
-                        )
-
-                        st.rerun()
-
-                    except Exception:
-
-                        st.error(
-                            "Your request could not be submitted. "
-                            "You may already have a membership request "
-                            "or the group may not accept new members."
-                        )
-
-    st.divider()
-
-    # -----------------------------------------------
-    # MEMBERSHIP EXPLANATION
-    # -----------------------------------------------
-
-    eco_card(
-        "Growing environmental communities",
-        "Community groups provide opportunities for members "
-        "to collaborate, exchange ideas and participate in "
-        "environmental initiatives. Membership requests are "
-        "subject to group approval.",
-        "🤝"
-    )
+    render_community_groups_page(supabase, user_id)
+    
 
 # =====================================================
 # PAGE 12 — ENVIRONMENTAL CHALLENGES
