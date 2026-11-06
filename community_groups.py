@@ -883,7 +883,36 @@ def get_my_chatrooms(supabase, user_id):
         st.error(f"Could not load your chatrooms: {e}")
         return []
 
+def upload_chatroom_photo(supabase, user_id, uploaded_file):
+    if not uploaded_file:
+        return ""
 
+    try:
+        extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
+
+        if extension not in ["jpg", "jpeg", "png", "webp"]:
+            st.error("Please upload a JPG, PNG or WEBP image.")
+            return None
+
+        file_path = (
+            f"chatrooms/{user_id}/{uuid.uuid4().hex}.{extension}"
+        )
+
+        supabase.storage.from_(MEDIA_BUCKET).upload(
+            file_path,
+            uploaded_file.getvalue(),
+            {
+                "content-type": uploaded_file.type,
+                "upsert": "true",
+            }
+        )
+
+        return file_path
+
+    except Exception as e:
+        st.error(f"Chatroom photo upload failed: {e}")
+        return None
+        
 def create_chatroom(
     supabase,
     user_id,
