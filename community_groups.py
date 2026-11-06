@@ -1115,17 +1115,11 @@ def render_community_groups_page(supabase, user_id):
         return
 
     # Open one group separately from the group listing.
-    open_group_id = st.session_state.get(
-        "ecoloop_open_group_id"
-    )
+    open_group_id = st.session_state.get("ecoloop_open_group_id")
 
-    if open_group_id:
-        group_workspace(
-            supabase,
-            open_group_id,
-            user_id
-        )
-        return
+if open_group_id:
+    group_workspace(supabase, open_group_id, user_id)
+    st.stop()
 
     st.title("🌍 EcoLoop Community")
 
