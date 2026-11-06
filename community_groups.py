@@ -671,8 +671,8 @@ def render_direct_chat(supabase, user_id, conversation_id):
 # ==========================================================
 
 def render_chats_page(supabase, user_id):
-    st.title("💬 Chats")
-    st.caption("Your private conversations on EcoLoop Node.")
+    st.title("Chats")
+    st.caption("Your conversations on EcoLoop Node.")
 
     active_conversation = st.session_state.get(
         "eco_active_conversation"
@@ -686,67 +686,137 @@ def render_chats_page(supabase, user_id):
         )
         return
 
-    tab_chats, tab_people = st.tabs([
-        "Messages",
-        "Find People"
-    ])
+    search = st.text_input(
+        "🔍 Search conversations",
+        key="eco_chat_inbox_search",
+        placeholder="Search names or usernames..."
+    )
 
-    with tab_chats:
-        conversations = get_direct_conversations(
-            supabase,
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.caption("PRIVATE MESSAGES")
+
+    with col2:
+        if st.button(
+            "＋ New Chat",
+            use_container_width=True
+        ):
+            st.session_state["eco_community_section"] = "Discover People"
+            st.rerun()
+
+    conversations = get_direct_conversations(
+        supabase,
+        user_id
+    )
+
+    inbox_items = []
+
+    for conversation in conversations:
+        other_user_id = get_other_conversation_user(
+            conversation,
             user_id
         )
 
-        if not conversations:
-            st.info(
-                "You have no conversations yet. "
-                "Find an EcoLoop member to start chatting."
+        profile = eco_profile(
+            supabase,
+            other_user_id
+        )
+
+        name = profile.get("display_name") or "EcoLoop Member"
+        username = profile.get("username") or "member"
+
+        if search:
+            term = search.strip().lower()
+
+            if (
+                term not in name.lower()
+                and term not in username.lower()
+            ):
+                continue
+
+        messages = get_direct_messages(
+            supabase,
+            conversation.get("id")
+        )
+
+        last_message = messages[-1] if messages else {}
+
+        message_text = (
+            last_message.get("message_text")
+            or (
+                "📎 Attachment"
+                if last_message.get("attachment_path")
+                else "Start a conversation"
             )
+        )
 
-        for conversation in conversations:
-            other_user_id = get_other_conversation_user(
-                conversation,
-                user_id
-            )
+        created_at = last_message.get("created_at") or ""
 
-            profile = eco_profile(
-                supabase,
-                other_user_id
-            )
+        inbox_items.append({
+            "conversation": conversation,
+            "user_id": other_user_id,
+            "profile": profile,
+            "name": name,
+            "username": username,
+            "message": message_text,
+            "time": created_at,
+        })
 
-            name = (
-                profile.get("display_name")
-                or "EcoLoop Member"
-            )
+    if not inbox_items:
+        st.info(
+            "No conversations found. "
+            "Start a new chat with an EcoLoop member."
+        )
+        return
 
-            username = profile.get("username") or "member"
-            avatar = profile.get("avatar_url") or ""
+    for item in inbox_items:
+        conversation = item["conversation"]
+        profile = item["profile"]
+        avatar = profile.get("avatar_url") or ""
 
-            with st.container(border=True):
-                col1, col2 = st.columns([1, 4])
+        with st.container(border=True):
+            col1, col2, col3 = st.columns([1, 4, 1])
 
-                with col1:
-                    if avatar:
-                        st.image(avatar, width=55)
+            with col1:
+                if avatar:
+                    avatar_url = get_story_media_url(
+                        supabase,
+                        avatar
+                    )
+
+                    if avatar_url:
+                        st.image(avatar_url, width=58)
                     else:
                         st.markdown("### 👤")
+                else:
+                    st.markdown("### 👤")
 
-                with col2:
-                    st.markdown(f"**{eco_escape(name)}**")
-                    st.caption(f"@{eco_escape(username)}")
+            with col2:
+                st.markdown(
+                    f"**{eco_escape(item['name'])}**"
+                )
+                st.caption(f"@{eco_escape(item['username'])}")
 
-                    if st.button(
-                        "Open Chat",
-                        key=f"eco_open_chat_{conversation.get('id')}",
-                        use_container_width=True
-                    ):
-                        st.session_state[
-                            "eco_active_conversation"
-                        ] = conversation.get("id")
-                        st.rerun()
+                st.caption(
+                    eco_escape(str(item["message"]))[:90]
+                )
 
-    with tab_people:
-        render_people_directory(supabase, user_id)
+                if item["time"]:
+                    st.caption(
+                        str(item["time"]).replace("T", " ")[:16]
+                    )
+
+            with col3:
+                if st.button(
+                    "Open",
+                    key=f"eco_open_chat_{conversation.get('id')}"
+                ):
+                    st.session_state[
+                        "eco_active_conversation"
+                    ] = conversation.get("id")
+                    st.rerun()
+                    
 
 # ==========================================================
 # PART 5 — CHATROOMS
