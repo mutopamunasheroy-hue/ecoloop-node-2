@@ -78,9 +78,12 @@ def eco_member_username(supabase, user_id):
 
 def eco_avatar(supabase, user_id):
     profile = eco_profile(supabase, user_id)
+    avatar_path = profile.get("avatar_url") or ""
 
-    return profile.get("avatar_url") or ""
+    if not avatar_path:
+        return ""
 
+    return get_story_media_url(supabase, avatar_path) or ""
 
 def eco_set_section(section):
     st.session_state["eco_community_section"] = section
