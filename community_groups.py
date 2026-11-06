@@ -1114,6 +1114,122 @@ def render_community_groups_page(supabase, user_id):
         st.warning("Please sign in to access the Community.")
         return
 
+    # -----------------------------------------------------
+    # OPEN SELECTED GROUP
+    # -----------------------------------------------------
+
+    open_group_id = st.session_state.get(
+        "ecoloop_open_group_id"
+    )
+
+    if open_group_id:
+
+        group_workspace(
+            supabase,
+            open_group_id,
+            user_id
+        )
+
+        return
+
+    # -----------------------------------------------------
+    # COMMUNITY HOME
+    # -----------------------------------------------------
+
+    st.title("🌍 EcoLoop Community")
+
+    discover_tab, communities_tab, profile_tab, join_tab = st.tabs([
+        "🔎 Discover",
+        "🌍 Communities",
+        "👤 My profile",
+        "🔗 Join with code"
+    ])
+
+    # -----------------------------------------------------
+    # DISCOVER GROUPS
+    # -----------------------------------------------------
+
+    with discover_tab:
+
+        st.subheader("Discover groups")
+
+        create_group(supabase, user_id)
+
+        try:
+            result = supabase.table(
+                "community_groups"
+            ).select("*").order(
+                "created_at", desc=True
+            ).execute()
+
+            groups = rows(result)
+
+        except Exception as e:
+            show_error(e, "Could not load groups")
+            groups = []
+
+        if not groups:
+            st.info(
+                "No groups yet. Create the first EcoLoop group!"
+            )
+
+        for group in groups:
+
+            group_preview(
+                supabase,
+                group,
+                user_id
+            )
+
+    # -----------------------------------------------------
+    # COMMUNITIES
+    # -----------------------------------------------------
+
+    with communities_tab:
+
+        create_community(
+            supabase,
+            user_id
+        )
+
+        communities_page(
+            supabase,
+            user_id
+        )
+
+    # -----------------------------------------------------
+    # MY PROFILE
+    # -----------------------------------------------------
+
+    with profile_tab:
+
+        profile_editor(
+            supabase,
+            user_id
+        )
+
+    # -----------------------------------------------------
+    # JOIN WITH INVITATION CODE
+    # -----------------------------------------------------
+
+    with join_tab:
+
+        redeem_invitation(
+            supabase,
+            user_id
+    )
+
+
+# =========================================================
+# MAIN COMMUNITY PAGE
+# =========================================================
+
+def render_community_groups_page(supabase, user_id):
+
+    if not user_id:
+        st.warning("Please sign in to access the Community.")
+        return
+
     # Open one group separately from the group listing.
     open_group_id = st.session_state.get("ecoloop_open_group_id")
 
