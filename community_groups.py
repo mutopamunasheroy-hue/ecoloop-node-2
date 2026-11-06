@@ -1123,13 +1123,11 @@ def render_community_groups_page(supabase, user_id):
     )
 
     if open_group_id:
-
         group_workspace(
             supabase,
             open_group_id,
             user_id
         )
-
         return
 
     # -----------------------------------------------------
@@ -1150,7 +1148,6 @@ def render_community_groups_page(supabase, user_id):
     # -----------------------------------------------------
 
     with discover_tab:
-
         st.subheader("Discover groups")
 
         create_group(supabase, user_id)
@@ -1174,7 +1171,6 @@ def render_community_groups_page(supabase, user_id):
             )
 
         for group in groups:
-
             group_preview(
                 supabase,
                 group,
@@ -1186,16 +1182,22 @@ def render_community_groups_page(supabase, user_id):
     # -----------------------------------------------------
 
     with communities_tab:
+        create_community(supabase, user_id)
+        communities_page(supabase, user_id)
 
-        create_community(
-            supabase,
-            user_id
-        )
+    # -----------------------------------------------------
+    # MY PROFILE
+    # -----------------------------------------------------
 
-        communities_page(
-            supabase,
-            user_id
-        )
+    with profile_tab:
+        profile_editor(supabase, user_id)
+
+    # -----------------------------------------------------
+    # JOIN WITH CODE
+    # -----------------------------------------------------
+
+    with join_tab:
+        redeem_invitation(supabase, user_id)
 
     # -----------------------------------------------------
     # MY PROFILE
