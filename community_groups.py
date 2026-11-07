@@ -15,7 +15,7 @@ MEDIA_BUCKET = "community-media"
 
 
 # ==========================================================
-# CORE HELPERS
+# PART 1 — CORE HELPERS
 # ==========================================================
 
 def eco_now():
@@ -26,6 +26,26 @@ def eco_escape(value):
     if value is None:
         return ""
     return html.escape(str(value))
+
+
+def eco_init_state():
+    defaults = {
+        "eco_community_section": "Chats",
+        "eco_active_conversation": None,
+        "eco_active_chatroom": None,
+        "eco_view_profile_id": None,
+        "eco_people_search": "",
+        "eco_chatroom_search": "",
+        "eco_chat_inbox_search": "",
+    }
+
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
+def eco_set_section(section):
+    st.session_state["eco_community_section"] = section
 
 
 def eco_profile(supabase, user_id):
@@ -52,6 +72,11 @@ def eco_profile(supabase, user_id):
         "bio": "",
         "location": "",
         "interests": "",
+        "country_of_origin": "",
+        "instagram_handle": "",
+        "facebook_handle": "",
+        "tiktok_handle": "",
+        "linkedin_handle": "",
     }
 
 
@@ -67,76 +92,134 @@ def eco_member_name(supabase, user_id):
 
 def eco_member_username(supabase, user_id):
     profile = eco_profile(supabase, user_id)
-
     username = profile.get("username") or ""
 
-    if username:
-        return f"@{username}"
+    return f"@{username}" if username else "@member"
 
-    return "@member"
+
+# ==========================================================
+# PART 2 — MEDIA HELPERS
+# ==========================================================
+
+def eco_valid_storage_path(file_path, allowed_folders=None):
+    if not isinstance(file_path, str):
+        return False
+
+    file_path = file_path.strip()
+
+    if not file_path or file_path.startswith("http"):
+        return False
+
+    if "\\" in file_path or ".." in file_path:
+        return False
+
+    parts = file_path.split("/")
+
+    if len(parts) < 3:
+        return False
+
+    if allowed_folders and parts[0] not in allowed_folders:
+        return False
+
+    return True
+
+
+def get_story_media_url(supabase, file_path):
+    if not file_path:
+        return None
+
+    file_path = str(file_path).strip()
+
+    # Support existing external image URLs.
+    if file_path.startswith("https://") or file_path.startswith("http://"):
+        return file_path
+
+    if not eco_valid_storage_path(
+        file_path,
+        ["profiles", "chatrooms", "stories"]
+    ):
+        return None
+
+    try:
+        result = (
+            supabase.storage
+            .from_(MEDIA_BUCKET)
+            .create_signed_url(file_path, 3600)
+        )
+
+        if isinstance(result, dict):
+            return (
+                result.get("signedURL")
+                or result.get("signedUrl")
+                or result.get("signed_url")
+            )
+
+        if hasattr(result, "signedURL"):
+            return result.signedURL
+
+        if hasattr(result, "signedUrl"):
+            return result.signedUrl
+
+        if hasattr(result, "data") and isinstance(result.data, dict):
+            return (
+                result.data.get("signedURL")
+                or result.data.get("signedUrl")
+            )
+
+        return None
+
+    except Exception:
+        # Invalid legacy image paths should not break the page.
+        return None
 
 
 def eco_avatar(supabase, user_id):
     profile = eco_profile(supabase, user_id)
     avatar_path = profile.get("avatar_url") or ""
 
-    if not avatar_path:
+    return get_story_media_url(supabase, avatar_path)
+
+
+def eco_show_avatar(supabase, avatar_path, width=70):
+    avatar_url = get_story_media_url(supabase, avatar_path)
+
+    if avatar_url:
+        try:
+            st.image(avatar_url, width=width)
+            return True
+        except Exception:
+            pass
+
+    st.markdown("### 👤")
+    return False
+
+
+def eco_upload_image(supabase, user_id, uploaded_file, folder):
+    if uploaded_file is None:
         return ""
 
-    return get_story_media_url(supabase, avatar_path) or ""
+    extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
 
-def eco_set_section(section):
-    st.session_state["eco_community_section"] = section
+    if extension not in ["jpg", "jpeg", "png", "webp"]:
+        st.error("Please upload a JPG, PNG or WEBP image.")
+        return None
 
+    content_type = (
+        uploaded_file.type
+        or mimetypes.guess_type(uploaded_file.name)[0]
+        or "application/octet-stream"
+    )
 
-def eco_error(message):
-    st.error(message)
-
-
-def eco_success(message):
-    st.success(message)
-
-
-def eco_init_state():
-    defaults = {
-        "eco_community_section": "Chats",
-        "eco_active_conversation": None,
-        "eco_active_chatroom": None,
-        "eco_profile_view": None,
-        "eco_chat_search": "",
-        "eco_people_search": "",
-        "eco_chatroom_search": "",
-    }
-
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
-
-# ==========================================================
-# PART 2 — MEMBER PROFILES
-# ==========================================================
-
-def upload_profile_photo(supabase, user_id, uploaded_file):
-    if not uploaded_file:
-        return ""
+    file_path = (
+        f"{folder}/{user_id}/{uuid.uuid4().hex}.{extension}"
+    )
 
     try:
-        extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
-
-        if extension not in ["jpg", "jpeg", "png", "webp"]:
-            st.error("Please upload a JPG, PNG or WEBP image.")
-            return None
-
-        file_path = (
-            f"profiles/{user_id}/{uuid.uuid4().hex}.{extension}"
-        )
-
         supabase.storage.from_(MEDIA_BUCKET).upload(
             file_path,
             uploaded_file.getvalue(),
             {
-                "content-type": uploaded_file.type,
+                "content-type": content_type,
                 "upsert": "true",
             }
         )
@@ -144,9 +227,13 @@ def upload_profile_photo(supabase, user_id, uploaded_file):
         return file_path
 
     except Exception as e:
-        st.error(f"Could not upload profile picture: {e}")
+        st.error(f"Image upload failed: {e}")
         return None
 
+
+# ==========================================================
+# PART 3 — MEMBER PROFILES
+# ==========================================================
 
 def get_member_directory(supabase, search=""):
     try:
@@ -156,8 +243,11 @@ def get_member_directory(supabase, search=""):
             .order("username")
         )
 
-        if search:
-            query = query.ilike("username", f"%{search}%")
+        if search and search.strip():
+            query = query.ilike(
+                "username",
+                f"%{search.strip()}%"
+            )
 
         result = query.limit(100).execute()
         return result.data or []
@@ -166,30 +256,6 @@ def get_member_directory(supabase, search=""):
         st.error(f"Could not load members: {e}")
         return []
 
-def init_follow_state():
-    if "eco_following" not in st.session_state:
-        st.session_state["eco_following"] = set()
-
-
-def init_follow_state():
-    if "eco_following" not in st.session_state:
-        st.session_state["eco_following"] = set()
-
-
-def render_follow_controls(member_id):
-    init_follow_state()
-
-    following = st.session_state["eco_following"]
-    is_following = str(member_id) in following
-
-    if is_following:
-        if st.button("Following ✓", key=f"unfollow_{member_id}"):
-            following.discard(str(member_id))
-            st.rerun()
-    else:
-        if st.button("＋ Follow", key=f"follow_{member_id}"):
-            following.add(str(member_id))
-            st.rerun()
 
 def save_member_profile(
     supabase,
@@ -200,11 +266,30 @@ def save_member_profile(
     bio,
     location,
     interests,
+    country_of_origin="",
+    instagram_handle="",
+    facebook_handle="",
+    tiktok_handle="",
+    linkedin_handle="",
 ):
     username = username.strip().lower().replace("@", "")
 
     if not username:
         st.error("Please enter a username.")
+        return False
+
+    if len(username) < 3:
+        st.error("Your username must contain at least 3 characters.")
+        return False
+
+    if not all(
+        char.isalnum() or char in "._"
+        for char in username
+    ):
+        st.error(
+            "Use only letters, numbers, dots and underscores "
+            "in your username."
+        )
         return False
 
     try:
@@ -225,10 +310,15 @@ def save_member_profile(
             "user_id": str(user_id),
             "display_name": display_name.strip(),
             "username": username,
-            "avatar_url": avatar_path,
+            "avatar_url": avatar_path or "",
             "bio": bio.strip(),
             "location": location.strip(),
             "interests": interests.strip(),
+            "country_of_origin": country_of_origin.strip(),
+            "instagram_handle": instagram_handle.strip(),
+            "facebook_handle": facebook_handle.strip(),
+            "tiktok_handle": tiktok_handle.strip(),
+            "linkedin_handle": linkedin_handle.strip(),
             "updated_at": eco_now().isoformat(),
         }
 
@@ -249,14 +339,15 @@ def render_profile_editor(supabase, user_id):
     profile = eco_profile(supabase, user_id)
 
     st.subheader("Your Profile")
-    st.caption("Let other EcoLoop members get to know you.")
+    st.caption(
+        "Build your EcoLoop identity and let other members "
+        "get to know you."
+    )
 
     current_avatar = profile.get("avatar_url") or ""
 
     if current_avatar:
-        avatar_url = get_story_media_url(supabase, current_avatar)
-        if avatar_url:
-            st.image(avatar_url, width=120)
+        eco_show_avatar(supabase, current_avatar, 120)
 
     uploaded_photo = st.file_uploader(
         "Upload profile picture from your device",
@@ -268,6 +359,8 @@ def render_profile_editor(supabase, user_id):
         st.image(uploaded_photo, width=120)
 
     with st.form("eco_profile_form"):
+        st.markdown("**Basic information**")
+
         display_name = st.text_input(
             "Display name",
             value=profile.get("display_name") or ""
@@ -276,23 +369,53 @@ def render_profile_editor(supabase, user_id):
         username = st.text_input(
             "Username",
             value=profile.get("username") or "",
-            help="Choose a unique username people can search for."
+            help="Your unique username helps people find you."
         )
 
         bio = st.text_area(
             "About me",
             value=profile.get("bio") or "",
-            max_chars=300
+            max_chars=300,
+            placeholder="Tell the community a little about yourself..."
         )
 
         location = st.text_input(
-            "Location",
+            "Current location",
             value=profile.get("location") or ""
+        )
+
+        country_of_origin = st.text_input(
+            "Country of origin",
+            value=profile.get("country_of_origin") or ""
         )
 
         interests = st.text_input(
             "Interests",
-            value=profile.get("interests") or ""
+            value=profile.get("interests") or "",
+            placeholder="Climate action, technology, entrepreneurship..."
+        )
+
+        st.divider()
+        st.markdown("**Social media (optional)**")
+
+        instagram_handle = st.text_input(
+            "Instagram username",
+            value=profile.get("instagram_handle") or ""
+        )
+
+        facebook_handle = st.text_input(
+            "Facebook profile",
+            value=profile.get("facebook_handle") or ""
+        )
+
+        tiktok_handle = st.text_input(
+            "TikTok username",
+            value=profile.get("tiktok_handle") or ""
+        )
+
+        linkedin_handle = st.text_input(
+            "LinkedIn profile",
+            value=profile.get("linkedin_handle") or ""
         )
 
         submitted = st.form_submit_button(
@@ -304,10 +427,11 @@ def render_profile_editor(supabase, user_id):
         avatar_path = current_avatar
 
         if uploaded_photo:
-            new_path = upload_profile_photo(
+            new_path = eco_upload_image(
                 supabase,
                 user_id,
-                uploaded_photo
+                uploaded_photo,
+                "profiles"
             )
 
             if new_path is None:
@@ -325,20 +449,66 @@ def render_profile_editor(supabase, user_id):
             bio,
             location,
             interests,
+            country_of_origin,
+            instagram_handle,
+            facebook_handle,
+            tiktok_handle,
+            linkedin_handle,
         )
 
         if saved:
             st.rerun()
 
 
+# ==========================================================
+# PART 4 — FOLLOW CONTROLS
+# TEMPORARY SESSION-BASED FOLLOWING
+# PERSISTENT FOLLOWING WILL BE CONNECTED LATER
+# ==========================================================
+
+def init_follow_state():
+    if "eco_following" not in st.session_state:
+        st.session_state["eco_following"] = set()
+
+
+def render_follow_controls(member_id):
+    if not member_id:
+        return
+
+    init_follow_state()
+
+    following = st.session_state["eco_following"]
+    member_id = str(member_id)
+
+    if member_id in following:
+        if st.button(
+            "Following ✓",
+            key=f"eco_unfollow_{member_id}"
+        ):
+            following.discard(member_id)
+            st.rerun()
+    else:
+        if st.button(
+            "＋ Follow",
+            key=f"eco_follow_{member_id}"
+        ):
+            following.add(member_id)
+            st.rerun()
+
+
+# ==========================================================
+# PART 5 — PUBLIC MEMBER PROFILES
+# ==========================================================
+
 def render_public_profile(supabase, user_id, member):
-    st.button(
+    member_id = str(member.get("user_id") or "")
+
+    if st.button(
         "← Back to Discover",
-        key="eco_back_to_discover",
-        on_click=lambda: st.session_state.pop(
-            "eco_view_profile_id", None
-        )
-    )
+        key="eco_back_to_discover"
+    ):
+        st.session_state["eco_view_profile_id"] = None
+        st.rerun()
 
     name = member.get("display_name") or "EcoLoop Member"
     username = member.get("username") or "member"
@@ -346,25 +516,27 @@ def render_public_profile(supabase, user_id, member):
     bio = member.get("bio") or ""
     location = member.get("location") or ""
     interests = member.get("interests") or ""
+    country = member.get("country_of_origin") or ""
 
-    st.subheader("Member Profile")
+    st.divider()
 
-    if avatar:
-        avatar_url = get_story_media_url(supabase, avatar)
+    col1, col2 = st.columns([1, 3])
 
-        if avatar_url:
-            st.image(avatar_url, width=150)
-        else:
-            st.markdown("### 👤")
-    else:
-        st.markdown("### 👤")
+    with col1:
+        eco_show_avatar(supabase, avatar, 120)
 
-    st.title(name)
-    st.caption(f"@{username}")
-    render_follow_controls(member.get("user_id"))
+    with col2:
+        st.title(name)
+        st.caption(f"@{username}")
 
-    if location:
-        st.caption(f"📍 {location}")
+        if location:
+            st.caption(f"📍 {location}")
+
+        if country:
+            st.caption(f"🌍 From {country}")
+
+        if member_id != str(user_id):
+            render_follow_controls(member_id)
 
     st.divider()
 
@@ -374,24 +546,51 @@ def render_public_profile(supabase, user_id, member):
     st.markdown("**Interests**")
     st.write(interests or "No interests added yet.")
 
-    st.divider()
+    social_links = {
+        "Instagram": member.get("instagram_handle"),
+        "Facebook": member.get("facebook_handle"),
+        "TikTok": member.get("tiktok_handle"),
+        "LinkedIn": member.get("linkedin_handle"),
+    }
 
-    if st.button(
-        "Message",
-        key=f"eco_public_profile_message_{member.get('user_id')}",
-        use_container_width=True
-    ):
-        conversation_id = get_or_create_direct_conversation(
-            supabase,
-            user_id,
-            member.get("user_id")
-        )
+    available_socials = {
+        name: value
+        for name, value in social_links.items()
+        if value
+    }
 
-        if conversation_id:
-            st.session_state["eco_active_conversation"] = conversation_id
-            eco_set_section("Chats")
-            st.rerun()
+    if available_socials:
+        st.divider()
+        st.markdown("**Social profiles**")
 
+        for platform, handle in available_socials.items():
+            st.caption(f"{platform}: {handle}")
+
+    if member_id and member_id != str(user_id):
+        st.divider()
+
+        if st.button(
+            "Message",
+            key=f"eco_public_message_{member_id}",
+            use_container_width=True
+        ):
+            conversation_id = get_or_create_direct_conversation(
+                supabase,
+                user_id,
+                member_id
+            )
+
+            if conversation_id:
+                st.session_state["eco_active_conversation"] = (
+                    conversation_id
+                )
+                eco_set_section("Chats")
+                st.rerun()
+
+
+# ==========================================================
+# PART 6 — DISCOVER PEOPLE
+# ==========================================================
 
 def render_people_directory(supabase, user_id):
     selected_id = st.session_state.get("eco_view_profile_id")
@@ -417,14 +616,15 @@ def render_people_directory(supabase, user_id):
         except Exception as e:
             st.error(f"Could not open profile: {e}")
 
-        st.session_state.pop("eco_view_profile_id", None)
+        st.session_state["eco_view_profile_id"] = None
 
     st.subheader("Discover People")
-    st.caption("Find people and explore their profiles.")
+    st.caption("Find members and connect with the EcoLoop community.")
 
     search = st.text_input(
         "Search by username",
-        key="eco_people_search"
+        key="eco_people_search",
+        placeholder="Enter a username..."
     )
 
     members = get_member_directory(supabase, search)
@@ -439,6 +639,7 @@ def render_people_directory(supabase, user_id):
         return
 
     for member in members:
+        member_id = str(member.get("user_id"))
         name = member.get("display_name") or "EcoLoop Member"
         username = member.get("username") or "member"
         avatar = member.get("avatar_url") or ""
@@ -449,50 +650,44 @@ def render_people_directory(supabase, user_id):
             col1, col2 = st.columns([1, 4])
 
             with col1:
-                if avatar:
-                    avatar_url = get_story_media_url(
-                        supabase,
-                        avatar
-                    )
-
-                    if avatar_url:
-                        st.image(avatar_url, width=70)
-                    else:
-                        st.markdown("### 👤")
-                else:
-                    st.markdown("### 👤")
+                eco_show_avatar(supabase, avatar, 70)
 
             with col2:
                 st.markdown(f"**{eco_escape(name)}**")
                 st.caption(f"@{eco_escape(username)}")
 
                 if bio:
-                    st.write(bio)
+                    st.write(bio[:160])
 
                 if location:
                     st.caption(f"📍 {eco_escape(location)}")
 
                 if st.button(
                     "View Profile",
-                    key=f"eco_view_profile_{member.get('user_id')}",
+                    key=f"eco_view_profile_{member_id}",
                     use_container_width=True
                 ):
-                    st.session_state["eco_view_profile_id"] = (
-                        str(member.get("user_id"))
-                    )
+                    st.session_state["eco_view_profile_id"] = member_id
                     st.rerun()
-        
-        
+
 
 # ==========================================================
-# PART 3 — PRIVATE DIRECT CHATS
+# PART 7 — PRIVATE DIRECT MESSAGES
 # ==========================================================
 
-def get_or_create_direct_conversation(supabase, user_id, other_user_id):
+def get_or_create_direct_conversation(
+    supabase,
+    user_id,
+    other_user_id
+):
+    user_a = str(user_id)
+    user_b = str(other_user_id)
+
+    if user_a == user_b:
+        st.warning("You cannot start a conversation with yourself.")
+        return None
+
     try:
-        user_a = str(user_id)
-        user_b = str(other_user_id)
-
         existing = (
             supabase.table("direct_conversations")
             .select("*")
@@ -507,11 +702,14 @@ def get_or_create_direct_conversation(supabase, user_id, other_user_id):
         if existing.data:
             return existing.data[0]["id"]
 
+        # Keep a consistent participant order.
+        first_user, second_user = sorted([user_a, user_b])
+
         result = (
             supabase.table("direct_conversations")
             .insert({
-                "user_one_id": user_a,
-                "user_two_id": user_b,
+                "user_one_id": first_user,
+                "user_two_id": second_user,
             })
             .execute()
         )
@@ -564,7 +762,12 @@ def get_direct_messages(supabase, conversation_id):
         return []
 
 
-def send_direct_message(supabase, conversation_id, user_id, message):
+def send_direct_message(
+    supabase,
+    conversation_id,
+    user_id,
+    message
+):
     message = message.strip()
 
     if not message:
@@ -592,32 +795,58 @@ def get_other_conversation_user(conversation, user_id):
 
 
 def render_direct_chat(supabase, user_id, conversation_id):
-    conversation_result = (
-        supabase.table("direct_conversations")
-        .select("*")
-        .eq("id", str(conversation_id))
-        .limit(1)
-        .execute()
-    )
+    try:
+        conversation_result = (
+            supabase.table("direct_conversations")
+            .select("*")
+            .eq("id", str(conversation_id))
+            .limit(1)
+            .execute()
+        )
 
-    if not conversation_result.data:
-        st.error("Conversation not found.")
+        if not conversation_result.data:
+            st.error("Conversation not found.")
+            return
+
+        conversation = conversation_result.data[0]
+
+        # Check that the current user belongs to this conversation.
+        participants = [
+            str(conversation.get("user_one_id")),
+            str(conversation.get("user_two_id")),
+        ]
+
+        if str(user_id) not in participants:
+            st.error("You do not have access to this conversation.")
+            return
+
+        other_user_id = get_other_conversation_user(
+            conversation,
+            user_id
+        )
+
+        other_profile = eco_profile(supabase, other_user_id)
+
+    except Exception as e:
+        st.error(f"Could not open conversation: {e}")
         return
 
-    conversation = conversation_result.data[0]
-    other_user_id = get_other_conversation_user(
-        conversation,
-        user_id
-    )
+    col1, col2 = st.columns([1, 5])
 
-    other_profile = eco_profile(supabase, other_user_id)
+    with col1:
+        eco_show_avatar(
+            supabase,
+            other_profile.get("avatar_url"),
+            55
+        )
 
-    st.markdown(
-        f"### {eco_escape(other_profile.get('display_name') or 'Member')}"
-    )
-    st.caption(
-        f"@{eco_escape(other_profile.get('username') or 'member')}"
-    )
+    with col2:
+        st.markdown(
+            f"### {eco_escape(other_profile.get('display_name') or 'Member')}"
+        )
+        st.caption(
+            f"@{eco_escape(other_profile.get('username') or 'member')}"
+        )
 
     if st.button("← Back to Chats", key="eco_back_to_chats"):
         st.session_state["eco_active_conversation"] = None
@@ -627,22 +856,34 @@ def render_direct_chat(supabase, user_id, conversation_id):
 
     messages = get_direct_messages(supabase, conversation_id)
 
+    if not messages:
+        st.info("This is the beginning of your conversation.")
+
     for message in messages:
         sender_id = str(message.get("sender_id"))
         mine = sender_id == str(user_id)
 
-        sender_name = (
-            "You" if mine
-            else eco_member_name(supabase, sender_id)
-        )
-
         with st.chat_message("user" if mine else "assistant"):
-            st.caption(sender_name)
-            st.write(message.get("message_text") or "")
+            st.caption("You" if mine else (
+                other_profile.get("display_name") or "Member"
+            ))
+
+            message_text = message.get("message_text") or ""
+
+            if message_text:
+                st.write(message_text)
+
+            if message.get("attachment_path"):
+                st.caption(
+                    f"📎 {message.get('attachment_name') or 'Attachment'}"
+                )
 
             created = message.get("created_at")
+
             if created:
-                st.caption(str(created)[:16].replace("T", " "))
+                st.caption(
+                    str(created).replace("T", " ")[:16]
+                )
 
     st.divider()
 
@@ -651,8 +892,8 @@ def render_direct_chat(supabase, user_id, conversation_id):
         clear_on_submit=True
     ):
         message_text = st.text_input(
-            "Write a message",
-            placeholder="Type your message..."
+            "Message",
+            placeholder="Write a message..."
         )
 
         submitted = st.form_submit_button(
@@ -660,22 +901,89 @@ def render_direct_chat(supabase, user_id, conversation_id):
             use_container_width=True
         )
 
-        if submitted and message_text.strip():
-            if send_direct_message(
-                supabase,
-                conversation_id,
-                user_id,
-                message_text
-            ):
-                st.rerun()
+    if submitted and message_text.strip():
+        if send_direct_message(
+            supabase,
+            conversation_id,
+            user_id,
+            message_text
+        ):
+            st.rerun()
+
 
 # ==========================================================
-# PART 4 — CHATS PAGE
+# PART 8 — CHATS INBOX AND NEW CHAT PICKER
 # ==========================================================
+
+def render_new_chat_picker(supabase, user_id):
+    st.subheader("Start a new conversation")
+
+    members = get_member_directory(supabase)
+
+    members = [
+        member for member in members
+        if str(member.get("user_id")) != str(user_id)
+    ]
+
+    if not members:
+        st.info("No other EcoLoop members are available yet.")
+        return
+
+    member_options = {}
+
+    for member in members:
+        member_id = str(member.get("user_id"))
+        name = member.get("display_name") or "EcoLoop Member"
+        username = member.get("username") or "member"
+
+        member_options[
+            f"{name} (@{username})"
+        ] = member_id
+
+    selected_label = st.selectbox(
+        "Choose a member",
+        list(member_options.keys()),
+        key="eco_new_chat_member"
+    )
+
+    selected_id = member_options.get(selected_label)
+
+    if selected_id:
+        selected_profile = next(
+            (
+                member for member in members
+                if str(member.get("user_id")) == selected_id
+            ),
+            {}
+        )
+
+        eco_show_avatar(
+            supabase,
+            selected_profile.get("avatar_url"),
+            75
+        )
+
+        if st.button(
+            "Open Conversation",
+            use_container_width=True,
+            key="eco_start_new_conversation"
+        ):
+            conversation_id = get_or_create_direct_conversation(
+                supabase,
+                user_id,
+                selected_id
+            )
+
+            if conversation_id:
+                st.session_state["eco_active_conversation"] = (
+                    conversation_id
+                )
+                st.rerun()
+
 
 def render_chats_page(supabase, user_id):
     st.title("Chats")
-    st.caption("Your conversations on EcoLoop Node.")
+    st.caption("Your private conversations on EcoLoop Node.")
 
     active_conversation = st.session_state.get(
         "eco_active_conversation"
@@ -689,24 +997,33 @@ def render_chats_page(supabase, user_id):
         )
         return
 
+    if st.session_state.get("eco_show_new_chat"):
+        if st.button("← Back to Inbox", key="eco_close_new_chat"):
+            st.session_state["eco_show_new_chat"] = False
+            st.rerun()
+
+        render_new_chat_picker(supabase, user_id)
+        return
+
+    col1, col2 = st.columns([3, 2])
+
+    with col1:
+        st.markdown("**PRIVATE MESSAGES**")
+
+    with col2:
+        if st.button(
+            "＋ New Chat",
+            use_container_width=True,
+            key="eco_new_chat_button"
+        ):
+            st.session_state["eco_show_new_chat"] = True
+            st.rerun()
+
     search = st.text_input(
         "🔍 Search conversations",
         key="eco_chat_inbox_search",
         placeholder="Search names or usernames..."
     )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.caption("PRIVATE MESSAGES")
-
-    with col2:
-        if st.button(
-            "＋ New Chat",
-            use_container_width=True
-        ):
-            st.session_state["eco_community_section"] = "Discover People"
-            st.rerun()
 
     conversations = get_direct_conversations(
         supabase,
@@ -721,10 +1038,7 @@ def render_chats_page(supabase, user_id):
             user_id
         )
 
-        profile = eco_profile(
-            supabase,
-            other_user_id
-        )
+        profile = eco_profile(supabase, other_user_id)
 
         name = profile.get("display_name") or "EcoLoop Member"
         username = profile.get("username") or "member"
@@ -754,8 +1068,6 @@ def render_chats_page(supabase, user_id):
             )
         )
 
-        created_at = last_message.get("created_at") or ""
-
         inbox_items.append({
             "conversation": conversation,
             "user_id": other_user_id,
@@ -763,8 +1075,9 @@ def render_chats_page(supabase, user_id):
             "name": name,
             "username": username,
             "message": message_text,
-            "time": created_at,
+            "time": last_message.get("created_at") or "",
         })
+
     if not inbox_items:
         st.info(
             "No conversations found. "
@@ -775,29 +1088,23 @@ def render_chats_page(supabase, user_id):
     for item in inbox_items:
         conversation = item["conversation"]
         profile = item["profile"]
-        avatar = profile.get("avatar_url") or ""
 
         with st.container(border=True):
-            col1, col2, col3 = st.columns([1, 4, 1])
+            col1, col2, col3 = st.columns([1, 4, 1.5])
 
             with col1:
-                if avatar and str(avatar).startswith("profiles/"):
-                    try:
-                        avatar_url = get_story_media_url(supabase, avatar)
-
-                        if avatar_url and str(avatar_url).startswith("http"):
-                            st.image(avatar_url, width=58)
-                        else:
-                            st.markdown("### 👤")
-                    except Exception:
-                        st.markdown("### 👤")
-                else:
-                    st.markdown("### 👤")
+                eco_show_avatar(
+                    supabase,
+                    profile.get("avatar_url"),
+                    55
+                )
 
             with col2:
                 st.markdown(f"**{eco_escape(item['name'])}**")
                 st.caption(f"@{eco_escape(item['username'])}")
-                st.caption(eco_escape(str(item["message"]))[:90])
+                st.caption(
+                    eco_escape(str(item["message"]))[:90]
+                )
 
                 if item["time"]:
                     st.caption(
@@ -810,7 +1117,9 @@ def render_chats_page(supabase, user_id):
                     key=f"eco_open_chat_{conversation.get('id')}",
                     use_container_width=True
                 ):
-                    st.session_state["eco_active_conversation"] = conversation.get("id")
+                    st.session_state["eco_active_conversation"] = (
+                        conversation.get("id")
+                    )
                     st.rerun()
 
                 if st.button(
@@ -818,13 +1127,15 @@ def render_chats_page(supabase, user_id):
                     key=f"eco_chat_profile_{item['user_id']}",
                     use_container_width=True
                 ):
-                    st.session_state["eco_view_profile_id"] = str(item["user_id"])
-                    st.session_state["eco_community_section"] = "Discover People"
+                    st.session_state["eco_view_profile_id"] = (
+                        str(item["user_id"])
+                    )
+                    eco_set_section("Discover People")
                     st.rerun()
-                    
+
 
 # ==========================================================
-# PART 5 — CHATROOMS
+# PART 9 — CHATROOM DATABASE HELPERS
 # ==========================================================
 
 def get_chatrooms(supabase, search=""):
@@ -835,10 +1146,10 @@ def get_chatrooms(supabase, search=""):
             .order("created_at", desc=True)
         )
 
-        if search:
+        if search and search.strip():
             query = query.or_(
-                f"name.ilike.%{search}%,"
-                f"description.ilike.%{search}%"
+                f"name.ilike.%{search.strip()}%,"
+                f"description.ilike.%{search.strip()}%"
             )
 
         result = query.limit(100).execute()
@@ -859,59 +1170,32 @@ def get_my_chatrooms(supabase, user_id):
             .execute()
         )
 
-        group_ids = [
-            item["group_id"]
+        group_ids = {
+            str(item.get("group_id"))
             for item in (memberships.data or [])
-        ]
+        }
 
         result = (
             supabase.table("community_groups")
             .select("*")
             .order("created_at", desc=True)
+            .limit(200)
             .execute()
         )
 
         return [
             group for group in (result.data or [])
-            if str(group.get("id")) in
-            [str(group_id) for group_id in group_ids]
-            or str(group.get("created_by")) == str(user_id)
+            if (
+                str(group.get("id")) in group_ids
+                or str(group.get("created_by")) == str(user_id)
+            )
         ]
 
     except Exception as e:
         st.error(f"Could not load your chatrooms: {e}")
         return []
 
-def upload_chatroom_photo(supabase, user_id, uploaded_file):
-    if not uploaded_file:
-        return ""
 
-    try:
-        extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
-
-        if extension not in ["jpg", "jpeg", "png", "webp"]:
-            st.error("Please upload a JPG, PNG or WEBP image.")
-            return None
-
-        file_path = (
-            f"chatrooms/{user_id}/{uuid.uuid4().hex}.{extension}"
-        )
-
-        supabase.storage.from_(MEDIA_BUCKET).upload(
-            file_path,
-            uploaded_file.getvalue(),
-            {
-                "content-type": uploaded_file.type,
-                "upsert": "true",
-            }
-        )
-
-        return file_path
-
-    except Exception as e:
-        st.error(f"Chatroom photo upload failed: {e}")
-        return None
-        
 def create_chatroom(
     supabase,
     user_id,
@@ -931,7 +1215,7 @@ def create_chatroom(
             "name": name,
             "description": description.strip(),
             "created_by": str(user_id),
-            "image_url": image_url.strip(),
+            "image_url": image_url or "",
             "location": location.strip(),
         }).execute()
 
@@ -967,6 +1251,7 @@ def request_chatroom_join(supabase, group_id, user_id):
                 st.info("Your request is awaiting approval.")
             else:
                 st.info("A membership record already exists.")
+
             return False
 
         supabase.table("group_memberships").insert({
@@ -1036,7 +1321,8 @@ def manage_chatroom_requests(supabase, group):
                 with col1:
                     if st.button(
                         "Approve",
-                        key=f"eco_approve_{request.get('id')}"
+                        key=f"eco_approve_{request.get('id')}",
+                        use_container_width=True
                     ):
                         supabase.table("group_memberships").update({
                             "status": "approved"
@@ -1050,7 +1336,8 @@ def manage_chatroom_requests(supabase, group):
                 with col2:
                     if st.button(
                         "Reject",
-                        key=f"eco_reject_{request.get('id')}"
+                        key=f"eco_reject_{request.get('id')}",
+                        use_container_width=True
                     ):
                         supabase.table("group_memberships").delete().eq(
                             "id", str(request.get("id"))
@@ -1063,18 +1350,24 @@ def manage_chatroom_requests(supabase, group):
 
 
 # ==========================================================
-# CHATROOMS PAGE — GALLERY PHOTO UPLOAD
+# PART 10 — CHATROOMS PAGE
 # ==========================================================
 
 def render_chatrooms_page(supabase, user_id):
     st.title("👥 Chatrooms")
-    st.caption("Find people, join conversations and build communities.")
+    st.caption(
+        "Find people, join conversations and build communities."
+    )
 
     tab_discover, tab_mine, tab_create = st.tabs([
         "Discover",
         "My Chatrooms",
         "Create"
     ])
+
+    # ------------------------------------------------------
+    # DISCOVER CHATROOMS
+    # ------------------------------------------------------
 
     with tab_discover:
         search = st.text_input(
@@ -1095,18 +1388,17 @@ def render_chatrooms_page(supabase, user_id):
             with st.container(border=True):
                 image_path = group.get("image_url") or ""
 
-                if image_path and "/" in image_path:
-                    try:
-                        image_url = get_story_media_url(
-                            supabase, image_path
+                if image_path:
+                    image_url = get_story_media_url(
+                        supabase,
+                        image_path
+                    )
+
+                    if image_url:
+                        st.image(
+                            image_url,
+                            use_container_width=True
                         )
-                        if image_url:
-                            st.image(
-                                image_url,
-                                use_container_width=True
-                            )
-                    except Exception:
-                        pass
 
                 st.markdown(
                     f"### {eco_escape(group.get('name') or '')}"
@@ -1122,6 +1414,7 @@ def render_chatrooms_page(supabase, user_id):
 
                 if creator_id == str(user_id):
                     st.caption("You created this chatroom.")
+
                 else:
                     if st.button(
                         "Request to Join",
@@ -1129,8 +1422,14 @@ def render_chatrooms_page(supabase, user_id):
                         use_container_width=True
                     ):
                         request_chatroom_join(
-                            supabase, group_id, user_id
+                            supabase,
+                            group_id,
+                            user_id
                         )
+
+    # ------------------------------------------------------
+    # MY CHATROOMS
+    # ------------------------------------------------------
 
     with tab_mine:
         my_chatrooms = get_my_chatrooms(supabase, user_id)
@@ -1147,18 +1446,17 @@ def render_chatrooms_page(supabase, user_id):
             with st.container(border=True):
                 image_path = group.get("image_url") or ""
 
-                if image_path and "/" in image_path:
-                    try:
-                        image_url = get_story_media_url(
-                            supabase, image_path
+                if image_path:
+                    image_url = get_story_media_url(
+                        supabase,
+                        image_path
+                    )
+
+                    if image_url:
+                        st.image(
+                            image_url,
+                            use_container_width=True
                         )
-                        if image_url:
-                            st.image(
-                                image_url,
-                                use_container_width=True
-                            )
-                    except Exception:
-                        pass
 
                 st.markdown(
                     f"### {eco_escape(group.get('name') or '')}"
@@ -1186,9 +1484,15 @@ def render_chatrooms_page(supabase, user_id):
                         use_container_width=True
                     ):
                         if leave_chatroom(
-                            supabase, group_id, user_id
+                            supabase,
+                            group_id,
+                            user_id
                         ):
                             st.rerun()
+
+    # ------------------------------------------------------
+    # CREATE CHATROOM
+    # ------------------------------------------------------
 
     with tab_create:
         st.subheader("Create a Chatroom")
@@ -1224,10 +1528,11 @@ def render_chatrooms_page(supabase, user_id):
             image_path = ""
 
             if uploaded_photo:
-                image_path = upload_chatroom_photo(
+                image_path = eco_upload_image(
                     supabase,
                     user_id,
-                    uploaded_photo
+                    uploaded_photo,
+                    "chatrooms"
                 )
 
                 if image_path is None:
@@ -1243,9 +1548,9 @@ def render_chatrooms_page(supabase, user_id):
             ):
                 st.rerun()
 
-            
+
 # ==========================================================
-# PART 6 — CHATROOM MESSAGES
+# PART 11 — CHATROOM MEMBERSHIP AND MESSAGES
 # ==========================================================
 
 def is_chatroom_member(supabase, group, user_id):
@@ -1287,7 +1592,12 @@ def get_chatroom_messages(supabase, group_id):
         return []
 
 
-def send_chatroom_message(supabase, group_id, user_id, message):
+def send_chatroom_message(
+    supabase,
+    group_id,
+    user_id,
+    message
+):
     message = message.strip()
 
     if not message:
@@ -1328,15 +1638,33 @@ def render_chatroom_chat(supabase, user_id, group_id):
         return
 
     if not is_chatroom_member(supabase, group, user_id):
-        st.warning("You must be an approved member to enter this chatroom.")
+        st.warning(
+            "You must be an approved member to enter this chatroom."
+        )
         return
 
-    st.markdown(f"## {eco_escape(group.get('name'))}")
+    image_path = group.get("image_url") or ""
+
+    if image_path:
+        image_url = get_story_media_url(supabase, image_path)
+
+        if image_url:
+            st.image(
+                image_url,
+                use_container_width=True
+            )
+
+    st.markdown(
+        f"## {eco_escape(group.get('name') or 'Chatroom')}"
+    )
 
     if group.get("description"):
         st.caption(group.get("description"))
 
-    if st.button("← Back to Chatrooms", key="eco_back_to_rooms"):
+    if st.button(
+        "← Back to Chatrooms",
+        key="eco_back_to_rooms"
+    ):
         st.session_state["eco_active_chatroom"] = None
         st.rerun()
 
@@ -1357,22 +1685,25 @@ def render_chatroom_chat(supabase, user_id, group_id):
             else eco_member_name(supabase, sender_id)
         )
 
-        sender_username = (
-            ""
-            if mine
-            else eco_member_username(supabase, sender_id)
-        )
-
         with st.chat_message("user" if mine else "assistant"):
-            st.caption(
-                f"{sender_name} {sender_username}"
-            )
+            st.caption(sender_name)
 
-            st.write(message.get("message_text") or "")
+            message_text = message.get("message_text") or ""
+
+            if message_text:
+                st.write(message_text)
+
+            if message.get("attachment_path"):
+                st.caption(
+                    f"📎 {message.get('attachment_name') or 'Attachment'}"
+                )
 
             created = message.get("created_at")
+
             if created:
-                st.caption(str(created)[:16].replace("T", " "))
+                st.caption(
+                    str(created).replace("T", " ")[:16]
+                )
 
     st.divider()
 
@@ -1390,47 +1721,49 @@ def render_chatroom_chat(supabase, user_id, group_id):
             use_container_width=True
         )
 
-        if submitted and message_text.strip():
-            if send_chatroom_message(
-                supabase,
-                group_id,
-                user_id,
-                message_text
-            ):
-                st.rerun()
+    if submitted and message_text.strip():
+        if send_chatroom_message(
+            supabase,
+            group_id,
+            user_id,
+            message_text
+        ):
+            st.rerun()
+
 
 # ==========================================================
-# PART 7 — STORIES
+# PART 12 — STORIES
 # ==========================================================
 
 def upload_story_media(supabase, user_id, uploaded_file):
     if uploaded_file is None:
         return None
 
+    extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
+
+    allowed = [
+        "jpg", "jpeg", "png", "webp",
+        "mp4", "mov", "webm"
+    ]
+
+    if extension not in allowed:
+        st.error("Unsupported story file type.")
+        return None
+
+    file_path = (
+        f"stories/{user_id}/{uuid.uuid4().hex}.{extension}"
+    )
+
+    content_type = (
+        uploaded_file.type
+        or mimetypes.guess_type(uploaded_file.name)[0]
+        or "application/octet-stream"
+    )
+
     try:
-        extension = uploaded_file.name.rsplit(".", 1)[-1].lower()
-
-        allowed = ["jpg", "jpeg", "png", "webp", "mp4", "mov", "webm"]
-
-        if extension not in allowed:
-            st.error("Unsupported story file type.")
-            return None
-
-        file_bytes = uploaded_file.getvalue()
-
-        file_path = (
-            f"stories/{user_id}/{uuid.uuid4().hex}.{extension}"
-        )
-
-        content_type = (
-            uploaded_file.type
-            or mimetypes.guess_type(uploaded_file.name)[0]
-            or "application/octet-stream"
-        )
-
         supabase.storage.from_(MEDIA_BUCKET).upload(
             file_path,
-            file_bytes,
+            uploaded_file.getvalue(),
             {
                 "content-type": content_type,
                 "upsert": "false",
@@ -1441,28 +1774,6 @@ def upload_story_media(supabase, user_id, uploaded_file):
 
     except Exception as e:
         st.error(f"Could not upload story media: {e}")
-        return None
-        
-def get_story_media_url(supabase, file_path):
-    if not file_path:
-        return None
-
-    try:
-        result = supabase.storage.from_(MEDIA_BUCKET).create_signed_url(
-            file_path,
-            3600
-        )
-
-        if isinstance(result, dict):
-            return (
-                result.get("signedURL")
-                or result.get("signedUrl")
-            )
-
-        return None
-
-    except Exception as e:
-        st.error(f"Could not load story media: {e}")
         return None
 
 
@@ -1480,7 +1791,7 @@ def create_story(
             "user_id": str(user_id),
             "caption": caption.strip(),
             "media_url": media_path,
-            "media_type": media_type,
+            "media_type": media_type or "",
             "created_at": now.isoformat(),
             "expires_at": (
                 now + timedelta(hours=24)
@@ -1528,14 +1839,7 @@ def render_story_card(supabase, story, current_user_id):
         col1, col2 = st.columns([1, 4])
 
         with col1:
-            if avatar:
-                avatar_url = get_story_media_url(supabase, avatar)
-                if avatar_url:
-                    st.image(avatar_url, width=50)
-                else:
-                    st.markdown("### 👤")
-            else:
-                st.markdown("### 👤")
+            eco_show_avatar(supabase, avatar, 50)
 
         with col2:
             st.markdown(f"**{eco_escape(name)}**")
@@ -1550,7 +1854,10 @@ def render_story_card(supabase, story, current_user_id):
             media_type = story.get("media_type") or ""
 
             if media_type.startswith("image"):
-                st.image(media_url, use_container_width=True)
+                st.image(
+                    media_url,
+                    use_container_width=True
+                )
 
             elif media_type.startswith("video"):
                 st.video(media_url)
@@ -1559,9 +1866,10 @@ def render_story_card(supabase, story, current_user_id):
             st.write(story.get("caption"))
 
         created = story.get("created_at")
+
         if created:
             st.caption(
-                f"Posted: {str(created)[:16].replace('T', ' ')}"
+                f"Posted: {str(created).replace('T', ' ')[:16]}"
             )
 
         if str(owner_id) == str(current_user_id):
@@ -1585,7 +1893,10 @@ def render_story_card(supabase, story, current_user_id):
 
 def render_updates_page(supabase, user_id):
     st.title("📸 Stories")
-    st.caption("Share photos and videos with the EcoLoop community. Stories expire after 24 hours.")
+    st.caption(
+        "Share photos and videos with the EcoLoop community. "
+        "Stories expire after 24 hours."
+    )
 
     tab_feed, tab_create = st.tabs([
         "Recent Stories",
@@ -1596,7 +1907,9 @@ def render_updates_page(supabase, user_id):
         stories = get_active_stories(supabase)
 
         if not stories:
-            st.info("No active stories yet. Be the first to share one!")
+            st.info(
+                "No active stories yet. Be the first to share one!"
+            )
 
         for story in stories:
             render_story_card(
@@ -1624,12 +1937,15 @@ def render_updates_page(supabase, user_id):
         )
 
         if uploaded_file:
-            if uploaded_file.type.startswith("image"):
+            uploaded_type = uploaded_file.type or ""
+
+            if uploaded_type.startswith("image"):
                 st.image(
                     uploaded_file,
                     use_container_width=True
                 )
-            elif uploaded_file.type.startswith("video"):
+
+            elif uploaded_type.startswith("video"):
                 st.video(uploaded_file)
 
         if st.button(
@@ -1656,14 +1972,16 @@ def render_updates_page(supabase, user_id):
 
 
 # ==========================================================
-# PART 8 — COMMUNITY HUB NAVIGATION
+# PART 13 — COMMUNITY HUB NAVIGATION
 # ==========================================================
 
 def render_community_groups_page(supabase, user_id):
     eco_init_state()
 
     st.title("🌍 Community Hub")
-    st.caption("Connect, communicate and make an impact together.")
+    st.caption(
+        "Connect, communicate and make an impact together."
+    )
 
     active_chatroom = st.session_state.get(
         "eco_active_chatroom"
@@ -1723,111 +2041,3 @@ def render_community_groups_page(supabase, user_id):
 
     st.divider()
     st.caption("Powered by Next Gen Impact Hub (NGIH)")
-    
-# ==========================================================
-# DISCOVER FIX — SAFE MEMBER DIRECTORY
-# ==========================================================
-
-def render_people_directory(supabase, user_id):
-
-    selected_id = st.session_state.get("eco_view_profile_id")
-
-    if selected_id:
-        try:
-            result = (
-                supabase.table("member_profiles")
-                .select("*")
-                .eq("user_id", str(selected_id))
-                .limit(1)
-                .execute()
-            )
-
-            if result.data:
-                render_public_profile(
-                    supabase,
-                    user_id,
-                    result.data[0]
-                )
-                return
-
-        except Exception as e:
-            st.error(f"Could not open profile: {e}")
-
-        st.session_state.pop("eco_view_profile_id", None)
-
-    st.subheader("Discover People")
-    st.caption("Find people and explore their profiles.")
-
-    search = st.text_input(
-        "Search by username",
-        key="eco_people_search"
-    )
-
-    members = get_member_directory(supabase, search)
-
-    members = [
-        member for member in members
-        if str(member.get("user_id")) != str(user_id)
-    ]
-
-    if not members:
-        st.info("No members found.")
-        return
-
-    for member in members:
-
-        member_id = str(member.get("user_id"))
-        name = member.get("display_name") or "EcoLoop Member"
-        username = member.get("username") or "member"
-        avatar = member.get("avatar_url") or ""
-        bio = member.get("bio") or ""
-        location = member.get("location") or ""
-
-        with st.container(border=True):
-
-            col1, col2 = st.columns([1, 4])
-
-            with col1:
-
-                image_displayed = False
-
-                if avatar and avatar.startswith("profiles/"):
-
-                    try:
-                        avatar_url = get_story_media_url(
-                            supabase,
-                            avatar
-                        )
-
-                        if (
-                            avatar_url
-                            and isinstance(avatar_url, str)
-                            and avatar_url.startswith("http")
-                        ):
-                            st.image(avatar_url, width=70)
-                            image_displayed = True
-
-                    except Exception:
-                        image_displayed = False
-
-                if not image_displayed:
-                    st.markdown("### 👤")
-
-            with col2:
-
-                st.markdown(f"**{eco_escape(name)}**")
-                st.caption(f"@{eco_escape(username)}")
-
-                if bio:
-                    st.write(bio)
-
-                if location:
-                    st.caption(f"📍 {eco_escape(location)}")
-
-                if st.button(
-                    "View Profile",
-                    key=f"eco_view_profile_{member_id}",
-                    use_container_width=True
-                ):
-                    st.session_state["eco_view_profile_id"] = member_id
-                    st.rerun()
