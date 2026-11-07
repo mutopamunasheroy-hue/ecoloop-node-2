@@ -1,7 +1,8 @@
 # ============================================================
-# ECOLOOP NODE — COMMUNITY HUB — WHATSAPP 2.0 — FULL REDO
-# Paste whole file, replace old community_hub.py, Reboot
-# No bottom overrides. No patches.
+# ECOLOOP NODE — COMMUNITY HUB — WHATSAPP 2.0 — CORRECTED FULL FILE
+# Fixes: 1) Emoji draft single source of truth  2) Mobile single-column inbox  3) Admin direct add member
+# Preserves: Chats, Groups, Stories, Discover, profiles, DM + group messaging, media uploads, Supabase tables
+# Composer = LIKE THID: [😊 Message 📎 📷 🎤] [■]
 # ============================================================
 import mimetypes, os, re, uuid
 from datetime import datetime, timedelta, timezone
@@ -20,7 +21,7 @@ def eco_safe_text(v, d=""):
     t = str(v or "").strip()
     return t if t else d
 def eco_init_state():
-    defaults = {"eco_community_section":"Chats","eco_chat_view":"Inbox","eco_active_conversation":None,"eco_active_chatroom":None,"eco_group_view":"Discover","eco_story_view":"Stories","eco_profile_view_user":None,"eco_story_open_id":None,"eco_group_members_open":None}
+    defaults = {"eco_community_section":"Chats","eco_chat_view":"Inbox","eco_active_conversation":None,"eco_active_chatroom":None,"eco_group_view":"Discover","eco_story_view":"Stories","eco_profile_view_user":None,"eco_story_open_id":None,"eco_group_members_open":None,"eco_composer_gen":0,"eco_emoji_open":False}
     for k,v in defaults.items():
         if k not in st.session_state: st.session_state[k]=v
 def eco_result_data(r):
@@ -99,7 +100,30 @@ def eco_inject_styles():
     .wa-avatar{width:44px;height:44px;border-radius:50%;background:#DFE5E7;display:flex;align-items:center;justify-content:center;font-weight:700;color:#54656F;font-size:16px;flex-shrink:0;overflow:hidden}
     .wa-unread{background:#25D366;color:white;font-size:11px;font-weight:700;min-width:20px;height:20px;border-radius:20px;display:flex;align-items:center;justify-content:center;padding:0 6px}
     .wa-empty{height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#F8F9FA;color:#667781;text-align:center;padding:30px;border-radius:10px}
-    .wa-composer{background:#F0F2F5;padding:8px;border-radius:12px}
+    .wa-emoji-row{background:#0B141A;padding:6px 8px 8px 8px}
+    /* === LIKE THID: [😊 Message 📎 📷] [■] === */
+    .wa-composer-wrap{background:#0B141A;padding:8px 8px 12px 8px;position:sticky;bottom:0;z-index:99}
+    .wa-composer-wrap [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important;gap:0!important;align-items:center!important}
+    .wa-composer-wrap [data-testid="column"]{min-width:0!important;flex-shrink:1!important;padding:0!important;background:#2A3942!important}
+    .wa-composer-wrap [data-testid="column"]:nth-child(1){flex:0 0 46px!important;max-width:46px!important;border-radius:24px 0 0 24px!important}
+    .wa-composer-wrap [data-testid="column"]:nth-child(2){flex:1 1 auto!important}
+    .wa-composer-wrap [data-testid="column"]:nth-child(3){flex:0 0 38px!important;max-width:38px!important}
+    .wa-composer-wrap [data-testid="column"]:nth-child(4){flex:0 0 38px!important;max-width:38px!important}
+    .wa-composer-wrap [data-testid="column"]:nth-child(5){flex:0 0 38px!important;max-width:38px!important;border-radius:0 24px 24px 0!important}
+    .wa-composer-wrap [data-testid="column"]:nth-child(6){flex:0 0 56px!important;max-width:56px!important;background:#0B141A!important;padding-left:8px!important}
+    .wa-composer-wrap input{background:#2A3942!important;color:#E9EDEF!important;border:none!important;border-radius:0!important;height:48px!important;font-size:15px!important;padding:0 6px!important;box-shadow:none!important}
+    .wa-composer-wrap input::placeholder{color:#8696A0!important}
+    .wa-composer-wrap [data-testid="column"]:nth-child(1) button{background:#2A3942!important;color:#8696A0!important;border:none!important;box-shadow:none!important;border-radius:24px 0 0 24px!important;height:48px!important;width:46px!important;min-width:46px!important;padding:0!important;font-size:22px!important}
+    .wa-composer-wrap [data-testid="column"]:nth-child(6) button{background:#00A884!important;color:white!important;border-radius:50%!important;height:48px!important;width:48px!important;min-width:48px!important;padding:0!important;font-size:16px!important;box-shadow:none!important}
+    .wa-composer-wrap [data-testid="stFileUploader"]{margin:0!important;padding:0!important}
+    .wa-composer-wrap [data-testid="stFileUploader"] section{border:none!important;background:#2A3942!important;padding:0!important;min-height:0!important;height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important}
+    .wa-composer-wrap [data-testid="stFileUploader"] section > div{display:none!important}
+    .wa-composer-wrap [data-testid="stFileUploader"] section > button{border:none!important;background:transparent!important;color:#8696A0!important;box-shadow:none!important;height:38px!important;width:38px!important;min-width:38px!important;padding:0!important;font-size:18px!important}
+    .wa-composer-wrap [data-testid="stFileUploader"] small,.wa-composer-wrap [data-testid="stFileUploader"] span{display:none!important}
+    .wa-composer-wrap [data-testid="stFileUploaderDropzoneInstructions"]{display:none!important}
+    .wa-composer-wrap [data-testid="stAudioInput"]{background:#2A3942!important;border-radius:0 24px 24px 0!important;height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important}
+    .wa-composer-wrap [data-testid="stAudioInput"] > div{border:none!important;background:transparent!important}
+    .wa-composer-wrap [data-testid="stAudioInput"] button{background:transparent!important;color:#8696A0!important;border:none!important;box-shadow:none!important;height:38px!important;width:38px!important}
     </style>""", unsafe_allow_html=True)
 
 def eco_avatar_html(profile, size=44):
@@ -117,9 +141,10 @@ def eco_bubble_html(text, time_label, is_me, sender_name="", edited=False):
     return f'<div class="{cls}">{sender}<div>{safe}</div><div class="wa-meta">{time_label}{edit}{tick}</div></div>'
 
 def eco_render_bubbles_html(supabase, messages, uid, is_group=False):
-    html=['<div class="wa-chat-bg">']
     if not messages:
-        html.append('<div class="wa-empty"><div style="font-size:48px;">💬</div><b>Say hi</b><p>This is the beginning of your conversation.</p></div>')
+        st.markdown('<div class="wa-chat-bg"><div class="wa-empty"><div style="font-size:48px;">💬</div><b>Say hi</b><p>This is the beginning of your conversation.</p></div></div>', unsafe_allow_html=True)
+        return
+    st.markdown('<div class="wa-chat-bg">', unsafe_allow_html=True)
     for m in messages:
         if m.get("deleted_at"): continue
         sent=str(m.get("sender_id"))==str(uid)
@@ -132,14 +157,19 @@ def eco_render_bubbles_html(supabase, messages, uid, is_group=False):
             a=m.get("attachments"); atts=a if isinstance(a,list) else [a]
         for it in atts:
             if not isinstance(it,dict): continue
-            url=eco_storage_url(supabase, it.get("path") or it.get("url")); typ=str(it.get("type") or "")
-            if url and typ.startswith("image"): html.append(f'<div style="text-align:{"right" if sent else "left"}"><img src="{url}" style="max-width:80%;border-radius:10px;margin:4px 0;" /></div>')
-            elif url and typ.startswith("video"): html.append(f'<div>🎬 <a href="{url}" target="_blank">Watch video</a></div>')
-            elif url and typ.startswith("audio"): html.append(f'<div>🎤 <a href="{url}" target="_blank">Play voice note</a></div>')
-            elif url: html.append(f'<div>📎 <a href="{url}" target="_blank">{it.get("name") or "Open attachment"}</a></div>')
-        if body: html.append(eco_bubble_html(body, eco_time_short(m.get("created_at")), sent, "" if sent else name, bool(m.get("edited_at"))))
-    html.append('</div>')
-    st.markdown("".join(html), unsafe_allow_html=True)
+            url=eco_storage_url(supabase, it.get("path") or it.get("url")); typ=str(it.get("type") or "").lower()
+            is_audio = typ.startswith("audio") or str(it.get("path") or "").lower().endswith((".wav",".mp3",".m4a",".webm",".ogg")) or str(it.get("name") or "").lower().endswith((".wav",".mp3",".m4a",".webm",".ogg"))
+            if url and is_audio:
+                st.audio(url, format="audio/wav")
+            elif url and typ.startswith("image"):
+                st.markdown(f'<div style="text-align:{"right" if sent else "left"}"><img src="{url}" style="max-width:80%;border-radius:10px;margin:4px 0;" /></div>', unsafe_allow_html=True)
+            elif url and typ.startswith("video"):
+                st.markdown(f'<div>🎬 <a href="{url}" target="_blank">Watch video</a></div>', unsafe_allow_html=True)
+            elif url:
+                st.markdown(f'<div>📎 <a href="{url}" target="_blank">{it.get("name") or "Open attachment"}</a></div>', unsafe_allow_html=True)
+        if body:
+            st.markdown(eco_bubble_html(body, eco_time_short(m.get("created_at")), sent, "" if sent else name, bool(m.get("edited_at"))), unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def eco_back_to_dashboard():
     st.session_state["eco_active_conversation"]=None
@@ -152,7 +182,6 @@ def eco_back_to_dashboard():
     st.session_state["eco_page"]="Dashboard"
     st.rerun()
 
-# ---------------- Profile ----------------
 def save_member_profile(supabase, uid, values):
     payload={"user_id":uid}
     for k in ("display_name","username","bio","location","interests","country_of_origin","instagram_handle","facebook_handle","tiktok_handle","linkedin_handle","avatar_url"):
@@ -166,7 +195,7 @@ def render_profile_editor(supabase, uid):
     if st.button("‹ Back to chats"):
         st.session_state.eco_chat_view="Inbox"; st.rerun()
     st.markdown(eco_avatar_html(profile, 96), unsafe_allow_html=True)
-    st.caption("Tap Upload below to change your picture. No more grey avatar.")
+    st.caption("Tap Upload below to change your picture.")
     avatar_file=st.file_uploader("Update profile picture", type=["jpg","jpeg","png","webp"], key="eco_profile_avatar_upload")
     if avatar_file and st.button("Upload profile picture", key="eco_profile_avatar_save", use_container_width=True):
         try:
@@ -252,7 +281,6 @@ def render_public_profile(supabase, uid, current_uid):
             st.session_state.eco_active_conversation=conv; st.session_state.eco_chat_view="Conversation"; st.rerun()
         except Exception as e: st.error(f"Could not start conversation: {e}")
 
-# ---------------- Direct Messages ----------------
 def get_or_create_direct_conversation(supabase, a, b):
     first,second=sorted([str(a),str(b)])
     rows=eco_select(supabase,"direct_conversations","*",[("eq","user_one_id",first),("eq","user_two_id",second)],limit=1)
@@ -291,29 +319,80 @@ def get_read_ts(supabase, cid, uid):
     except Exception: return None
 def get_other_user(conv, cur): return conv.get("user_two_id") if str(conv.get("user_one_id"))==str(cur) else conv.get("user_one_id")
 
+# --- FIX 1: Emoji draft — single source of truth ---
+# The text_input's own session_state key IS the draft. No separate draft + value=.
+# Emoji appends to that same key, then reruns. Send clears that same key.
 def render_whatsapp_composer(supabase, uid, conversation_id=None, group_id=None):
-    st.markdown('<div class="wa-composer">', unsafe_allow_html=True)
-    c1,c2,c3,c4=st.columns([1,6,1,1])
-    with c1: attach=st.file_uploader("📎", type=["jpg","jpeg","png","webp","mp4","mov","pdf","docx"], label_visibility="collapsed", key=f"attach_{conversation_id or group_id}")
-    with c2: text=st.text_input("Type a message...", label_visibility="collapsed", key=f"txt_{conversation_id or group_id}")
-    with c3: voice=st.audio_input("🎤", label_visibility="collapsed", key=f"voice_{conversation_id or group_id}")
-    with c4: send=st.button("➤", key=f"send_{conversation_id or group_id}")
+    eco_init_state()
+    gen = int(st.session_state.get("eco_composer_gen", 0))
+    base = f"{conversation_id or group_id}_{gen}"
+    txt_key = f"txt_{base}"
+    if txt_key not in st.session_state: st.session_state[txt_key] = ""
+    if st.session_state.get("eco_emoji_open"):
+        emojis = ["😂","❤️","🔥","😭","👏","😍","🙏","💯","😅","🥺","👀","🎉","😡","🤣","😊","👍","🫶","✨"]
+        ecols = st.columns(9, gap="small")
+        for i, em in enumerate(emojis):
+            with ecols[i % 9]:
+                if st.button(em, key=f"eco_emoji_pick_{base}_{i}"):
+                    st.session_state[txt_key] = str(st.session_state.get(txt_key,"")) + em
+                    st.session_state["eco_emoji_open"] = False
+                    st.rerun()
+        if st.button("✕ Close emojis", key=f"eco_emoji_close_{base}"):
+            st.session_state["eco_emoji_open"] = False
+            st.rerun()
+    st.markdown('<div class="wa-composer-wrap">', unsafe_allow_html=True)
+    c1,c2,c3,c4,c5,c6 = st.columns([0.8, 5, 0.8, 0.8, 0.8, 0.9], gap="small")
+    with c1:
+        if st.button("😊", key=f"emoji_{base}"):
+            st.session_state["eco_emoji_open"] = not st.session_state.get("eco_emoji_open", False)
+            st.rerun()
+    with c2:
+        # No value= here — key holds the truth, emoji + typing both write to same key
+        text = st.text_input("Message", label_visibility="collapsed", placeholder="Message", key=txt_key)
+    with c3:
+        attach=st.file_uploader("📎", type=["pdf","docx","mp4","mov"], label_visibility="collapsed", key=f"attach_{base}")
+    with c4:
+        photo=st.file_uploader("📷", type=["jpg","jpeg","png","webp"], label_visibility="collapsed", key=f"photo_{base}")
+    with c5:
+        voice=st.audio_input("🎤", label_visibility="collapsed", key=f"voice_{base}")
+    with c6:
+        send=st.button("■", key=f"send_{base}")
     st.markdown('</div>', unsafe_allow_html=True)
-    if not (send or voice is not None): return
+    if not send: return
+    has_text = bool((text or "").strip())
+    has_attach = attach is not None
+    has_photo = photo is not None
+    has_voice = voice is not None
+    if not (has_text or has_attach or has_photo or has_voice): return
     try:
-        if voice is not None:
-            path=f"voice/{uid}/{uuid.uuid4().hex}.wav"
-            supabase.storage.from_(BUCKET).upload(path, voice.getvalue(), {"content-type":"audio/wav"})
-            if conversation_id: send_direct_message(supabase, conversation_id, uid, "🎤 Voice note", path, "voice.wav", "audio")
-            if group_id: supabase.table("group_messages").insert({"group_id":group_id,"sender_id":uid,"message_text":"🎤 Voice note","attachments":[{"path":path,"name":"voice.wav","type":"audio"}]}).execute()
-            st.rerun()
-        apath=""; aname=""; atyp=""
-        if attach is not None:
-            apath=eco_upload(supabase, attach, "chat", uid, allow_video=True, allow_doc=True); aname=attach.name; atyp=attach.type or ""
-        if text.strip() or apath:
-            if conversation_id: send_direct_message(supabase, conversation_id, uid, text or aname or "Attachment", apath, aname, atyp)
-            if group_id: supabase.table("group_messages").insert({"group_id":group_id,"sender_id":uid,"message_text":text.strip() or aname or "Attachment","attachments":[{"path":apath,"name":aname,"type":atyp}] if apath else []}).execute()
-            st.rerun()
+        voice_path = ""
+        if has_voice:
+            voice_path=f"voice/{uid}/{uuid.uuid4().hex}.wav"
+            supabase.storage.from_(BUCKET).upload(voice_path, voice.getvalue(), {"content-type":"audio/wav"})
+        uploads=[]
+        for up in [photo, attach]:
+            if up is not None:
+                p=eco_upload(supabase, up, "chat", uid, allow_video=True, allow_doc=True)
+                uploads.append((p, up.name, up.type or ""))
+        if conversation_id:
+            if has_voice:
+                send_direct_message(supabase, conversation_id, uid, (text.strip() if has_text and not uploads else "🎤 Voice note"), voice_path, "voice.wav", "audio")
+            if has_text or uploads:
+                if uploads:
+                    for idx,(apath,aname,atyp) in enumerate(uploads):
+                        send_direct_message(supabase, conversation_id, uid, text.strip() if idx==0 and has_text else aname, apath, aname, atyp)
+                else:
+                    send_direct_message(supabase, conversation_id, uid, text.strip(), "", "", "")
+        if group_id:
+            if has_voice:
+                supabase.table("group_messages").insert({"group_id":group_id,"sender_id":uid,"message_text":"🎤 Voice note","attachments":[{"path":voice_path,"name":"voice.wav","type":"audio"}]}).execute()
+            if has_text or uploads:
+                supabase.table("group_messages").insert({"group_id":group_id,"sender_id":uid,"message_text":text.strip() or (uploads[0][1] if uploads else "Attachment"),"attachments":[{"path":p,"name":n,"type":t} for p,n,t in uploads]}).execute()
+        # Clear the single source of truth, bump gen so uploaders reset
+        st.session_state[txt_key] = ""
+        st.session_state["eco_emoji_open"] = False
+        st.session_state["eco_composer_gen"] = gen + 1
+        st.rerun()
     except Exception as e: st.error(f"Message could not be sent: {e}")
 
 def render_direct_conversation(supabase, uid):
@@ -385,7 +464,6 @@ def render_chats_section(supabase, uid):
     if v=="My Profile": render_profile_editor(supabase, uid); return
     render_whatsapp_inbox(supabase, uid)
 
-# ---------------- Groups ----------------
 def get_chatrooms(supabase, search=""):
     try:
         rows=eco_select(supabase,"community_groups","*",order=("created_at",True),limit=150)
@@ -415,6 +493,12 @@ def is_member(supabase, group, uid):
         rows=eco_select(supabase,"group_memberships","*",[("eq","group_id",group.get("id")),("eq","user_id",uid),("eq","status","approved")],limit=1)
         return bool(rows)
     except Exception: return str(group.get("created_by"))==str(uid)
+def is_group_admin(supabase, group, uid):
+    if str(group.get("created_by"))==str(uid): return True
+    try:
+        rows=eco_select(supabase,"group_memberships","*",[("eq","group_id",group.get("id")),("eq","user_id",uid),("eq","status","approved")],limit=1)
+        return bool(rows and rows[0].get("membership_role")=="admin")
+    except Exception: return False
 def get_membership(supabase, gid, uid):
     try:
         rows=eco_select(supabase,"group_memberships","*",[("eq","group_id",gid),("eq","user_id",uid)],limit=1); return rows[0] if rows else {}
@@ -431,6 +515,36 @@ def get_group_members(supabase, gid):
             if p: p["_role"]=m.get("membership_role"); out.append(p)
         return out
     except Exception: return []
+
+# --- FIX 3: Admin direct add member ---
+def render_admin_add_member(supabase, group, uid):
+    if not is_group_admin(supabase, group, uid): return
+    gid=group.get("id")
+    st.markdown("### ➕ Add member directly (Admin)")
+    st.caption("Admins can add anyone without waiting for a join request. Uses existing group_memberships table.")
+    q=st.text_input("Search person to add", placeholder="Search username or name…", key=f"eco_admin_add_search_{gid}")
+    candidates=[p for p in get_member_directory(supabase, q) if str(p.get("user_id"))!=str(uid)][:20]
+    existing={str(m.get("user_id")) for m in get_group_members(supabase, gid)}
+    for i,p in enumerate(candidates):
+        puid=str(p.get("user_id"))
+        if puid in existing: continue
+        a,b=st.columns([3,1])
+        with a: st.write(f"{eco_display_name(p)} (@{eco_safe_text(p.get('username'),'member')})")
+        with b:
+            if st.button("Add", key=f"eco_admin_add_{gid}_{i}_{puid}"):
+                try:
+                    supabase.table("group_memberships").upsert({"group_id":gid,"user_id":puid,"membership_role":"member","status":"approved"}, on_conflict="group_id,user_id").execute()
+                    st.success(f"Added {eco_display_name(p)}"); st.rerun()
+                except Exception as e: st.error(f"Could not add: {e}")
+    st.markdown("### Current members")
+    for i,m in enumerate(get_group_members(supabase, gid)):
+        a,b=st.columns([3,1])
+        with a: st.write(f"{eco_display_name(m)} (@{eco_safe_text(m.get('username'),'member')}) · {m.get('_role','member')}")
+        with b:
+            if str(m.get("user_id"))!=str(uid) and str(m.get("user_id"))!=str(group.get("created_by")):
+                if st.button("Remove", key=f"eco_admin_remove_{gid}_{i}_{m.get('user_id')}"):
+                    try: leave_chatroom(supabase, gid, m.get("user_id")); st.rerun()
+                    except Exception as e: st.error(str(e))
 
 def render_chatroom_chat(supabase, group, uid):
     gid=group.get("id")
@@ -454,6 +568,8 @@ def render_chatroom_chat(supabase, group, uid):
                 with c2: st.markdown(f"**{eco_display_name(m)}**"); st.caption(f"@{eco_safe_text(m.get('username'),'member')} · {m.get('_role','member')}")
             if str(m.get("user_id"))!=str(uid) and st.button("View profile", key=f"eco_member_view_{gid}_{i}"):
                 st.session_state.eco_profile_view_user=m.get("user_id"); st.session_state.eco_chat_view="Profile"; st.rerun()
+        # Admin direct add also inside chat view
+        render_admin_add_member(supabase, group, uid)
     msgs=get_group_messages(supabase, gid)
     eco_render_bubbles_html(supabase, msgs, uid, is_group=True)
     render_whatsapp_composer(supabase, uid, group_id=gid)
@@ -504,8 +620,8 @@ def render_chatrooms_page(supabase, uid):
         if not groups: st.info("You have not joined any groups yet.")
         for i,g in enumerate(groups): _render_group_card(supabase, g, uid, i, "mine")
         for g in groups:
-            if str(g.get("created_by"))!=str(uid): continue
-            with st.expander(f"Manage requests · {g.get('name','Group')}"):
+            if not is_group_admin(supabase, g, uid): continue
+            with st.expander(f"Manage · {g.get('name','Group')}"):
                 try: pending=eco_select(supabase,"group_memberships","*",[("eq","group_id",g.get("id")),("eq","status","pending")],limit=100)
                 except Exception: pending=[]
                 if not pending: st.caption("No pending requests.")
@@ -521,6 +637,8 @@ def render_chatrooms_page(supabase, uid):
                         if st.button("Reject", key=f"eco_req_reject_{g.get('id')}_{j}"):
                             try: supabase.table("group_memberships").update({"status":"rejected"}).eq("group_id",g.get("id")).eq("user_id",req.get("user_id")).execute(); st.rerun()
                             except Exception as e: st.error(str(e))
+                # FIX 3 also in My Groups manage
+                render_admin_add_member(supabase, g, uid)
     else:
         with st.form("eco_create_group_form", clear_on_submit=True):
             name=st.text_input("Group name", placeholder="e.g. Bulawayo Climate Action"); desc=st.text_area("What is this group about?", max_chars=500); loc=st.text_input("Location (optional)"); imgf=st.file_uploader("Group cover image (optional)", type=["jpg","jpeg","png","webp"], key="eco_group_cover_upload"); submit=st.form_submit_button("Create community group", use_container_width=True)
@@ -534,7 +652,6 @@ def render_chatrooms_page(supabase, uid):
                     else: st.success("Group created. Find it under My Groups.")
                 except Exception as e: st.error(f"Could not create group: {e}")
 
-# ---------------- Stories ----------------
 def create_story(supabase, uid, caption, path, typ):
     now=eco_now(); exp=now+timedelta(hours=24)
     return supabase.table("stories").insert({"user_id":uid,"caption":(caption or "").strip(),"media_url":path,"media_type":typ,"created_at":now.isoformat(),"expires_at":exp.isoformat()}).execute()
@@ -615,7 +732,6 @@ def render_discover(supabase, uid):
 
 def render_community_groups_page(supabase, user_id):
     eco_init_state(); eco_inject_styles()
-    # BACK TO DASHBOARD - always at top, never stuck
     if st.button("← Back to Dashboard", key="eco_main_back_dashboard_top"): eco_back_to_dashboard()
     private_open=st.session_state.get("eco_chat_view")=="Conversation"; room_open=bool(st.session_state.get("eco_active_chatroom"))
     st.session_state["eco_hide_app_footer"]=bool(private_open or room_open)
@@ -633,285 +749,10 @@ def render_community_groups_page(supabase, user_id):
     cur=st.session_state.get("eco_community_section","Chats"); cur_opt=next((k for k,v in labels.items() if v==cur), options[0])
     sel=st.radio("Community navigation", options, horizontal=True, key=MAIN_NAV_KEY, index=options.index(cur_opt), label_visibility="collapsed"); section=labels[sel]; st.session_state.eco_community_section=section
     try:
-        if section=="Chats":
-            left,right=st.columns([1,1.2])
-            with left: render_whatsapp_inbox(supabase, user_id)
-            with right: st.markdown('<div class="wa-empty"><div style="font-size:64px;">💬</div><h3>EcoLoop Web</h3><p>Select a chat to start messaging.</p><p style="font-size:12px;color:#8696A0;">Powered by Next Gen Impact Hub (NGIH)</p></div>', unsafe_allow_html=True)
+        # FIX 2: Mobile layout — single column, full width inbox. No 2-col squeeze.
+        if section=="Chats": render_whatsapp_inbox(supabase, user_id)
         elif section=="Groups": render_chatrooms_page(supabase, user_id)
         elif section=="Stories": render_stories_page(supabase, user_id)
         else: render_discover(supabase, user_id)
     except Exception as e: st.error("Community Hub section could not load."); st.caption(f"Detail: {e}")
     st.divider(); st.caption("Powered by Next Gen Impact Hub (NGIH)")
-
-# ============================================================
-# ECOLOOP NODE — COMMUNITY HUB
-# WHATSAPP 2.0 — VOICE MESSAGE FIX
-# Add this entire section at the VERY BOTTOM of the file.
-# Overrides the older composer and message renderer.
-# ============================================================
-
-def render_whatsapp_composer(supabase, uid, conversation_id=None, group_id=None):
-    import hashlib
-
-    target = str(conversation_id or group_id or uid)
-    counter_key = f"eco_voice_widget_counter_{target}"
-
-    if counter_key not in st.session_state:
-        st.session_state[counter_key] = 0
-
-    # A new widget key after sending clears the previous recording.
-    voice_key = f"voice_{target}_{st.session_state[counter_key]}"
-
-    st.markdown('<div class="wa-composer">', unsafe_allow_html=True)
-
-    c1, c2, c3, c4 = st.columns([1, 6, 1, 1])
-
-    with c1:
-        attach = st.file_uploader(
-            "📎",
-            type=["jpg", "jpeg", "png", "webp", "mp4", "mov", "pdf", "docx"],
-            label_visibility="collapsed",
-            key=f"attach_{target}"
-        )
-
-    with c2:
-        text = st.text_input(
-            "Type a message...",
-            label_visibility="collapsed",
-            key=f"txt_{target}"
-        )
-
-    with c3:
-        voice = st.audio_input(
-            "🎤",
-            label_visibility="collapsed",
-            key=voice_key
-        )
-
-    with c4:
-        send = st.button(
-            "➤",
-            key=f"send_{target}",
-            help="Send message",
-            use_container_width=True
-        )
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Nothing is sent until the user taps Send.
-    if not send:
-        return
-
-    try:
-        sent_any = False
-
-        # ---------------- VOICE MESSAGE ----------------
-        if voice is not None:
-            audio_bytes = voice.getvalue()
-
-            if not audio_bytes:
-                st.warning("The recording appears to be empty.")
-                return
-
-            # Prevent the same recording being submitted twice.
-            signature = hashlib.sha256(audio_bytes).hexdigest()
-            sent_key = f"eco_voice_last_sent_{target}"
-
-            if st.session_state.get(sent_key) != signature:
-
-                path = f"voice/{uid}/{uuid.uuid4().hex}.wav"
-
-                supabase.storage.from_(BUCKET).upload(
-                    path,
-                    audio_bytes,
-                    {
-                        "content-type": "audio/wav",
-                        "upsert": "false"
-                    }
-                )
-
-                if conversation_id:
-                    send_direct_message(
-                        supabase,
-                        conversation_id,
-                        uid,
-                        "🎤 Voice note",
-                        path,
-                        "voice.wav",
-                        "audio"
-                    )
-
-                elif group_id:
-                    supabase.table("group_messages").insert({
-                        "group_id": group_id,
-                        "sender_id": uid,
-                        "message_text": "🎤 Voice note",
-                        "attachments": [{
-                            "path": path,
-                            "name": "voice.wav",
-                            "type": "audio"
-                        }]
-                    }).execute()
-
-                st.session_state[sent_key] = signature
-                sent_any = True
-
-                # Change the audio widget key so its old recording clears.
-                st.session_state[counter_key] += 1
-
-        # ---------------- FILE ATTACHMENT ----------------
-        apath = ""
-        aname = ""
-        atyp = ""
-
-        if attach is not None:
-            apath = eco_upload(
-                supabase,
-                attach,
-                "chat",
-                uid,
-                allow_video=True,
-                allow_doc=True
-            )
-            aname = attach.name
-            atyp = attach.type or ""
-
-        # ---------------- TEXT MESSAGE ----------------
-        if text.strip() or apath:
-            message_text = text.strip() or aname or "Attachment"
-
-            if conversation_id:
-                send_direct_message(
-                    supabase,
-                    conversation_id,
-                    uid,
-                    message_text,
-                    apath,
-                    aname,
-                    atyp
-                )
-
-            elif group_id:
-                supabase.table("group_messages").insert({
-                    "group_id": group_id,
-                    "sender_id": uid,
-                    "message_text": message_text,
-                    "attachments": [{
-                        "path": apath,
-                        "name": aname,
-                        "type": atyp
-                    }] if apath else []
-                }).execute()
-
-            sent_any = True
-
-        if sent_any:
-            st.rerun()
-
-    except Exception as e:
-        st.error(f"Message could not be sent: {e}")
-
-
-# ============================================================
-# MESSAGE DISPLAY — REAL AUDIO PLAYBACK
-# ============================================================
-
-def eco_render_bubbles_html(supabase, messages, uid, is_group=False):
-
-    if not messages:
-        st.markdown(
-            '<div class="wa-empty">'
-            '<div style="font-size:48px;">💬</div>'
-            '<b>Say hi</b>'
-            '<p>This is the beginning of your conversation.</p>'
-            '</div>',
-            unsafe_allow_html=True
-        )
-        return
-
-    for m in messages:
-
-        if m.get("deleted_at"):
-            continue
-
-        sent = str(m.get("sender_id")) == str(uid)
-
-        sender = (
-            eco_profile_with_avatar(supabase, m.get("sender_id"))
-            if is_group else {}
-        )
-
-        name = "You" if sent else eco_display_name(sender)
-        body = str(m.get("message_text") or "")
-
-        # Collect attachments.
-        atts = []
-
-        if m.get("attachment_path"):
-            atts = [{
-                "path": m.get("attachment_path"),
-                "type": m.get("attachment_type") or "",
-                "name": m.get("attachment_name") or "Attachment"
-            }]
-
-        if m.get("attachments"):
-            a = m.get("attachments")
-            atts = a if isinstance(a, list) else [a]
-
-        # Display media.
-        for it in atts:
-
-            if not isinstance(it, dict):
-                continue
-
-            url = eco_storage_url(
-                supabase,
-                it.get("path") or it.get("url")
-            )
-
-            typ = str(it.get("type") or "").lower()
-
-            if not url:
-                continue
-
-            if typ.startswith("image"):
-                st.markdown(
-                    f'<div style="text-align:{"right" if sent else "left"};">'
-                    f'<img src="{url}" '
-                    f'style="max-width:80%;border-radius:10px;margin:5px 0;" />'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-
-            elif typ.startswith("video"):
-                st.markdown(
-                    f'<div>🎬 <a href="{url}" target="_blank">'
-                    f'Watch video</a></div>',
-                    unsafe_allow_html=True
-                )
-
-            elif typ.startswith("audio"):
-                st.caption("🎤 Voice note")
-                st.audio(url, format="audio/wav")
-
-            else:
-                filename = it.get("name") or "Open attachment"
-
-                st.markdown(
-                    f'📎 <a href="{url}" target="_blank">'
-                    f'{filename}</a>',
-                    unsafe_allow_html=True
-                )
-
-        # Display message text.
-        if body:
-            st.markdown(
-                eco_bubble_html(
-                    body,
-                    eco_time_short(m.get("created_at")),
-                    sent,
-                    "" if sent else name,
-                    bool(m.get("edited_at"))
-                ),
-                unsafe_allow_html=True
-            )
