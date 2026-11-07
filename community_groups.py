@@ -18,7 +18,6 @@
 # is not installed, the inbox still works and simply omits unread counts.
 # ============================================================
 
-import html
 import mimetypes
 import os
 import re
@@ -51,7 +50,8 @@ def eco_iso(value=None):
 
 
 def eco_escape(value):
-    return html.escape(str(value or ""), quote=True)
+    # Plain text only: this module deliberately does not render HTML.
+    return str(value or "")
 
 
 def eco_safe_text(value, default=""):
@@ -132,18 +132,10 @@ def eco_initials(name):
 def eco_avatar(profile, size=48):
     profile = profile or {}
     avatar = profile.get("avatar_url")
-    name = eco_display_name(profile)
     if avatar:
         st.image(avatar, width=size)
     else:
-        st.markdown(
-            f"""<div style="width:{size}px;height:{size}px;border-radius:50%;
-            background:linear-gradient(135deg,#087f5b,#35b779);color:white;
-            display:flex;align-items:center;justify-content:center;
-            font-weight:800;font-size:{max(13, size//3)}px;">
-            {eco_escape(eco_initials(name))}</div>""",
-            unsafe_allow_html=True
-        )
+        st.subheader(eco_initials(eco_display_name(profile)))
 
 
 def eco_storage_url(supabase, path, expires=3600):
@@ -181,47 +173,14 @@ def eco_upload(supabase, uploaded, folder, user_id, allow_video=False):
 
 
 def eco_header(title, subtitle=None):
-    st.markdown(
-        f"""
-        <div class="eco-page-head">
-          <div class="eco-kicker">ECOLOOP NODE · COMMUNITY</div>
-          <div class="eco-page-title">{eco_escape(title)}</div>
-          {f'<div class="eco-page-subtitle">{eco_escape(subtitle)}</div>' if subtitle else ''}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.subheader(title)
+    if subtitle:
+        st.caption(subtitle)
 
 
 def eco_inject_styles():
-    st.markdown(
-        """
-        <style>
-        .eco-page-head{padding:8px 2px 16px;border-bottom:3px solid #16a36a;margin-bottom:16px}
-        .eco-kicker{font-size:10px;letter-spacing:2px;font-weight:900;color:#18a66b}
-        .eco-page-title{font-size:27px;line-height:1.15;font-weight:900;color:var(--text-color);margin-top:4px}
-        .eco-page-subtitle{font-size:13px;opacity:.72;margin-top:5px}
-        .eco-card{border:1px solid rgba(128,128,128,.25);border-radius:17px;padding:13px;margin:8px 0;background:rgba(128,128,128,.045)}
-        .eco-muted{font-size:12px;opacity:.68}
-        .eco-chat-wrap{display:flex;flex-direction:column;gap:7px;margin:10px 0}
-        .eco-bubble{max-width:82%;padding:8px 11px;border-radius:14px;font-size:13px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-wrap}
-        .eco-sent{align-self:flex-end;background:#d8f7e5;color:#123b2a;border-bottom-right-radius:4px}
-        .eco-received{align-self:flex-start;background:rgba(128,128,128,.15);color:var(--text-color);border-bottom-left-radius:4px}
-        .eco-bubble-meta{font-size:9px;opacity:.65;text-align:right;margin-top:4px}
-        .eco-story-ring{border:3px solid #16a36a;border-radius:50%;padding:3px;display:inline-block}
-        div[data-testid="stRadio"] > div{gap:7px}
-        div[data-testid="stRadio"] label{font-weight:800!important}
-        div[data-testid="stRadio"] label p{font-size:14px!important}
-        div.stButton>button{border-radius:12px;font-weight:750;min-height:42px}
-        @media(max-width:600px){
-          .eco-page-title{font-size:23px}
-          .eco-bubble{max-width:88%;font-size:13px}
-          div[data-testid="stRadio"] label p{font-size:12px!important}
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    # Native Streamlit components only. No injected HTML or CSS.
+    return None
 
 
 # ------------------------------
@@ -667,7 +626,7 @@ def render_chat_inbox(supabase, user_id):
             with right:
                 st.caption(timestamp)
                 if unread:
-                    st.markdown(f'<div style="background:#16a36a;color:white;border-radius:20px;padding:3px 8px;text-align:center;font-size:11px;font-weight:800">{unread}</div>', unsafe_allow_html=True)
+                    st.caption(f"Unread: {unread}")
                 if st.button("Open chat", key=f"eco_inbox_open_{index}_{conv.get('id')}", use_container_width=True):
                     st.session_state.eco_active_conversation = conv.get("id")
                     st.session_state.eco_chat_view = "Conversation"
@@ -869,13 +828,12 @@ def render_chatroom_chat(supabase, group, user_id):
     for message in messages:
         sender = eco_profile(supabase, message.get("sender_id"))
         name = "You" if str(message.get("sender_id")) == str(user_id) else eco_display_name(sender)
-        body = eco_escape(message.get("message_text", ""))
         sent = str(message.get("sender_id")) == str(user_id)
-        css = "eco-sent" if sent else "eco-received"
-        st.markdown(
-            f'<div class="eco-chat-wrap"><div class="eco-bubble {css}"><div style="font-size:10px;font-weight:800;opacity:.7;margin-bottom:3px">{eco_escape(name)}</div>{body}<div class="eco-bubble-meta">{eco_escape(eco_time_label(message.get("created_at")))}</div></div></div>',
-            unsafe_allow_html=True
-        )
+        with st.chat_message("user" if sent else "assistant"):
+            if not sent:
+                st.caption(name)
+            st.write(str(message.get("message_text") or ""))
+            st.caption(eco_time_label(message.get("created_at")))
     with st.form(f"eco_group_send_form_{group_id}", clear_on_submit=True):
         text_value = st.text_input("Message", placeholder=f"Message {group.get('name', 'the group')}…", label_visibility="collapsed")
         send = st.form_submit_button("Send", use_container_width=True)
@@ -1116,19 +1074,21 @@ def render_stories_page(supabase, user_id):
 # ------------------------------
 
 def render_community_groups_page(supabase, user_id):
-    """Render the EcoLoop Node Community Hub."""
+    """Render the Community Hub; hide the app footer in focused chat screens."""
     eco_init_state()
     eco_inject_styles()
 
-    # Private conversations are a dedicated screen: no Community Hub header,
-    # section navigation, or NGIH footer is rendered while a chat is open.
-    if st.session_state.get("eco_chat_view") == "Conversation":
-        # Also hide the application-level NGIH footer, which is rendered by
-        # the parent app after this page function returns.
-        st.markdown(
-            "<style>.eco-footer{display:none!important}</style>",
-            unsafe_allow_html=True
-        )
+    private_chat_open = st.session_state.get("eco_chat_view") == "Conversation"
+    chatroom_open = bool(st.session_state.get("eco_active_chatroom"))
+
+    # streamlit_app.py checks this session flag before rendering its global
+    # footer. Keep the flag true for BOTH one-to-one and group conversations.
+    # The Chats inbox, Chat Rooms directory and Updates feed keep the footer.
+    st.session_state["eco_hide_app_footer"] = bool(
+        private_chat_open or chatroom_open
+    )
+
+    if private_chat_open:
         try:
             render_direct_conversation(supabase, user_id)
         except Exception as exc:
@@ -1136,35 +1096,32 @@ def render_community_groups_page(supabase, user_id):
             st.caption(f"Technical detail: {exc}")
         return
 
-    st.markdown(
-        """
-        <div style="padding:4px 0 12px">
-          <div style="font-size:11px;letter-spacing:2px;font-weight:900;color:#16a36a">NEXT GEN IMPACT HUB</div>
-          <div style="font-size:29px;font-weight:950;line-height:1.1">Community Hub</div>
-          <div style="font-size:13px;opacity:.7;margin-top:4px">Connect · Collaborate · Create impact</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # An opened group chat is also a focused, full-screen conversation.
+    # Return before the Hub navigation and its own footer are rendered.
+    if chatroom_open:
+        try:
+            render_chatrooms_page(supabase, user_id)
+        except Exception as exc:
+            st.error("The chatroom could not load.")
+            st.caption(f"Technical detail: {exc}")
+        return
+
+    st.caption("NEXT GEN IMPACT HUB")
+    st.title("Community Hub")
+    st.caption("Connect · Collaborate · Create impact")
 
     options = ["💬 Chats", "👥 Groups", "🟢 Updates"]
     labels = {"💬 Chats": "Chats", "👥 Groups": "Groups", "🟢 Updates": "Updates"}
     current = st.session_state.get("eco_community_section", "Chats")
     current_option = next((key for key, value in labels.items() if value == current), options[0])
     selected = st.radio(
-        "Community navigation",
-        options,
-        horizontal=True,
-        key=MAIN_NAV_KEY,
-        index=options.index(current_option),
+        "Community navigation", options, horizontal=True,
+        key=MAIN_NAV_KEY, index=options.index(current_option),
         label_visibility="collapsed"
     )
     section = labels[selected]
     st.session_state.eco_community_section = section
-    st.markdown(
-        '<div style="height:4px;background:linear-gradient(90deg,#087f5b,#35b779);border-radius:8px;margin:0 0 16px"></div>',
-        unsafe_allow_html=True
-    )
+    st.divider()
 
     try:
         if section == "Chats":
@@ -1177,11 +1134,5 @@ def render_community_groups_page(supabase, user_id):
         st.error("The Community Hub section could not load.")
         st.caption(f"Technical detail: {exc}")
 
-    st.markdown(
-        """
-        <div style="text-align:center;padding:22px 4px 8px;opacity:.65;font-size:11px">
-          Powered by <b>Next Gen Impact Hub (NGIH)</b>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.divider()
+    st.caption("Powered by Next Gen Impact Hub (NGIH)")
