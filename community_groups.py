@@ -642,3 +642,276 @@ def render_community_groups_page(supabase, user_id):
         else: render_discover(supabase, user_id)
     except Exception as e: st.error("Community Hub section could not load."); st.caption(f"Detail: {e}")
     st.divider(); st.caption("Powered by Next Gen Impact Hub (NGIH)")
+
+# ============================================================
+# ECOLOOP NODE — COMMUNITY HUB
+# WHATSAPP 2.0 — VOICE MESSAGE FIX
+# Add this entire section at the VERY BOTTOM of the file.
+# Overrides the older composer and message renderer.
+# ============================================================
+
+def render_whatsapp_composer(supabase, uid, conversation_id=None, group_id=None):
+    import hashlib
+
+    target = str(conversation_id or group_id or uid)
+    counter_key = f"eco_voice_widget_counter_{target}"
+
+    if counter_key not in st.session_state:
+        st.session_state[counter_key] = 0
+
+    # A new widget key after sending clears the previous recording.
+    voice_key = f"voice_{target}_{st.session_state[counter_key]}"
+
+    st.markdown('<div class="wa-composer">', unsafe_allow_html=True)
+
+    c1, c2, c3, c4 = st.columns([1, 6, 1, 1])
+
+    with c1:
+        attach = st.file_uploader(
+            "📎",
+            type=["jpg", "jpeg", "png", "webp", "mp4", "mov", "pdf", "docx"],
+            label_visibility="collapsed",
+            key=f"attach_{target}"
+        )
+
+    with c2:
+        text = st.text_input(
+            "Type a message...",
+            label_visibility="collapsed",
+            key=f"txt_{target}"
+        )
+
+    with c3:
+        voice = st.audio_input(
+            "🎤",
+            label_visibility="collapsed",
+            key=voice_key
+        )
+
+    with c4:
+        send = st.button(
+            "➤",
+            key=f"send_{target}",
+            help="Send message",
+            use_container_width=True
+        )
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Nothing is sent until the user taps Send.
+    if not send:
+        return
+
+    try:
+        sent_any = False
+
+        # ---------------- VOICE MESSAGE ----------------
+        if voice is not None:
+            audio_bytes = voice.getvalue()
+
+            if not audio_bytes:
+                st.warning("The recording appears to be empty.")
+                return
+
+            # Prevent the same recording being submitted twice.
+            signature = hashlib.sha256(audio_bytes).hexdigest()
+            sent_key = f"eco_voice_last_sent_{target}"
+
+            if st.session_state.get(sent_key) != signature:
+
+                path = f"voice/{uid}/{uuid.uuid4().hex}.wav"
+
+                supabase.storage.from_(BUCKET).upload(
+                    path,
+                    audio_bytes,
+                    {
+                        "content-type": "audio/wav",
+                        "upsert": "false"
+                    }
+                )
+
+                if conversation_id:
+                    send_direct_message(
+                        supabase,
+                        conversation_id,
+                        uid,
+                        "🎤 Voice note",
+                        path,
+                        "voice.wav",
+                        "audio"
+                    )
+
+                elif group_id:
+                    supabase.table("group_messages").insert({
+                        "group_id": group_id,
+                        "sender_id": uid,
+                        "message_text": "🎤 Voice note",
+                        "attachments": [{
+                            "path": path,
+                            "name": "voice.wav",
+                            "type": "audio"
+                        }]
+                    }).execute()
+
+                st.session_state[sent_key] = signature
+                sent_any = True
+
+                # Change the audio widget key so its old recording clears.
+                st.session_state[counter_key] += 1
+
+        # ---------------- FILE ATTACHMENT ----------------
+        apath = ""
+        aname = ""
+        atyp = ""
+
+        if attach is not None:
+            apath = eco_upload(
+                supabase,
+                attach,
+                "chat",
+                uid,
+                allow_video=True,
+                allow_doc=True
+            )
+            aname = attach.name
+            atyp = attach.type or ""
+
+        # ---------------- TEXT MESSAGE ----------------
+        if text.strip() or apath:
+            message_text = text.strip() or aname or "Attachment"
+
+            if conversation_id:
+                send_direct_message(
+                    supabase,
+                    conversation_id,
+                    uid,
+                    message_text,
+                    apath,
+                    aname,
+                    atyp
+                )
+
+            elif group_id:
+                supabase.table("group_messages").insert({
+                    "group_id": group_id,
+                    "sender_id": uid,
+                    "message_text": message_text,
+                    "attachments": [{
+                        "path": apath,
+                        "name": aname,
+                        "type": atyp
+                    }] if apath else []
+                }).execute()
+
+            sent_any = True
+
+        if sent_any:
+            st.rerun()
+
+    except Exception as e:
+        st.error(f"Message could not be sent: {e}")
+
+
+# ============================================================
+# MESSAGE DISPLAY — REAL AUDIO PLAYBACK
+# ============================================================
+
+def eco_render_bubbles_html(supabase, messages, uid, is_group=False):
+
+    if not messages:
+        st.markdown(
+            '<div class="wa-empty">'
+            '<div style="font-size:48px;">💬</div>'
+            '<b>Say hi</b>'
+            '<p>This is the beginning of your conversation.</p>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+        return
+
+    for m in messages:
+
+        if m.get("deleted_at"):
+            continue
+
+        sent = str(m.get("sender_id")) == str(uid)
+
+        sender = (
+            eco_profile_with_avatar(supabase, m.get("sender_id"))
+            if is_group else {}
+        )
+
+        name = "You" if sent else eco_display_name(sender)
+        body = str(m.get("message_text") or "")
+
+        # Collect attachments.
+        atts = []
+
+        if m.get("attachment_path"):
+            atts = [{
+                "path": m.get("attachment_path"),
+                "type": m.get("attachment_type") or "",
+                "name": m.get("attachment_name") or "Attachment"
+            }]
+
+        if m.get("attachments"):
+            a = m.get("attachments")
+            atts = a if isinstance(a, list) else [a]
+
+        # Display media.
+        for it in atts:
+
+            if not isinstance(it, dict):
+                continue
+
+            url = eco_storage_url(
+                supabase,
+                it.get("path") or it.get("url")
+            )
+
+            typ = str(it.get("type") or "").lower()
+
+            if not url:
+                continue
+
+            if typ.startswith("image"):
+                st.markdown(
+                    f'<div style="text-align:{"right" if sent else "left"};">'
+                    f'<img src="{url}" '
+                    f'style="max-width:80%;border-radius:10px;margin:5px 0;" />'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
+            elif typ.startswith("video"):
+                st.markdown(
+                    f'<div>🎬 <a href="{url}" target="_blank">'
+                    f'Watch video</a></div>',
+                    unsafe_allow_html=True
+                )
+
+            elif typ.startswith("audio"):
+                st.caption("🎤 Voice note")
+                st.audio(url, format="audio/wav")
+
+            else:
+                filename = it.get("name") or "Open attachment"
+
+                st.markdown(
+                    f'📎 <a href="{url}" target="_blank">'
+                    f'{filename}</a>',
+                    unsafe_allow_html=True
+                )
+
+        # Display message text.
+        if body:
+            st.markdown(
+                eco_bubble_html(
+                    body,
+                    eco_time_short(m.get("created_at")),
+                    sent,
+                    "" if sent else name,
+                    bool(m.get("edited_at"))
+                ),
+                unsafe_allow_html=True
+            )
