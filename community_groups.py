@@ -778,32 +778,27 @@ def render_chats_page(supabase, user_id):
         profile = item["profile"]
         avatar = profile.get("avatar_url") or ""
 
-        with st.container(border=True):
+                with st.container(border=True):
             col1, col2, col3 = st.columns([1, 4, 1])
 
             with col1:
-                if avatar:
-                    avatar_url = get_story_media_url(
-                        supabase,
-                        avatar
-                    )
+                if avatar and str(avatar).startswith("profiles/"):
+                    try:
+                        avatar_url = get_story_media_url(supabase, avatar)
 
-                    if avatar_url:
-                        st.image(avatar_url, width=58)
-                    else:
+                        if avatar_url and str(avatar_url).startswith("http"):
+                            st.image(avatar_url, width=58)
+                        else:
+                            st.markdown("### 👤")
+                    except Exception:
                         st.markdown("### 👤")
                 else:
                     st.markdown("### 👤")
 
             with col2:
-                st.markdown(
-                    f"**{eco_escape(item['name'])}**"
-                )
+                st.markdown(f"**{eco_escape(item['name'])}**")
                 st.caption(f"@{eco_escape(item['username'])}")
-
-                st.caption(
-                    eco_escape(str(item["message"]))[:90]
-                )
+                st.caption(eco_escape(str(item["message"]))[:90])
 
                 if item["time"]:
                     st.caption(
