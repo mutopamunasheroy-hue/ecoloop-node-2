@@ -4170,3 +4170,536 @@ def render_chats_page(supabase, user_id):
 # ==========================================================
 # END — CLEAN INBOX
 # ==========================================================
+
+
+# ==========================================================
+# ECOLOOP NODE — CHATROOMS + STORIES REDESIGN
+# WhatsApp-inspired Groups and Status
+# ==========================================================
+
+
+# ----------------------------------------------------------
+# 1. CHATROOM CARD
+# ----------------------------------------------------------
+
+def eco_render_chatroom_item(supabase, group, user_id, is_member=False):
+    group_id = str(group.get("id"))
+    name = group.get("name") or "EcoLoop Community"
+    description = group.get("description") or "Community group"
+
+    image_path = group.get("image_url")
+
+    with st.container(border=True):
+        image_col, details_col, action_col = st.columns([1, 3.8, 1])
+
+        with image_col:
+            if image_path:
+                image_url = get_story_media_url(supabase, image_path)
+                if image_url:
+                    st.image(image_url, width=55)
+                else:
+                    st.markdown("## 👥")
+            else:
+                st.markdown("## 👥")
+
+        with details_col:
+            st.markdown(f"**{eco_escape(name)}**")
+            st.caption(eco_escape(description)[:90])
+
+            if str(group.get("created_by")) == str(user_id):
+                st.caption("👑 Group administrator")
+            elif is_member:
+                st.caption("✓ Member")
+
+        with action_col:
+            if is_member:
+                if st.button(
+                    "Open",
+                    key=f"eco_v5_open_group_{group_id}",
+                    use_container_width=True
+                ):
+                    st.session_state["eco_active_chatroom"] = group_id
+                    st.rerun()
+            else:
+                if st.button(
+                    "Join",
+                    key=f"eco_v5_join_group_{group_id}",
+                    use_container_width=True
+                ):
+                    try:
+                        request_chatroom_join(
+                            supabase,
+                            user_id,
+                            group_id
+                        )
+                        st.success("Join request submitted.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not request membership: {e}")
+
+
+# ----------------------------------------------------------
+# 2. CHATROOMS PAGE
+# ----------------------------------------------------------
+
+def render_chatrooms_page(supabase, user_id):
+
+    active_group = st.session_state.get("eco_active_chatroom")
+
+    if active_group:
+        render_chatroom_chat(
+            supabase,
+            user_id,
+            active_group
+        )
+        return
+
+    st.markdown("## 👥 Chatrooms")
+    st.caption("Find your community. Join conversations. Make an impact.")
+
+    discover_tab, my_tab, create_tab = st.tabs(
+        ["Discover", "My Groups", "＋ Create"]
+    )
+
+    # DISCOVER GROUPS
+    with discover_tab:
+        search = st.text_input(
+            "Search groups",
+            placeholder="Search communities...",
+            key="eco_v5_group_search"
+        )
+
+        groups = get_chatrooms(
+            supabase,
+            search
+        )
+
+        if not groups:
+            st.info("No communities found.")
+        else:
+            for group in groups:
+                is_member = is_chatroom_member(
+                    supabase,
+                    group,
+                    user_id
+                )
+
+                eco_render_chatroom_item(
+                    supabase,
+                    group,
+                    user_id,
+                    is_member
+                )
+
+                if str(group.get("created_by")) == str(user_id):
+                    with st.expander(
+                        f"Manage requests — {group.get('name')}"
+                    ):
+                        manage_chatroom_requests(
+                            supabase,
+                            group
+                        )
+
+    # MY GROUPS
+    with my_tab:
+        my_groups = get_my_chatrooms(
+            supabase,
+            user_id
+        )
+
+        if not my_groups:
+            st.info(
+                "You haven't joined any groups yet. "
+                "Explore communities in Discover."
+            )
+        else:
+            for group in my_groups:
+                eco_render_chatroom_item(
+                    supabase,
+                    group,
+                    user_id,
+                    True
+                )
+
+                if str(group.get("created_by")) == str(user_id):
+                    with st.expander(
+                        f"Manage requests — {group.get('name')}"
+                    ):
+                        manage_chatroom_requests(
+                            supabase,
+                            group
+                        )
+
+                elif is_chatroom_member(
+                    supabase,
+                    group,
+                    user_id
+                ):
+                    with st.expander(
+                        f"Group options — {group.get('name')}"
+                    ):
+                        if st.button(
+                            "Leave group",
+                            key=f"eco_v5_leave_{group.get('id')}"
+                        ):
+                            try:
+                                leave_chatroom(
+                                    supabase,
+                                    user_id,
+                                    group.get("id")
+                                )
+                                st.success("You left the group.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Could not leave group: {e}")
+
+    # CREATE GROUP
+    with create_tab:
+        st.markdown("### Create a community")
+
+        with st.form("eco_v5_create_group_form"):
+            group_name = st.text_input(
+                "Group name",
+                placeholder="e.g. Bulawayo Climate Action"
+            )
+
+            group_description = st.text_area(
+                "Description",
+                placeholder="What is this group about?"
+            )
+
+            group_location = st.text_input(
+                "Location (optional)",
+                placeholder="e.g. Bulawayo"
+            )
+
+            group_image = st.file_uploader(
+                "Group picture (optional)",
+                type=["jpg", "jpeg", "png", "webp"],
+                key="eco_v5_group_image"
+            )
+
+            create_clicked = st.form_submit_button(
+                "Create group",
+                use_container_width=True
+            )
+
+        if create_clicked:
+            if not group_name.strip():
+                st.warning("Enter a group name.")
+            else:
+                image_path = ""
+
+                if group_image:
+                    uploaded = eco_upload_image(
+                        supabase,
+                        user_id,
+                        group_image,
+                        "chatrooms"
+                    )
+
+                    image_path = uploaded or ""
+
+                try:
+                    result = create_chatroom(
+                        supabase,
+                        user_id,
+                        group_name.strip(),
+                        group_description.strip(),
+                        image_path=image_path,
+                        location=group_location.strip()
+                    )
+
+                    if result:
+                        st.success("Your group has been created!")
+                        st.rerun()
+
+                except TypeError:
+                    # Compatibility with the original four-argument helper.
+                    result = create_chatroom(
+                        supabase,
+                        user_id,
+                        group_name.strip(),
+                        group_description.strip()
+                    )
+
+                    if result:
+                        st.success("Your group has been created!")
+                        st.rerun()
+
+                except Exception as e:
+                    st.error(f"Could not create group: {e}")
+
+    st.caption("Powered by Next Gen Impact Hub (NGIH)")
+
+
+# ----------------------------------------------------------
+# 3. STORY STATUS VIEWER
+# ----------------------------------------------------------
+
+def eco_render_status_viewer(supabase, story, user_id):
+
+    story_user_id = story.get("user_id")
+    profile = eco_profile(supabase, story_user_id) or {}
+
+    name = (
+        "Your status"
+        if str(story_user_id) == str(user_id)
+        else profile.get("display_name") or "EcoLoop Member"
+    )
+
+    st.markdown(f"### {eco_escape(name)}")
+
+    avatar = profile.get("avatar_url")
+
+    if avatar:
+        eco_show_avatar(supabase, avatar, 45)
+
+    media_path = (
+        story.get("media_url")
+        or story.get("media_path")
+    )
+
+    media_url = get_story_media_url(
+        supabase,
+        media_path
+    ) if media_path else None
+
+    media_type = story.get("media_type") or ""
+
+    if media_url:
+        if media_type.startswith("video/"):
+            st.video(media_url)
+        elif media_type.startswith("image/"):
+            st.image(media_url, use_container_width=True)
+        else:
+            st.info("Status media")
+            st.link_button("Open attachment", media_url)
+
+    caption = story.get("caption") or ""
+
+    if caption:
+        st.markdown(f"**{eco_escape(caption)}**")
+
+    created = story.get("created_at") or ""
+
+    if created:
+        st.caption(
+            str(created).replace("T", " ")[:16]
+        )
+
+    if st.button(
+        "← Back to Status",
+        key=f"eco_v5_status_back_{story.get('id')}"
+    ):
+        st.session_state["eco_active_story"] = None
+        st.rerun()
+
+
+# ----------------------------------------------------------
+# 4. WHATSAPP-STYLE STATUS PAGE
+# ----------------------------------------------------------
+
+def render_updates_page(supabase, user_id):
+
+    active_story_id = st.session_state.get("eco_active_story")
+
+    stories = get_active_stories(supabase) or []
+
+    if active_story_id:
+        selected = next(
+            (
+                story for story in stories
+                if str(story.get("id")) == str(active_story_id)
+            ),
+            None
+        )
+
+        if selected:
+            eco_render_status_viewer(
+                supabase,
+                selected,
+                user_id
+            )
+            return
+
+        st.session_state["eco_active_story"] = None
+
+    st.markdown("## Updates")
+    st.caption("Share moments with your EcoLoop community.")
+
+    # MY STATUS
+    my_stories = [
+        story for story in stories
+        if str(story.get("user_id")) == str(user_id)
+    ]
+
+    st.markdown("### My Status")
+
+    col1, col2 = st.columns([1, 4])
+
+    with col1:
+        if my_stories:
+            my_profile = eco_profile(supabase, user_id) or {}
+
+            if my_profile.get("avatar_url"):
+                eco_show_avatar(
+                    supabase,
+                    my_profile.get("avatar_url"),
+                    58
+                )
+            else:
+                st.markdown("## 👤")
+
+        else:
+            st.markdown("## ➕")
+
+    with col2:
+        if my_stories:
+            st.markdown("**My updates**")
+            st.caption(f"{len(my_stories)} active status update(s)")
+
+            if st.button(
+                "View my status",
+                key="eco_v5_my_status"
+            ):
+                st.session_state["eco_active_story"] = str(
+                    my_stories[-1].get("id")
+                )
+                st.rerun()
+        else:
+            st.markdown("**Add a status**")
+            st.caption("Share a photo, video or thought.")
+
+    # ADD STATUS
+    with st.expander("＋ Add a status"):
+        with st.form("eco_v5_add_status_form"):
+            status_file = st.file_uploader(
+                "Choose a photo or video",
+                type=[
+                    "jpg", "jpeg", "png", "webp",
+                    "mp4", "mov", "webm"
+                ],
+                key="eco_v5_status_file"
+            )
+
+            status_caption = st.text_area(
+                "Caption",
+                placeholder="What's happening?"
+            )
+
+            status_submit = st.form_submit_button(
+                "Share status",
+                use_container_width=True
+            )
+
+        if status_submit:
+            if not status_file and not status_caption.strip():
+                st.warning("Add a photo, video or caption first.")
+            else:
+                media_path = None
+                media_type = None
+
+                if status_file:
+                    media_path = upload_story_media(
+                        supabase,
+                        user_id,
+                        status_file
+                    )
+
+                    media_type = (
+                        status_file.type
+                        or "application/octet-stream"
+                    )
+
+                try:
+                    result = create_story(
+                        supabase,
+                        user_id,
+                        status_caption.strip(),
+                        media_path,
+                        media_type
+                    )
+
+                    if result:
+                        st.success("Status shared!")
+                        st.rerun()
+
+                except Exception as e:
+                    st.error(f"Could not share status: {e}")
+
+    st.divider()
+
+    # RECENT UPDATES
+    st.markdown("### Recent Updates")
+
+    other_stories = [
+        story for story in stories
+        if str(story.get("user_id")) != str(user_id)
+    ]
+
+    # Group stories by member, keeping the latest first.
+    grouped = {}
+
+    for story in other_stories:
+        member_id = str(story.get("user_id"))
+
+        grouped.setdefault(member_id, []).append(story)
+
+    if not grouped:
+        st.info(
+            "No recent updates yet. "
+            "When community members share statuses, they'll appear here."
+        )
+
+    for member_id, member_stories in grouped.items():
+
+        latest = member_stories[-1]
+        profile = eco_profile(supabase, member_id) or {}
+
+        name = profile.get("display_name") or "EcoLoop Member"
+        username = profile.get("username") or "member"
+
+        with st.container(border=True):
+            avatar_col, details_col, view_col = st.columns(
+                [1, 3.5, 1]
+            )
+
+            with avatar_col:
+                if profile.get("avatar_url"):
+                    eco_show_avatar(
+                        supabase,
+                        profile.get("avatar_url"),
+                        55
+                    )
+                else:
+                    st.markdown("## 👤")
+
+            with details_col:
+                st.markdown(f"**{eco_escape(name)}**")
+                st.caption(f"@{eco_escape(username)}")
+
+                caption = latest.get("caption") or "New status update"
+                st.caption(eco_escape(caption)[:65])
+
+                if len(member_stories) > 1:
+                    st.caption(
+                        f"{len(member_stories)} updates"
+                    )
+
+            with view_col:
+                if st.button(
+                    "View",
+                    key=f"eco_v5_view_status_{member_id}"
+                ):
+                    st.session_state["eco_active_story"] = str(
+                        latest.get("id")
+                    )
+                    st.rerun()
+
+    st.caption("Powered by Next Gen Impact Hub (NGIH)")
+
+
+# ==========================================================
+# END CHATROOMS + STORIES REDESIGN
+# ==========================================================
