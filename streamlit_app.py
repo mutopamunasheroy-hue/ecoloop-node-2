@@ -1305,112 +1305,27 @@ def registration_form():
 # PAGE 4 — MY PROFILE
 # =====================================================
 
+
 def account_page():
 
     if not require_login():
         return
 
-    render_account_profiles(
-        supabase,
-        page="profile"
-    )
+    if not supabase:
+        st.error("The database connection is unavailable.")
+        return
 
-    # -----------------------------------------------
-    # LOAD MEMBER PROFILE
-    # -----------------------------------------------
-
-    profile = st.session_state.get("profile") or {}
-
-    user = st.session_state.get("user")
-
-    email = getattr(user, "email", "Not available")
-
-    user_metadata = getattr(
-        user,
-        "user_metadata",
-        None
-    ) or {}
-
-    display_name = (
-        profile.get("full_name")
-        or user_metadata.get("full_name")
-        or "Name not available"
-    )
-
-    # -----------------------------------------------
-    # MEMBER NAME
-    # -----------------------------------------------
-
-    st.subheader(display_name)
-
-    st.caption(email)
-
-    st.divider()
-
-    # -----------------------------------------------
-    # ACCOUNT OVERVIEW
-    # -----------------------------------------------
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.metric(
-            "Account Role",
-            str(profile.get("role") or "User").capitalize()
+    try:
+        render_account_profiles(
+            supabase,
+            page="profile"
         )
 
-    with col2:
-        st.metric(
-            "Account Status",
-            "Active"
-        )
+    except Exception as error:
+        st.error("Your profile could not be opened.")
+        st.exception(error)
 
-    st.divider()
-
-    # -----------------------------------------------
-    # ACCOUNT INFORMATION
-    # -----------------------------------------------
-
-    st.subheader("Account Information")
-
-    st.write("**Full Name:**", display_name)
-
-    st.write("**Email:**", email)
-
-    st.write(
-        "**User ID:**",
-        st.session_state.get("user_id", "Not available")
-    )
-
-    created_at = profile.get("created_at")
-
-    if created_at:
-        st.write(
-            "**Member Since:**",
-            str(created_at)[:10]
-        )
-
-    st.divider()
-
-    # -----------------------------------------------
-    # ACCOUNT SECURITY
-    # -----------------------------------------------
-
-    st.caption(
-        "Your account information is managed through "
-        "EcoLoop Node and its secure authentication system."
-    )
-
-    # -----------------------------------------------
-    # LOG OUT
-    # -----------------------------------------------
-
-    if st.button(
-        "Log Out",
-        use_container_width=True
-    ):
-        clear_user_session()
-        st.rerun()
+    return
 
 
 # =====================================================
