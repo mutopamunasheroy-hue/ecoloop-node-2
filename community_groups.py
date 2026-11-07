@@ -482,4 +482,163 @@ def _render_group_card(supabase, group, uid, idx, view):
         else:
             if st.button("Request to join", key=f"eco_group_join_{view}_{gid}_{idx}", use_container_width=True):
                 try: request_join(supabase, gid, uid); st.success("Join request sent."); st.rerun()
-                except Exception as e: st.error(f"Could not request: {e
+                except Exception as e: st.error(f"Could not request: {e}")
+
+def render_chatrooms_page(supabase, uid):
+    if st.session_state.get("eco_active_chatroom"):
+        gid=st.session_state.eco_active_chatroom; group=next((g for g in get_chatrooms(supabase) if str(g.get("id"))==str(gid)), None)
+        if group: render_chatroom_chat(supabase, group, uid)
+        else:
+            st.warning("This group could not be found.")
+            if st.button("Back to groups"): st.session_state.eco_active_chatroom=None; st.rerun()
+        return
+    st.markdown('<div class="wa-topbar"><b>Groups</b><span>Community</span></div>', unsafe_allow_html=True)
+    if st.button("← Back to Dashboard", key="eco_groups_back_dash"): eco_back_to_dashboard()
+    views=["Discover","My Groups","Create"]; cur=st.session_state.get("eco_group_view","Discover")
+    sel=st.radio("Group sections", views, horizontal=True, key="eco_group_view_radio", label_visibility="collapsed", index=views.index(cur) if cur in views else 0); st.session_state.eco_group_view=sel
+    if sel=="Discover":
+        s=st.text_input("Search groups", placeholder="Search by group name, topic or location…", key="eco_group_search")
+        for i,g in enumerate(get_chatrooms(supabase, s)): _render_group_card(supabase, g, uid, i, "discover")
+    elif sel=="My Groups":
+        groups=get_my_chatrooms(supabase, uid)
+        if not groups: st.info("You have not joined any groups yet.")
+        for i,g in enumerate(groups): _render_group_card(supabase, g, uid, i, "mine")
+        for g in groups:
+            if str(g.get("created_by"))!=str(uid): continue
+            with st.expander(f"Manage requests · {g.get('name','Group')}"):
+                try: pending=eco_select(supabase,"group_memberships","*",[("eq","group_id",g.get("id")),("eq","status","pending")],limit=100)
+                except Exception: pending=[]
+                if not pending: st.caption("No pending requests.")
+                for j,req in enumerate(pending):
+                    person=eco_profile_with_avatar(supabase, req.get("user_id"))
+                    a,b,c=st.columns([3,1,1])
+                    with a: st.write(eco_display_name(person)); st.caption("@"+eco_safe_text(person.get("username"),"member"))
+                    with b:
+                        if st.button("Approve", key=f"eco_req_approve_{g.get('id')}_{j}"):
+                            try: supabase.table("group_memberships").update({"status":"approved"}).eq("group_id",g.get("id")).eq("user_id",req.get("user_id")).execute(); st.rerun()
+                            except Exception as e: st.error(str(e))
+                    with c:
+                        if st.button("Reject", key=f"eco_req_reject_{g.get('id')}_{j}"):
+                            try: supabase.table("group_memberships").update({"status":"rejected"}).eq("group_id",g.get("id")).eq("user_id",req.get("user_id")).execute(); st.rerun()
+                            except Exception as e: st.error(str(e))
+    else:
+        with st.form("eco_create_group_form", clear_on_submit=True):
+            name=st.text_input("Group name", placeholder="e.g. Bulawayo Climate Action"); desc=st.text_area("What is this group about?", max_chars=500); loc=st.text_input("Location (optional)"); imgf=st.file_uploader("Group cover image (optional)", type=["jpg","jpeg","png","webp"], key="eco_group_cover_upload"); submit=st.form_submit_button("Create community group", use_container_width=True)
+        if submit:
+            if len(name.strip())<3 or len(desc.strip())<8: st.error("Add a group name and a short description.")
+            else:
+                try:
+                    path=eco_upload(supabase, imgf, "chatrooms", uid) if imgf else ""
+                    gid=create_chatroom(supabase, uid, name, desc, path, loc)
+                    if gid: st.success("Your group has been created."); st.session_state.eco_active_chatroom=gid; st.rerun()
+                    else: st.success("Group created. Find it under My Groups.")
+                except Exception as e: st.error(f"Could not create group: {e}")
+
+# ---------------- Stories ----------------
+def create_story(supabase, uid, caption, path, typ):
+    now=eco_now(); exp=now+timedelta(hours=24)
+    return supabase.table("stories").insert({"user_id":uid,"caption":(caption or "").strip(),"media_url":path,"media_type":typ,"created_at":now.isoformat(),"expires_at":exp.isoformat()}).execute()
+def get_active_stories(supabase):
+    try: return eco_select(supabase,"stories","*",[("gt","expires_at",eco_iso())],order=("created_at",True),limit=150)
+    except Exception: return []
+def get_story_views(supabase, sid):
+    try: return eco_select(supabase,"story_views","*",[("eq","story_id",sid)],limit=200)
+    except Exception: return []
+def mark_story_viewed(supabase, sid, viewer):
+    try: supabase.table("story_views").upsert({"story_id":sid,"viewer_id":viewer,"viewed_at":eco_iso()}, on_conflict="story_id,viewer_id").execute()
+    except Exception: pass
+
+def render_stories_page(supabase, uid):
+    st.markdown('<div class="wa-topbar"><b>Stories</b><span>24 hours · WhatsApp 2.0</span></div>', unsafe_allow_html=True)
+    if st.button("← Back to Dashboard", key="eco_stories_back_dash"): eco_back_to_dashboard()
+    views=["Stories","Create Story"]; cur=st.session_state.get("eco_story_view","Stories")
+    sel=st.radio("Story sections", views, horizontal=True, key="eco_story_view_radio", label_visibility="collapsed", index=views.index(cur) if cur in views else 0); st.session_state.eco_story_view=sel
+    if sel=="Create Story":
+        st.markdown("### Share a story")
+        up=st.file_uploader("Choose a photo or short video", type=["jpg","jpeg","png","webp","mp4","mov","webm"], key="eco_story_upload")
+        cap=st.text_area("Add a caption (optional)", max_chars=180, key="eco_story_caption")
+        if st.button("Publish story", key="eco_story_publish", use_container_width=True):
+            if not up: st.warning("Choose a photo or video first.")
+            else:
+                try:
+                    path=eco_upload(supabase, up, "stories", uid, allow_video=True); typ=up.type or "image"
+                    create_story(supabase, uid, cap, path, typ); st.success("Your story is live for 24 hours."); st.session_state.eco_story_view="Stories"; st.rerun()
+                except Exception as e: st.error(f"Could not publish story: {e}")
+        return
+    stories=get_active_stories(supabase)
+    chat_ids=set()
+    for c in get_direct_conversations(supabase, uid): chat_ids.add(str(get_other_user(c, uid)))
+    mine=[s for s in stories if str(s.get("user_id"))==str(uid)]
+    friends=[s for s in stories if str(s.get("user_id")) in chat_ids and str(s.get("user_id"))!=str(uid)]
+    others=[s for s in stories if str(s.get("user_id")) not in chat_ids and str(s.get("user_id"))!=str(uid)]
+    st.markdown("### Stories")
+    if not stories: st.info("No stories yet. Be the first to share.")
+    for label, lst in [("My story", mine), ("Stories from people you chat with", friends), ("All stories", others)]:
+        if not lst: continue
+        st.markdown(f"#### {label}")
+        for i,s in enumerate(lst):
+            prof=eco_profile_with_avatar(supabase, s.get("user_id")); name="Your story" if str(s.get("user_id"))==str(uid) else eco_display_name(prof)
+            views=get_story_views(supabase, s.get("id"))
+            with st.container(border=True):
+                c1,c2=st.columns([1,4])
+                with c1: st.markdown(eco_avatar_html(prof,48), unsafe_allow_html=True)
+                with c2: st.markdown(f"**{name}**"); st.caption(eco_time_label(s.get("created_at"))+f" · 👁 {len(views)} views")
+                url=eco_storage_url(supabase, s.get("media_url")); mt=str(s.get("media_type") or "")
+                if url and mt.startswith("video"): st.video(url)
+                elif url: st.image(url, use_container_width=True)
+                if s.get("caption"): st.write(s["caption"])
+                if st.button("View story", key=f"eco_story_view_{s.get('id')}_{i}"):
+                    mark_story_viewed(supabase, s.get("id"), uid); st.session_state.eco_story_open_id=s.get("id"); st.rerun()
+                if str(s.get("user_id"))==str(uid):
+                    st.caption("Viewers:")
+                    if not views: st.caption("No views yet.")
+                    for v in views:
+                        vp=eco_profile_with_avatar(supabase, v.get("viewer_id")); st.caption(f"👁 {eco_display_name(vp)} (@{eco_safe_text(vp.get('username'),'member')})")
+                    if st.button("Delete story", key=f"eco_story_del_{s.get('id')}_{i}"):
+                        try: supabase.table("stories").delete().eq("id", s.get("id")).eq("user_id", uid).execute(); st.success("Story deleted."); st.rerun()
+                        except Exception as e: st.error(f"Could not delete: {e}")
+
+def render_discover(supabase, uid):
+    st.markdown('<div class="wa-topbar"><b>Discover</b><span>People & Groups</span></div>', unsafe_allow_html=True)
+    if st.button("← Back to Dashboard", key="eco_discover_back_dash"): eco_back_to_dashboard()
+    q=st.text_input("Search people or groups", key="eco_discover_search_input", placeholder="Search names, usernames, groups or locations…")
+    st.markdown("### People")
+    people=[p for p in get_member_directory(supabase, q) if str(p.get("user_id"))!=str(uid)]
+    if people:
+        for i,p in enumerate(people[:30]): render_member_card(supabase, p, uid, f"discover_{i}")
+    else: st.caption("No matching people found.")
+    st.divider(); st.markdown("### Groups")
+    groups=get_chatrooms(supabase, q)
+    if groups:
+        for i,g in enumerate(groups[:30]): _render_group_card(supabase, g, uid, i, "discover_hub")
+    else: st.caption("No matching groups found.")
+
+def render_community_groups_page(supabase, user_id):
+    eco_init_state(); eco_inject_styles()
+    # BACK TO DASHBOARD - always at top, never stuck
+    if st.button("← Back to Dashboard", key="eco_main_back_dashboard_top"): eco_back_to_dashboard()
+    private_open=st.session_state.get("eco_chat_view")=="Conversation"; room_open=bool(st.session_state.get("eco_active_chatroom"))
+    st.session_state["eco_hide_app_footer"]=bool(private_open or room_open)
+    if private_open:
+        try: render_direct_conversation(supabase, user_id)
+        except Exception as e: st.error("Private conversation could not load."); st.caption(f"Detail: {e}")
+        return
+    if room_open:
+        try: render_chatrooms_page(supabase, user_id)
+        except Exception as e: st.error("Chatroom could not load."); st.caption(f"Detail: {e}")
+        return
+    me=eco_profile_with_avatar(supabase, user_id)
+    st.markdown(f'<div class="wa-topbar"><div style="display:flex;align-items:center;gap:10px;">{eco_avatar_html(me,38)}<div><b>Community Hub</b><br><span>Next Gen Impact Hub · {eco_display_name(me)}</span></div></div><span>Connect · Collaborate · Create impact</span></div>', unsafe_allow_html=True)
+    options=["💬 Chats","👥 Groups","🟢 Stories","🔎 Discover"]; labels={"💬 Chats":"Chats","👥 Groups":"Groups","🟢 Stories":"Stories","🔎 Discover":"Discover"}
+    cur=st.session_state.get("eco_community_section","Chats"); cur_opt=next((k for k,v in labels.items() if v==cur), options[0])
+    sel=st.radio("Community navigation", options, horizontal=True, key=MAIN_NAV_KEY, index=options.index(cur_opt), label_visibility="collapsed"); section=labels[sel]; st.session_state.eco_community_section=section
+    try:
+        if section=="Chats":
+            left,right=st.columns([1,1.2])
+            with left: render_whatsapp_inbox(supabase, user_id)
+            with right: st.markdown('<div class="wa-empty"><div style="font-size:64px;">💬</div><h3>EcoLoop Web</h3><p>Select a chat to start messaging.</p><p style="font-size:12px;color:#8696A0;">Powered by Next Gen Impact Hub (NGIH)</p></div>', unsafe_allow_html=True)
+        elif section=="Groups": render_chatrooms_page(supabase, user_id)
+        elif section=="Stories": render_stories_page(supabase, user_id)
+        else: render_discover(supabase, user_id)
+    except Exception as e: st.error("Community Hub section could not load."); st.caption(f"Detail: {e}")
+    st.divider(); st.caption("Powered by Next Gen Impact Hub (NGIH)")
