@@ -4703,3 +4703,344 @@ def render_updates_page(supabase, user_id):
 # ==========================================================
 # END CHATROOMS + STORIES REDESIGN
 # ==========================================================
+
+
+# ==========================================================
+# ECOLOOP NODE — EXACT WHATSAPP-STYLE PRIVATE CHAT
+# CONVERSATION SCREEN OVERRIDE
+# ==========================================================
+
+import streamlit as st
+import html
+
+
+# ----------------------------------------------------------
+# WHATSAPP-STYLE MESSAGE BUBBLES
+# ----------------------------------------------------------
+
+def eco_render_bubble(message, user_id, supabase, group_chat=False):
+
+    mine = str(message.get("sender_id")) == str(user_id)
+
+    message_text = html.escape(
+        str(message.get("message_text") or "")
+    ).replace("\n", "<br>")
+
+    created = str(message.get("created_at") or "")
+    timestamp = created.replace("T", " ")[:16]
+
+    background = "#075E45" if mine else "#FFFFFF"
+    text_color = "#FFFFFF" if mine else "#202124"
+
+    alignment = "flex-end" if mine else "flex-start"
+
+    radius = (
+        "18px 18px 4px 18px"
+        if mine else "18px 18px 18px 4px"
+    )
+
+    sender_html = ""
+
+    if group_chat and not mine:
+        sender_name = eco_member_name(
+            supabase,
+            message.get("sender_id")
+        )
+
+        sender_html = f"""
+        <div style="font-size:12px;color:#16865B;
+                    font-weight:700;margin-bottom:5px;">
+            {html.escape(str(sender_name))}
+        </div>
+        """
+
+    bubble = f"""
+    <div style="
+        display:flex;
+        justify-content:{alignment};
+        width:100%;
+        margin:7px 0;
+    ">
+        <div style="
+            max-width:82%;
+            min-width:65px;
+            background:{background};
+            color:{text_color};
+            padding:10px 13px;
+            border-radius:{radius};
+            font-size:14px;
+            line-height:1.5;
+            overflow-wrap:anywhere;
+            box-shadow:0 1px 2px rgba(0,0,0,.12);
+        ">
+            {sender_html}
+            {message_text}
+            <div style="
+                text-align:right;
+                font-size:10px;
+                opacity:.65;
+                margin-top:5px;
+            ">
+                {html.escape(timestamp)}
+                {" ✓✓" if mine else ""}
+            </div>
+        </div>
+    </div>
+    """
+
+    st.markdown(bubble, unsafe_allow_html=True)
+
+    if message.get("attachment_path"):
+        eco_render_message_attachment(supabase, message)
+
+
+# ----------------------------------------------------------
+# PRIVATE CHAT SCREEN
+# ----------------------------------------------------------
+
+def render_direct_chat(supabase, user_id, conversation_id):
+
+    # Profile viewer
+    profile_id = st.session_state.get(
+        "eco_chat_profile_id"
+    )
+
+    if profile_id:
+        eco_chat_profile_viewer(
+            supabase,
+            profile_id
+        )
+        return
+
+    # Retrieve conversation
+    try:
+        result = (
+            supabase.table("direct_conversations")
+            .select("*")
+            .eq("id", str(conversation_id))
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            st.error("Conversation not found.")
+            return
+
+        conversation = result.data[0]
+
+        participants = [
+            str(conversation.get("user_one_id")),
+            str(conversation.get("user_two_id"))
+        ]
+
+        if str(user_id) not in participants:
+            st.error("You cannot access this conversation.")
+            return
+
+        other_id = get_other_conversation_user(
+            conversation,
+            user_id
+        )
+
+        profile = eco_profile(
+            supabase,
+            other_id
+        ) or {}
+
+    except Exception as e:
+        st.error(f"Unable to open conversation: {e}")
+        return
+
+    display_name = (
+        profile.get("display_name")
+        or "EcoLoop Member"
+    )
+
+    username = (
+        profile.get("username")
+        or "member"
+    )
+
+    # ------------------------------------------------------
+    # CHAT SCREEN STYLING
+    # ------------------------------------------------------
+
+    st.markdown("""
+    <style>
+
+    .eco-wa-header {
+        background:#075E45;
+        padding:12px 10px;
+        border-radius:12px 12px 0 0;
+        color:white;
+        margin-bottom:8px;
+    }
+
+    .eco-wa-name {
+        font-size:16px;
+        font-weight:700;
+        color:white;
+    }
+
+    .eco-wa-status {
+        font-size:11px;
+        color:#D5EEE3;
+    }
+
+    div[data-testid="stButton"] button {
+        border-radius:22px;
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ------------------------------------------------------
+    # HEADER
+    # ------------------------------------------------------
+
+    st.markdown(
+        '<div class="eco-wa-header"></div>',
+        unsafe_allow_html=True
+    )
+
+    back_col, avatar_col, name_col, video_col, phone_col, menu_col = (
+        st.columns([0.45, 0.8, 3.0, 0.65, 0.65, 0.45])
+    )
+
+    with back_col:
+        if st.button(
+            "‹",
+            key=f"eco_wa_back_{conversation_id}"
+        ):
+            st.session_state["eco_active_conversation"] = None
+            st.session_state["eco_pending_call"] = None
+            st.rerun()
+
+    with avatar_col:
+        if profile.get("avatar_url"):
+            eco_show_avatar(
+                supabase,
+                profile.get("avatar_url"),
+                42
+            )
+        else:
+            st.markdown("👤")
+
+    with name_col:
+        if st.button(
+            display_name,
+            key=f"eco_wa_profile_{conversation_id}"
+        ):
+            st.session_state["eco_chat_profile_id"] = str(other_id)
+            st.rerun()
+
+        st.caption(f"@{username}")
+
+    with video_col:
+        if st.button(
+            "📹",
+            key=f"eco_wa_video_{conversation_id}"
+        ):
+            st.session_state["eco_pending_call"] = "video"
+
+    with phone_col:
+        if st.button(
+            "📞",
+            key=f"eco_wa_phone_{conversation_id}"
+        ):
+            st.session_state["eco_pending_call"] = "voice"
+
+    with menu_col:
+        if st.button(
+            "⋮",
+            key=f"eco_wa_menu_{conversation_id}"
+        ):
+            st.session_state["eco_chat_profile_id"] = str(other_id)
+            st.rerun()
+
+    # Call placeholders
+    pending_call = st.session_state.get(
+        "eco_pending_call"
+    )
+
+    if pending_call:
+        call_name = (
+            "Video calling"
+            if pending_call == "video"
+            else "Voice calling"
+        )
+
+        st.info(
+            f"{call_name} is coming soon to EcoLoop Node."
+        )
+
+        if st.button(
+            "Close",
+            key=f"eco_wa_close_call_{conversation_id}"
+        ):
+            st.session_state["eco_pending_call"] = None
+            st.rerun()
+
+    # ------------------------------------------------------
+    # CHAT BACKGROUND
+    # ------------------------------------------------------
+
+    st.markdown("""
+    <div style="
+        background:#E8E2D8;
+        height:8px;
+        border-radius:5px;
+        margin:5px 0 12px 0;
+    "></div>
+    """, unsafe_allow_html=True)
+
+    # ------------------------------------------------------
+    # MESSAGE HISTORY
+    # ------------------------------------------------------
+
+    messages = get_direct_messages(
+        supabase,
+        conversation_id
+    )
+
+    if not messages:
+        st.markdown("""
+        <div style="
+            text-align:center;
+            padding:35px 10px;
+            color:#777;
+            font-size:13px;
+        ">
+            This is the beginning of your conversation.
+        </div>
+        """, unsafe_allow_html=True)
+
+    else:
+        for message in messages:
+
+            eco_render_bubble(
+                message,
+                user_id,
+                supabase,
+                False
+            )
+
+    # ------------------------------------------------------
+    # COMPOSER
+    # ------------------------------------------------------
+
+    st.markdown("---")
+
+    eco_message_composer(
+        supabase,
+        user_id,
+        conversation_id,
+        False
+    )
+
+    st.caption("Powered by Next Gen Impact Hub (NGIH)")
+
+
+# ==========================================================
+# END — WHATSAPP-STYLE PRIVATE CHAT OVERRIDE
+# ==========================================================
