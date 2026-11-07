@@ -766,7 +766,7 @@ def render_chats_page(supabase, user_id):
             "time": created_at,
         })
 
-    if not inbox_items:
+        if not inbox_items:
         st.info(
             "No conversations found. "
             "Start a new chat with an EcoLoop member."
@@ -778,7 +778,7 @@ def render_chats_page(supabase, user_id):
         profile = item["profile"]
         avatar = profile.get("avatar_url") or ""
 
-                with st.container(border=True):
+        with st.container(border=True):
             col1, col2, col3 = st.columns([1, 4, 1])
 
             with col1:
@@ -805,7 +805,7 @@ def render_chats_page(supabase, user_id):
                         str(item["time"]).replace("T", " ")[:16]
                     )
 
-                        with col3:
+            with col3:
                 if st.button(
                     "Open",
                     key=f"eco_open_chat_{conversation.get('id')}"
@@ -813,13 +813,13 @@ def render_chats_page(supabase, user_id):
                     st.session_state["eco_active_conversation"] = conversation.get("id")
                     st.rerun()
 
-    if st.button(
-        "Profile",
-        key=f"eco_chat_profile_{item['user_id']}"
-    ):
-        st.session_state["eco_view_profile_id"] = str(item["user_id"])
-        st.session_state["eco_community_section"] = "Discover People"
-        st.rerun()
+                if st.button(
+                    "Profile",
+                    key=f"eco_chat_profile_{item['user_id']}"
+                ):
+                    st.session_state["eco_view_profile_id"] = str(item["user_id"])
+                    st.session_state["eco_community_section"] = "Discover People"
+                    st.rerun()
                     
 
 # ==========================================================
