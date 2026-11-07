@@ -5044,3 +5044,469 @@ def render_direct_chat(supabase, user_id, conversation_id):
 # ==========================================================
 # END — WHATSAPP-STYLE PRIVATE CHAT OVERRIDE
 # ==========================================================
+
+# ============================================================
+# ECOLOOP NODE — COMPLETE WHATSAPP COMMUNITY OVERRIDE
+# ONE INTEGRATED SYSTEM:
+# CHATS | GROUPS | UPDATES
+# ============================================================
+
+import streamlit as st
+import html
+
+
+# ============================================================
+# 1. SHARED WHATSAPP CHATROOM CONVERSATION SCREEN
+# ============================================================
+
+def render_chatroom_chat(supabase, user_id, group_id):
+
+    # Load group
+    try:
+        result = (
+            supabase.table("community_groups")
+            .select("*")
+            .eq("id", str(group_id))
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            st.error("This community group could not be found.")
+            return
+
+        group = result.data[0]
+
+    except Exception as e:
+        st.error(f"Could not load group: {e}")
+        return
+
+    # Membership security check
+    try:
+        if not is_chatroom_member(
+            supabase, user_id, group_id
+        ):
+            st.warning("You need approved membership to access this group.")
+
+            if st.button("Back to Groups"):
+                st.session_state.pop("eco_active_group", None)
+                st.rerun()
+
+            return
+
+    except Exception as e:
+        st.error(f"Membership verification failed: {e}")
+        return
+
+    # --------------------------------------------------------
+    # HEADER
+    # --------------------------------------------------------
+
+    st.markdown("""
+    <style>
+    .eco-wa-group-header {
+        background:#075E45;
+        color:white;
+        padding:12px;
+        border-radius:12px;
+        margin-bottom:10px;
+    }
+
+    .eco-wa-group-name {
+        color:white;
+        font-size:16px;
+        font-weight:700;
+    }
+
+    .eco-wa-group-description {
+        color:#D5EEE3;
+        font-size:11px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    back_col, avatar_col, name_col, menu_col = st.columns(
+        [0.5, 0.85, 3.5, 0.6]
+    )
+
+    with back_col:
+        if st.button(
+            "‹",
+            key=f"eco_wa_group_back_{group_id}"
+        ):
+            st.session_state.pop("eco_active_group", None)
+            st.session_state.pop("eco_pending_call", None)
+            st.rerun()
+
+    with avatar_col:
+        if group.get("image_url"):
+            eco_show_avatar(
+                supabase,
+                group.get("image_url"),
+                44
+            )
+        else:
+            st.markdown("👥")
+
+    with name_col:
+        st.markdown(
+            f"""
+            <div class="eco-wa-group-name">
+                {html.escape(str(group.get("name") or "Community Group"))}
+            </div>
+            <div class="eco-wa-group-description">
+                {html.escape(str(group.get("description") or "EcoLoop Community"))}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with menu_col:
+        if st.button(
+            "⋮",
+            key=f"eco_wa_group_menu_{group_id}"
+        ):
+            st.session_state["eco_group_details_open"] = (
+                not st.session_state.get("eco_group_details_open", False)
+            )
+
+    if st.session_state.get("eco_group_details_open"):
+
+        st.markdown("### Group information")
+
+        st.write(group.get("description") or "No description available.")
+
+        if group.get("location"):
+            st.caption(f"📍 {group.get('location')}")
+
+        if st.button(
+            "Close group information",
+            key=f"eco_group_details_close_{group_id}"
+        ):
+            st.session_state["eco_group_details_open"] = False
+            st.rerun()
+
+    # --------------------------------------------------------
+    # CALL BUTTONS
+    # --------------------------------------------------------
+
+    call_col, video_col = st.columns(2)
+
+    with call_col:
+        if st.button(
+            "📞 Voice call",
+            key=f"eco_group_voice_{group_id}",
+            use_container_width=True
+        ):
+            st.info("Group voice calling is coming soon.")
+
+    with video_col:
+        if st.button(
+            "📹 Video call",
+            key=f"eco_group_video_{group_id}",
+            use_container_width=True
+        ):
+            st.info("Group video calling is coming soon.")
+
+    # --------------------------------------------------------
+    # MESSAGES
+    # --------------------------------------------------------
+
+    st.markdown("""
+    <div style="
+        background:#E8E2D8;
+        padding:7px;
+        border-radius:8px;
+        text-align:center;
+        color:#666;
+        font-size:11px;
+        margin:10px 0;
+    ">
+        ECOLOOP COMMUNITY CONVERSATION
+    </div>
+    """, unsafe_allow_html=True)
+
+    try:
+        messages = get_chatroom_messages(
+            supabase,
+            group_id
+        ) or []
+
+        if not messages:
+            st.info(
+                "This group is ready. Send the first message!"
+            )
+
+        for message in messages:
+
+            eco_render_bubble(
+                message,
+                user_id,
+                supabase,
+                True
+            )
+
+    except Exception as e:
+        st.error(f"Could not load group messages: {e}")
+
+    # --------------------------------------------------------
+    # MESSAGE COMPOSER
+    # --------------------------------------------------------
+
+    st.markdown("---")
+
+    eco_message_composer(
+        supabase,
+        user_id,
+        group_id,
+        True
+    )
+
+    st.caption("Powered by Next Gen Impact Hub (NGIH)")
+
+
+# ============================================================
+# 2. PRESERVE EXISTING PAGE FUNCTIONS
+# ============================================================
+
+_eco_whatsapp_old_chats = render_chats_page
+_eco_whatsapp_old_groups = render_chatrooms_page
+_eco_whatsapp_old_updates = render_updates_page
+
+
+# ============================================================
+# 3. UNIFIED WHATSAPP COMMUNITY PAGE
+# ============================================================
+
+def render_community_groups_page(supabase, user_id):
+
+    # --------------------------------------------------------
+    # OPEN PRIVATE CONVERSATION
+    # --------------------------------------------------------
+
+    active_conversation = st.session_state.get(
+        "eco_active_conversation"
+    )
+
+    if active_conversation:
+        render_direct_chat(
+            supabase,
+            user_id,
+            active_conversation
+        )
+        return
+
+    # --------------------------------------------------------
+    # OPEN GROUP CONVERSATION
+    # --------------------------------------------------------
+
+    active_group = st.session_state.get(
+        "eco_active_group"
+    )
+
+    if active_group:
+        render_chatroom_chat(
+            supabase,
+            user_id,
+            active_group
+        )
+        return
+
+    # --------------------------------------------------------
+    # COMMUNITY HOME
+    # --------------------------------------------------------
+
+    st.markdown("""
+    <style>
+
+    div[data-testid="stTabs"] {
+        width:100%;
+    }
+
+    div[data-testid="stTabs"] button {
+        font-size:14px !important;
+        font-weight:700 !important;
+        min-width:95px;
+    }
+
+    div[data-testid="stTabs"] button[aria-selected="true"] {
+        color:#16865B !important;
+        border-bottom:3px solid #16865B !important;
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("## EcoLoop Community")
+
+    st.caption(
+        "Connect, communicate and share your impact."
+    )
+
+    # Three main WhatsApp-style sections
+    chats_tab, groups_tab, updates_tab = st.tabs([
+        "💬 Chats",
+        "👥 Groups",
+        "⭕ Updates"
+    ])
+
+    # --------------------------------------------------------
+    # CHATS
+    # --------------------------------------------------------
+
+    with chats_tab:
+
+        _eco_whatsapp_old_chats(
+            supabase,
+            user_id
+        )
+
+    # --------------------------------------------------------
+    # GROUPS
+    # --------------------------------------------------------
+
+    with groups_tab:
+
+        _eco_whatsapp_old_groups(
+            supabase,
+            user_id
+        )
+
+    # --------------------------------------------------------
+    # UPDATES / STORIES
+    # --------------------------------------------------------
+
+    with updates_tab:
+
+        _eco_whatsapp_old_updates(
+            supabase,
+            user_id
+        )
+
+    st.markdown("---")
+
+    st.caption(
+        "Powered by Next Gen Impact Hub (NGIH)"
+    )
+
+
+# ============================================================
+# 4. END OF UNIFIED WHATSAPP OVERRIDE
+# ============================================================
+# ==========================================================
+# ECOLOOP NODE — WHATSAPP BUBBLE SIZE & TEXT FIX
+# ==========================================================
+
+import streamlit as st
+import html
+
+
+def eco_render_bubble(message, user_id, supabase, group_chat=False):
+
+    mine = str(message.get("sender_id")) == str(user_id)
+
+    # Get message as ordinary text
+    message_text = str(message.get("message_text") or "")
+
+    safe_text = html.escape(message_text).replace("\n", "<br>")
+
+    # Timestamp
+    timestamp = str(
+        message.get("created_at") or ""
+    ).replace("T", " ")[:16]
+
+    # Bubble colours
+    if mine:
+        background = "#D5F5C8"
+        text_color = "#17251C"
+        alignment = "flex-end"
+        radius = "14px 14px 3px 14px"
+    else:
+        background = "#FFFFFF"
+        text_color = "#202124"
+        alignment = "flex-start"
+        radius = "14px 14px 14px 3px"
+
+    # Group sender name
+    sender_html = ""
+
+    if group_chat and not mine:
+        try:
+            sender_name = eco_member_name(
+                supabase,
+                message.get("sender_id")
+            )
+        except Exception:
+            sender_name = "Member"
+
+        sender_html = f"""
+        <div style="
+            font-size:11px;
+            font-weight:700;
+            color:#16865B;
+            margin-bottom:3px;
+        ">
+            {html.escape(str(sender_name))}
+        </div>
+        """
+
+    # Compact WhatsApp-style bubble
+    bubble_html = f"""
+    <div style="
+        display:flex;
+        justify-content:{alignment};
+        width:100%;
+        margin:4px 0;
+    ">
+        <div style="
+            display:inline-block;
+            width:fit-content;
+            max-width:75%;
+            min-width:35px;
+            background:{background};
+            color:{text_color};
+            padding:7px 10px 5px 10px;
+            border-radius:{radius};
+            font-size:13px;
+            line-height:1.4;
+            overflow-wrap:anywhere;
+            word-break:normal;
+            box-shadow:0 1px 2px rgba(0,0,0,.12);
+        ">
+            {sender_html}
+            <div style="
+                font-size:13px;
+                font-weight:400;
+                white-space:normal;
+                overflow-wrap:anywhere;
+            ">{safe_text}</div>
+            <div style="
+                text-align:right;
+                font-size:9px;
+                color:#66756B;
+                margin-top:3px;
+            ">
+                {html.escape(timestamp)}
+                {" ✓✓" if mine else ""}
+            </div>
+        </div>
+    </div>
+    """
+
+    # Render as HTML, not a code block
+    st.markdown(
+        bubble_html,
+        unsafe_allow_html=True
+    )
+
+    # Preserve existing attachment display
+    if message.get("attachment_path"):
+        eco_render_message_attachment(
+            supabase,
+            message
+        )
+
+
+# ==========================================================
+# END OF BUBBLE FIX
+# ==========================================================
