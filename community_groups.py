@@ -8,6 +8,7 @@
 #   1. Chats   — private conversations, people directory, profile
 #   2. Groups  — discover, manage and chat in community groups
 #   3. Updates — 24-hour photo/video stories
+#   4. Discover — search people and groups
 #
 # Integration:
 #   render_community_groups_page(supabase, user_id)
@@ -75,6 +76,7 @@ def eco_init_state():
         "eco_people_search": "",
         "eco_group_view": "Discover",
         "eco_story_view": "Recent Updates",
+        "eco_discover_search": "",
         "eco_profile_view_user": None,
     }
     for key, value in defaults.items():
@@ -150,14 +152,15 @@ def eco_storage_url(supabase, path, expires=3600):
         return path if str(path).startswith("http") else ""
 
 
-def eco_upload(supabase, uploaded, folder, user_id, allow_video=False):
+def eco_upload(supabase, uploaded, folder, user_id, allow_video=False, allow_documents=False):
     if not uploaded:
         return ""
     name = os.path.basename(uploaded.name or "upload")
     ext = os.path.splitext(name)[1].lower()
     allowed_images = {".jpg", ".jpeg", ".png", ".webp"}
     allowed_videos = {".mp4", ".mov", ".webm"}
-    allowed = allowed_images | (allowed_videos if allow_video else set())
+    allowed_documents = {".pdf"}
+    allowed = allowed_images | (allowed_videos if allow_video else set()) | (allowed_documents if allow_documents else set())
     if ext not in allowed:
         raise ValueError("Please choose a supported image" + (" or video." if allow_video else "."))
     limit = MAX_VIDEO_MB if ext in allowed_videos else MAX_IMAGE_MB
@@ -253,17 +256,48 @@ def render_profile_editor(supabase, user_id):
 
 
 def get_member_directory(supabase, search_text=""):
+    """Search the full member_profiles table, including administrator accounts.
+
+    A search is performed by Supabase rather than filtering only the first
+    150 downloaded profiles. No role is excluded, so a Super Admin profile
+    is discoverable by username just like any other member profile.
+    """
+    q = (search_text or "").strip().lower().lstrip("@").strip()
     try:
-        rows = eco_select(supabase, "member_profiles", "*", order=("display_name", False), limit=150)
-        q = (search_text or "").strip().lower().lstrip("@")
-        if q:
-            rows = [
-                row for row in rows
-                if q in str(row.get("username", "")).lower()
-                or q in str(row.get("display_name", "")).lower()
-                or q in str(row.get("location", "")).lower()
-            ]
-        return rows
+        if not q:
+            return eco_select(
+                supabase, "member_profiles", "*",
+                order=("display_name", False), limit=150
+            )
+
+        # Search username first (the primary member lookup), then display
+        # name and location. Merge by user_id to avoid duplicate cards.
+        found = {}
+        for column in ("username", "display_name", "location"):
+            try:
+                query = (
+                    supabase.table("member_profiles")
+                    .select("*")
+                    .ilike(column, f"%{q}%")
+                    .limit(100)
+                )
+                rows = eco_result_data(query.execute())
+                for row in rows:
+                    uid = str(row.get("user_id") or row.get("id") or "")
+                    if uid:
+                        found[uid] = row
+            except Exception:
+                # A missing optional search column must not prevent
+                # username lookup or hide the rest of the directory.
+                continue
+
+        return sorted(
+            found.values(),
+            key=lambda row: (
+                str(row.get("username") or "").lower(),
+                str(row.get("display_name") or "").lower()
+            )
+        )
     except Exception:
         return []
 
@@ -482,11 +516,35 @@ def eco_time_label(value):
         return str(value)[:16]
 
 
+def eco_soft_delete_message(supabase, table, message_id, sender_id):
+    """Soft-delete only the signed-in user's own message."""
+    return supabase.table(table).update({"deleted_at": eco_iso()}).eq(
+        "id", message_id
+    ).eq("sender_id", sender_id).execute()
+
+
+def eco_edit_message(supabase, table, message_id, sender_id, new_text):
+    new_text = (new_text or "").strip()
+    if not new_text:
+        raise ValueError("A message cannot be empty.")
+    return supabase.table(table).update({
+        "message_text": new_text,
+        "edited_at": eco_iso(),
+    }).eq("id", message_id).eq("sender_id", sender_id).execute()
+
+
+def eco_message_visible(message):
+    return not message.get("deleted_at")
+
+
 def eco_render_bubble(message, current_user_id, supabase=None):
-    """Render a private message with Streamlit's native chat alignment."""
+    """Render a private message and controls for its author."""
+    if not eco_message_visible(message):
+        return
     sent = str(message.get("sender_id")) == str(current_user_id)
     role = "user" if sent else "assistant"
     attachment = message.get("attachment_path")
+    message_id = message.get("id")
     with st.chat_message(role):
         if attachment and supabase:
             url = eco_storage_url(supabase, attachment)
@@ -496,16 +554,37 @@ def eco_render_bubble(message, current_user_id, supabase=None):
             elif url and kind.startswith("video"):
                 st.video(url)
             elif url:
-                st.link_button(
-                    message.get("attachment_name") or "Open attachment",
-                    url,
-                    use_container_width=False
-                )
+                st.link_button(message.get("attachment_name") or "Open attachment", url)
         body = str(message.get("message_text") or "").strip()
         if body:
             st.write(body)
         meta = eco_time_label(message.get("created_at"))
+        if message.get("edited_at"):
+            meta += " · edited"
         st.caption((meta + ("  ✓✓" if sent else "")).strip())
+        if sent and message_id:
+            with st.expander("Message options"):
+                edited = st.text_input(
+                    "Edit message", value=body,
+                    key=f"eco_dm_edit_text_{message_id}"
+                )
+                a, b = st.columns(2)
+                with a:
+                    if st.button("Save edit", key=f"eco_dm_edit_{message_id}", use_container_width=True):
+                        try:
+                            eco_edit_message(supabase, "direct_messages", message_id, current_user_id, edited)
+                            st.success("Message updated.")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Could not edit message: {exc}")
+                with b:
+                    if st.button("Delete message", key=f"eco_dm_delete_{message_id}", use_container_width=True):
+                        try:
+                            eco_soft_delete_message(supabase, "direct_messages", message_id, current_user_id)
+                            st.success("Message deleted.")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Could not delete message: {exc}")
 
 
 def render_direct_conversation(supabase, user_id):
@@ -571,16 +650,20 @@ def render_direct_conversation(supabase, user_id):
         typed_message = None
         st.warning("Your Streamlit version does not support the bottom chat composer. Update Streamlit to use it.")
 
-    if typed_message is not None or attachment is not None:
+    send_attachment = False
+    if attachment is not None:
+        send_attachment = st.button("Send attachment", key=f"eco_dm_send_attachment_{conversation_id}")
+    if typed_message is not None or send_attachment:
         try:
             path = ""
-            if attachment:
-                path = eco_upload(supabase, attachment, "chatrooms", user_id, allow_video=True)
+            selected_file = attachment if send_attachment else None
+            if selected_file:
+                path = eco_upload(supabase, selected_file, "direct-messages", user_id, allow_video=True, allow_documents=True)
             send_direct_message(
                 supabase, conversation_id, user_id, typed_message or "",
                 path,
-                attachment.name if attachment else "",
-                attachment.type if attachment else ""
+                selected_file.name if selected_file else "",
+                selected_file.type if selected_file else ""
             )
             st.rerun()
         except Exception as exc:
@@ -778,7 +861,7 @@ def get_chatroom_messages(supabase, group_id, limit=100):
     try:
         return eco_select(
             supabase, "group_messages", "*",
-            [("eq", "group_id", group_id)],
+            [("eq", "group_id", group_id), ("is_", "deleted_at", "null")],
             order=("created_at", False), limit=limit
         )
     except Exception:
@@ -826,20 +909,75 @@ def render_chatroom_chat(supabase, group, user_id):
     st.divider()
     messages = get_chatroom_messages(supabase, group_id)
     for message in messages:
+        if not eco_message_visible(message):
+            continue
         sender = eco_profile(supabase, message.get("sender_id"))
-        name = "You" if str(message.get("sender_id")) == str(user_id) else eco_display_name(sender)
         sent = str(message.get("sender_id")) == str(user_id)
+        name = "You" if sent else eco_display_name(sender)
         with st.chat_message("user" if sent else "assistant"):
             if not sent:
                 st.caption(name)
+            attachments = message.get("attachments") or []
+            if isinstance(attachments, dict):
+                attachments = [attachments]
+            for item in attachments:
+                if not isinstance(item, dict):
+                    continue
+                media_path = item.get("path") or item.get("url")
+                media_url = eco_storage_url(supabase, media_path)
+                media_type = str(item.get("type") or "")
+                if media_url and media_type.startswith("image"):
+                    st.image(media_url, use_container_width=True)
+                elif media_url and media_type.startswith("video"):
+                    st.video(media_url)
+                elif media_url:
+                    st.link_button(item.get("name") or "Open attachment", media_url)
             st.write(str(message.get("message_text") or ""))
-            st.caption(eco_time_label(message.get("created_at")))
+            meta = eco_time_label(message.get("created_at"))
+            if message.get("edited_at"):
+                meta += " · edited"
+            st.caption(meta)
+            if sent and message.get("id"):
+                with st.expander("Message options"):
+                    body = str(message.get("message_text") or "")
+                    edited = st.text_input("Edit message", value=body, key=f"eco_group_edit_text_{message['id']}")
+                    a, b = st.columns(2)
+                    with a:
+                        if st.button("Save edit", key=f"eco_group_edit_{message['id']}", use_container_width=True):
+                            try:
+                                eco_edit_message(supabase, "group_messages", message["id"], user_id, edited)
+                                st.success("Message updated.")
+                                st.rerun()
+                            except Exception as exc:
+                                st.error(f"Could not edit message: {exc}")
+                    with b:
+                        if st.button("Delete message", key=f"eco_group_delete_{message['id']}", use_container_width=True):
+                            try:
+                                eco_soft_delete_message(supabase, "group_messages", message["id"], user_id)
+                                st.success("Message deleted.")
+                                st.rerun()
+                            except Exception as exc:
+                                st.error(f"Could not delete message: {exc}")
+
+    attachment = st.file_uploader(
+        "Attach a photo, video or document",
+        type=["jpg", "jpeg", "png", "webp", "mp4", "mov", "pdf"],
+        key=f"eco_group_attach_{group_id}"
+    )
     with st.form(f"eco_group_send_form_{group_id}", clear_on_submit=True):
         text_value = st.text_input("Message", placeholder=f"Message {group.get('name', 'the group')}…", label_visibility="collapsed")
         send = st.form_submit_button("Send", use_container_width=True)
-    if send:
+    send_attachment = False
+    if attachment is not None:
+        send_attachment = st.button("Send attachment", key=f"eco_group_send_attachment_{group_id}")
+    if send or send_attachment:
         try:
-            send_chatroom_message(supabase, group_id, user_id, text_value)
+            attachment_items = []
+            selected_file = attachment if send_attachment else None
+            if selected_file:
+                path = eco_upload(supabase, selected_file, "groups", user_id, allow_video=True, allow_documents=True)
+                attachment_items.append({"path": path, "name": selected_file.name, "type": selected_file.type or ""})
+            send_chatroom_message(supabase, group_id, user_id, text_value if send else "", attachment_items)
             st.rerun()
         except Exception as exc:
             st.error(f"Message could not be sent: {exc}")
@@ -1070,6 +1208,33 @@ def render_stories_page(supabase, user_id):
 
 
 # ------------------------------
+# Community discovery
+# ------------------------------
+
+def render_community_discover(supabase, user_id):
+    eco_header("Discover", "Find people and communities across EcoLoop")
+    query = st.text_input(
+        "Search people or groups", key="eco_discover_search_input",
+        placeholder="Search names, usernames, groups or locations…"
+    )
+    st.markdown("### People")
+    people = [p for p in get_member_directory(supabase, query) if str(p.get("user_id")) != str(user_id)]
+    if people:
+        for index, profile in enumerate(people[:30]):
+            render_member_card(supabase, profile, user_id, f"discover_{index}")
+    else:
+        st.caption("No matching people found.")
+    st.divider()
+    st.markdown("### Groups")
+    groups = get_chatrooms(supabase, query)
+    if groups:
+        for index, group in enumerate(groups[:30]):
+            _render_group_card(supabase, group, user_id, index, "discover_hub")
+    else:
+        st.caption("No matching groups found.")
+
+
+# ------------------------------
 # Main Community Hub entry point
 # ------------------------------
 
@@ -1110,8 +1275,8 @@ def render_community_groups_page(supabase, user_id):
     st.title("Community Hub")
     st.caption("Connect · Collaborate · Create impact")
 
-    options = ["💬 Chats", "👥 Groups", "🟢 Updates"]
-    labels = {"💬 Chats": "Chats", "👥 Groups": "Groups", "🟢 Updates": "Updates"}
+    options = ["💬 Chats", "👥 Groups", "🟢 Updates", "🔎 Discover"]
+    labels = {"💬 Chats": "Chats", "👥 Groups": "Groups", "🟢 Updates": "Updates", "🔎 Discover": "Discover"}
     current = st.session_state.get("eco_community_section", "Chats")
     current_option = next((key for key, value in labels.items() if value == current), options[0])
     selected = st.radio(
@@ -1128,8 +1293,10 @@ def render_community_groups_page(supabase, user_id):
             render_chats_section(supabase, user_id)
         elif section == "Groups":
             render_chatrooms_page(supabase, user_id)
-        else:
+        elif section == "Updates":
             render_stories_page(supabase, user_id)
+        else:
+            render_community_discover(supabase, user_id)
     except Exception as exc:
         st.error("The Community Hub section could not load.")
         st.caption(f"Technical detail: {exc}")
