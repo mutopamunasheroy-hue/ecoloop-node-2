@@ -810,13 +810,13 @@ def render_chats_page(supabase, user_id):
                         str(item["time"]).replace("T", " ")[:16]
                     )
 
-            with col3:
-    if st.button(
-        "Open",
-        key=f"eco_open_chat_{conversation.get('id')}"
-    ):
-        st.session_state["eco_active_conversation"] = conversation.get("id")
-        st.rerun()
+                        with col3:
+                if st.button(
+                    "Open",
+                    key=f"eco_open_chat_{conversation.get('id')}"
+                ):
+                    st.session_state["eco_active_conversation"] = conversation.get("id")
+                    st.rerun()
 
     if st.button(
         "Profile",
