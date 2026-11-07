@@ -3159,3 +3159,1014 @@ def render_chats_page(supabase, user_id):
 # ==========================================================
 # END FLOATING COMPOSE BUTTON
 # ==========================================================
+
+# ==========================================================
+# ECOLOOP NODE — WHATSAPP-INSPIRED COMMUNITY MESSAGING V2
+# Profiles | Calls | Video Notes | Floating Compose | Composer
+# ==========================================================
+
+# ----------------------------------------------------------
+# 1. PROFILE VIEWER INSIDE MESSAGING
+# ----------------------------------------------------------
+
+def eco_chat_profile_viewer(supabase, member_id):
+    profile = eco_profile(supabase, member_id) or {}
+
+    st.divider()
+
+    top1, top2 = st.columns([4, 1])
+
+    with top1:
+        st.markdown("### Member profile")
+
+    with top2:
+        if st.button("✕", key=f"eco_close_profile_{member_id}"):
+            st.session_state["eco_chat_profile_id"] = None
+            st.rerun()
+
+    avatar = profile.get("avatar_url")
+
+    if avatar:
+        eco_show_avatar(supabase, avatar, 110)
+    else:
+        st.markdown("### 👤")
+
+    display_name = profile.get("display_name") or "EcoLoop Member"
+    username = profile.get("username") or "member"
+
+    st.markdown(f"## {eco_escape(display_name)}")
+    st.markdown(f"**@{eco_escape(username)}**")
+
+    bio = profile.get("bio") or "This member hasn't added a bio yet."
+    st.write(bio)
+
+    if profile.get("location"):
+        st.caption(f"📍 {eco_escape(profile['location'])}")
+
+    if profile.get("country_of_origin"):
+        st.caption(
+            f"🌍 {eco_escape(profile['country_of_origin'])}"
+        )
+
+    st.divider()
+    st.markdown("**Social profiles**")
+
+    social_fields = [
+        ("Instagram", "instagram_handle"),
+        ("Facebook", "facebook_handle"),
+        ("TikTok", "tiktok_handle"),
+        ("LinkedIn", "linkedin_handle"),
+    ]
+
+    found_social = False
+
+    for label, field in social_fields:
+        value = profile.get(field)
+
+        if value:
+            found_social = True
+            st.caption(f"{label}: {eco_escape(value)}")
+
+    if not found_social:
+        st.caption("No social profiles added.")
+
+    if st.button(
+        "Message member",
+        key=f"eco_profile_message_{member_id}",
+        use_container_width=True
+    ):
+        try:
+            conversation_id = get_or_create_direct_conversation(
+                supabase,
+                st.session_state.get("user_id", member_id),
+                member_id
+            )
+
+            st.session_state["eco_active_conversation"] = conversation_id
+            st.session_state["eco_chat_profile_id"] = None
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"Could not open conversation: {e}")
+
+
+# ----------------------------------------------------------
+# 2. CALL CONTROLS — READY FOR FUTURE IN-APP CALLING
+# ----------------------------------------------------------
+
+def eco_chat_call_controls(conversation_id):
+    call1, call2 = st.columns(2)
+
+    with call1:
+        if st.button(
+            "📞",
+            key=f"eco_voice_call_{conversation_id}",
+            help="Voice call"
+        ):
+            st.session_state["eco_call_notice"] = "voice"
+
+    with call2:
+        if st.button(
+            "📹",
+            key=f"eco_video_call_{conversation_id}",
+            help="Video call"
+        ):
+            st.session_state["eco_call_notice"] = "video"
+
+    notice = st.session_state.get("eco_call_notice")
+
+    if notice:
+        if notice == "voice":
+            st.info(
+                "Voice calling is coming to EcoLoop. "
+                "In-app calls are not available yet."
+            )
+        elif notice == "video":
+            st.info(
+                "Video calling is coming to EcoLoop. "
+                "In-app calls are not available yet."
+            )
+
+        if st.button(
+            "Close",
+            key=f"eco_close_call_notice_{conversation_id}"
+        ):
+            st.session_state["eco_call_notice"] = None
+            st.rerun()
+
+
+# ----------------------------------------------------------
+# 3. WHATSAPP-STYLE MESSAGE COMPOSER
+# ----------------------------------------------------------
+
+def eco_message_composer(
+    supabase,
+    user_id,
+    parent_id,
+    is_group=False
+):
+    table = "group_messages" if is_group else "direct_messages"
+    parent_field = "group_id" if is_group else "conversation_id"
+
+    st.markdown("---")
+
+    # Attachment options
+    with st.expander("＋ Attach / Record"):
+        uploaded_file = st.file_uploader(
+            "Photos, documents, audio or video",
+            type=[
+                "jpg", "jpeg", "png", "webp",
+                "pdf", "doc", "docx", "xls", "xlsx",
+                "ppt", "pptx", "txt", "csv",
+                "mp3", "wav", "ogg", "m4a", "aac",
+                "mp4", "mov", "webm"
+            ],
+            key=f"eco_v2_file_{parent_id}"
+        )
+
+        if uploaded_file:
+            st.caption(f"Selected: {uploaded_file.name}")
+
+            if uploaded_file.type.startswith("video/"):
+                st.video(uploaded_file)
+
+        audio_recorder = getattr(st, "audio_input", None)
+        recorded_audio = None
+
+        if audio_recorder:
+            recorded_audio = audio_recorder(
+                "🎙 Record voice note",
+                key=f"eco_v2_audio_{parent_id}"
+            )
+
+        if recorded_audio:
+            st.audio(recorded_audio)
+
+        st.caption(
+            "Video notes can currently be sent as uploaded video files. "
+            "Direct camera recording will be added in a later update."
+        )
+
+    # Main message bar
+    col_plus, col_message, col_send = st.columns(
+        [0.7, 4.5, 0.9]
+    )
+
+    with col_plus:
+        st.markdown("")
+
+        if st.button(
+            "＋",
+            key=f"eco_v2_plus_{parent_id}",
+            help="Attach a file"
+        ):
+            st.session_state[
+                f"eco_v2_attachment_open_{parent_id}"
+            ] = True
+
+    with col_message:
+        message_text = st.text_input(
+            "Message",
+            placeholder="Message...",
+            label_visibility="collapsed",
+            key=f"eco_v2_text_{parent_id}"
+        )
+
+    with col_send:
+        send_clicked = st.button(
+            "➤",
+            key=f"eco_v2_send_{parent_id}",
+            use_container_width=True,
+            help="Send message"
+        )
+
+    # Open attachment panel when plus is tapped
+    if st.session_state.get(
+        f"eco_v2_attachment_open_{parent_id}"
+    ):
+        st.info(
+            "Open the Attach / Record section above "
+            "to choose your file or record audio."
+        )
+
+    if not send_clicked:
+        return
+
+    # If both file and audio are selected, use the uploaded file.
+    selected_attachment = uploaded_file or recorded_audio
+
+    if selected_attachment:
+        attachment = eco_upload_chat_attachment(
+            supabase,
+            user_id,
+            selected_attachment
+        )
+
+        if not attachment:
+            return
+
+        success = eco_save_attachment_message(
+            supabase,
+            table,
+            parent_field,
+            parent_id,
+            user_id,
+            attachment,
+            message_text or ""
+        )
+
+        if success:
+            st.session_state[
+                f"eco_v2_attachment_open_{parent_id}"
+            ] = False
+            st.rerun()
+
+        return
+
+    if message_text and message_text.strip():
+        if is_group:
+            send_chatroom_message(
+                supabase,
+                parent_id,
+                user_id,
+                message_text.strip()
+            )
+        else:
+            send_direct_message(
+                supabase,
+                parent_id,
+                user_id,
+                message_text.strip()
+            )
+
+        st.rerun()
+
+
+# ----------------------------------------------------------
+# 4. PRIVATE CHAT HEADER + PROFILE + CALL BUTTONS
+# ----------------------------------------------------------
+
+def render_direct_chat(supabase, user_id, conversation_id):
+    profile_id = st.session_state.get("eco_chat_profile_id")
+
+    if profile_id:
+        eco_chat_profile_viewer(supabase, profile_id)
+        return
+
+    try:
+        result = (
+            supabase.table("direct_conversations")
+            .select("*")
+            .eq("id", str(conversation_id))
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            st.error("Conversation not found.")
+            return
+
+        conversation = result.data[0]
+
+        participants = [
+            str(conversation.get("user_one_id")),
+            str(conversation.get("user_two_id"))
+        ]
+
+        if str(user_id) not in participants:
+            st.error("You cannot access this conversation.")
+            return
+
+        other_id = get_other_conversation_user(
+            conversation,
+            user_id
+        )
+
+        profile = eco_profile(supabase, other_id) or {}
+
+    except Exception as e:
+        st.error(f"Could not open chat: {e}")
+        return
+
+    # WhatsApp-inspired header
+    avatar_col, name_col, call_col1, call_col2 = st.columns(
+        [1, 3.2, 0.8, 0.8]
+    )
+
+    with avatar_col:
+        if st.button(
+            "👤",
+            key=f"eco_chat_profile_avatar_{conversation_id}",
+            help="View profile"
+        ):
+            st.session_state["eco_chat_profile_id"] = str(other_id)
+            st.rerun()
+
+    with name_col:
+        if st.button(
+            profile.get("display_name") or "Member",
+            key=f"eco_chat_profile_name_{conversation_id}"
+        ):
+            st.session_state["eco_chat_profile_id"] = str(other_id)
+            st.rerun()
+
+        st.caption(
+            f"@{eco_escape(profile.get('username') or 'member')}"
+        )
+
+    with call_col1:
+        if st.button(
+            "📞",
+            key=f"eco_chat_voice_{conversation_id}",
+            help="Voice call"
+        ):
+            st.session_state["eco_call_notice"] = "voice"
+
+    with call_col2:
+        if st.button(
+            "📹",
+            key=f"eco_chat_video_{conversation_id}",
+            help="Video call"
+        ):
+            st.session_state["eco_call_notice"] = "video"
+
+    notice = st.session_state.get("eco_call_notice")
+
+    if notice:
+        st.info(
+            f"{notice.title()} calling is coming soon. "
+            "EcoLoop will support in-app calling in a future update."
+        )
+
+        if st.button(
+            "Close",
+            key=f"eco_chat_call_close_{conversation_id}"
+        ):
+            st.session_state["eco_call_notice"] = None
+            st.rerun()
+
+    if st.button(
+        "← Messages",
+        key=f"eco_chat_back_{conversation_id}"
+    ):
+        st.session_state["eco_active_conversation"] = None
+        st.session_state["eco_chat_profile_id"] = None
+        st.rerun()
+
+    st.divider()
+
+    messages = get_direct_messages(
+        supabase,
+        conversation_id
+    )
+
+    if not messages:
+        st.info("This is the beginning of your conversation.")
+
+    for message in messages:
+        eco_render_bubble(
+            message,
+            user_id,
+            supabase
+        )
+
+    eco_message_composer(
+        supabase,
+        user_id,
+        conversation_id,
+        False
+    )
+
+
+# ----------------------------------------------------------
+# 5. INBOX WITH PROFILE ACCESS + FLOATING COMPOSE
+# ----------------------------------------------------------
+
+def render_chats_page(supabase, user_id):
+    profile_id = st.session_state.get("eco_chat_profile_id")
+
+    if profile_id:
+        eco_chat_profile_viewer(supabase, profile_id)
+        return
+
+    active = st.session_state.get("eco_active_conversation")
+
+    if active:
+        render_direct_chat(
+            supabase,
+            user_id,
+            active
+        )
+        return
+
+    st.markdown("## Messages")
+    st.caption("Connect and communicate with your EcoLoop community.")
+
+    # Floating compose button
+    st.markdown("""
+    <style>
+    div.st-key-eco_v2_floating_compose button {
+        position: fixed;
+        right: 23px;
+        bottom: 85px;
+        z-index: 999999;
+        width: 57px;
+        height: 57px;
+        min-height: 57px;
+        border-radius: 50%;
+        background: #20C875;
+        color: white;
+        border: none;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.35);
+        font-size: 25px;
+        font-weight: bold;
+    }
+    div.st-key-eco_v2_floating_compose button:hover {
+        background: #159B5A;
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    with st.container(key="eco_v2_floating_compose"):
+        if st.button(
+            "✎",
+            key="eco_v2_compose_button",
+            help="New message"
+        ):
+            st.session_state["eco_show_new_chat"] = True
+            st.rerun()
+
+    if st.session_state.get("eco_show_new_chat"):
+        if st.button(
+            "← Back to messages",
+            key="eco_v2_back_new_chat"
+        ):
+            st.session_state["eco_show_new_chat"] = False
+            st.rerun()
+
+        render_new_chat_picker(
+            supabase,
+            user_id
+        )
+        return
+
+    search = st.text_input(
+        "Search",
+        placeholder="Search by name or username...",
+        key="eco_v2_inbox_search"
+    )
+
+    conversations = get_direct_conversations(
+        supabase,
+        user_id
+    )
+
+    inbox = []
+
+    for conversation in conversations:
+        other_id = get_other_conversation_user(
+            conversation,
+            user_id
+        )
+
+        profile = eco_profile(supabase, other_id) or {}
+
+        name = profile.get("display_name") or "EcoLoop Member"
+        username = profile.get("username") or "member"
+
+        if search:
+            term = search.strip().lower().lstrip("@")
+
+            if (
+                term not in name.lower()
+                and term not in username.lower()
+            ):
+                continue
+
+        messages = get_direct_messages(
+            supabase,
+            conversation.get("id")
+        )
+
+        last = messages[-1] if messages else {}
+
+        preview = (
+            last.get("message_text")
+            or (
+                "📎 Attachment"
+                if last.get("attachment_path")
+                else "Start a conversation"
+            )
+        )
+
+        inbox.append({
+            "conversation": conversation,
+            "profile": profile,
+            "other_id": other_id,
+            "name": name,
+            "username": username,
+            "preview": preview,
+            "time": last.get("created_at") or ""
+        })
+
+    if not inbox:
+        st.info(
+            "No conversations found. Use the green compose button "
+            "to start a new chat."
+        )
+        return
+
+    for item in inbox:
+        conversation_id = item["conversation"].get("id")
+        other_id = item["other_id"]
+        profile = item["profile"]
+
+        with st.container(border=True):
+            avatar_col, details_col, profile_col, open_col = (
+                st.columns([1, 3.5, 0.8, 0.8])
+            )
+
+            with avatar_col:
+                if st.button(
+                    "👤",
+                    key=f"eco_v2_avatar_{other_id}",
+                    help="View member profile"
+                ):
+                    st.session_state["eco_chat_profile_id"] = str(other_id)
+                    st.rerun()
+
+            with details_col:
+                st.markdown(
+                    f"**{eco_escape(item['name'])}**"
+                )
+
+                st.caption(
+                    f"@{eco_escape(item['username'])}"
+                )
+
+                st.caption(
+                    eco_escape(str(item["preview"]))[:75]
+                )
+
+                if item["time"]:
+                    st.caption(
+                        str(item["time"]).replace("T", " ")[:16]
+                    )
+
+            with profile_col:
+                if st.button(
+                    "ⓘ",
+                    key=f"eco_v2_profile_{other_id}",
+                    help="View profile"
+                ):
+                    st.session_state["eco_chat_profile_id"] = str(other_id)
+                    st.rerun()
+
+            with open_col:
+                if st.button(
+                    "›",
+                    key=f"eco_v2_open_{conversation_id}",
+                    help="Open chat"
+                ):
+                    st.session_state[
+                        "eco_active_conversation"
+                    ] = conversation_id
+                    st.rerun()
+
+
+# ----------------------------------------------------------
+# 6. CHATROOMS — PROFILE ACCESS + NEW COMPOSER
+# ----------------------------------------------------------
+
+def render_chatroom_chat(supabase, user_id, group_id):
+    profile_id = st.session_state.get("eco_chat_profile_id")
+
+    if profile_id:
+        eco_chat_profile_viewer(supabase, profile_id)
+        return
+
+    try:
+        result = (
+            supabase.table("community_groups")
+            .select("*")
+            .eq("id", str(group_id))
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            st.error("Chatroom not found.")
+            return
+
+        group = result.data[0]
+
+    except Exception as e:
+        st.error(f"Could not open chatroom: {e}")
+        return
+
+    if not is_chatroom_member(
+        supabase,
+        group,
+        user_id
+    ):
+        st.warning("You must be an approved member to enter this chatroom.")
+        return
+
+    col1, col2 = st.columns([1, 5])
+
+    with col1:
+        if group.get("image_url"):
+            eco_show_avatar(
+                supabase,
+                group.get("image_url"),
+                55
+            )
+        else:
+            st.markdown("## 👥")
+
+    with col2:
+        st.markdown(
+            f"### {eco_escape(group.get('name') or 'Chatroom')}"
+        )
+        st.caption(
+            group.get("description") or "EcoLoop community"
+        )
+
+    if st.button(
+        "← Chatrooms",
+        key=f"eco_v2_group_back_{group_id}"
+    ):
+        st.session_state["eco_active_chatroom"] = None
+        st.rerun()
+
+    st.divider()
+
+    messages = get_chatroom_messages(
+        supabase,
+        group_id
+    )
+
+    if not messages:
+        st.info("No messages yet. Start the conversation!")
+
+    for message in messages:
+        eco_render_bubble(
+            message,
+            user_id,
+            supabase,
+            group_chat=True
+        )
+
+    eco_message_composer(
+        supabase,
+        user_id,
+        group_id,
+        True
+    )
+
+
+# ==========================================================
+# END ECOLOOP NODE MESSAGING V2
+# ==========================================================
+
+# ==========================================================
+# FIX — CLICK ANYWHERE ON INBOX CONVERSATION TO OPEN
+# ==========================================================
+
+def render_chats_page(supabase, user_id):
+    profile_id = st.session_state.get("eco_chat_profile_id")
+
+    if profile_id:
+        eco_chat_profile_viewer(supabase, profile_id)
+        return
+
+    active = st.session_state.get("eco_active_conversation")
+
+    if active:
+        render_direct_chat(supabase, user_id, active)
+        return
+
+    st.markdown("## Messages")
+    st.caption("Your EcoLoop conversations")
+
+    st.markdown("""
+    <style>
+    div.st-key-eco_v3_compose button {
+        position: fixed;
+        right: 23px;
+        bottom: 85px;
+        z-index: 999999;
+        width: 56px;
+        height: 56px;
+        min-height: 56px;
+        border-radius: 50%;
+        background: #20C875;
+        color: white;
+        border: none;
+        font-size: 25px;
+        box-shadow: 0 4px 15px rgba(0,0,0,.3);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    with st.container(key="eco_v3_compose"):
+        if st.button("✎", key="eco_v3_compose_button"):
+            st.session_state["eco_show_new_chat"] = True
+            st.rerun()
+
+    if st.session_state.get("eco_show_new_chat"):
+        if st.button("← Back", key="eco_v3_back"):
+            st.session_state["eco_show_new_chat"] = False
+            st.rerun()
+
+        render_new_chat_picker(supabase, user_id)
+        return
+
+    search = st.text_input(
+        "Search",
+        placeholder="Search by name or username...",
+        key="eco_v3_search"
+    )
+
+    conversations = get_direct_conversations(supabase, user_id)
+
+    for conversation in conversations:
+        other_id = get_other_conversation_user(
+            conversation, user_id
+        )
+
+        profile = eco_profile(supabase, other_id) or {}
+
+        name = profile.get("display_name") or "EcoLoop Member"
+        username = profile.get("username") or "member"
+
+        if search:
+            term = search.strip().lower().lstrip("@")
+            if term not in name.lower() and term not in username.lower():
+                continue
+
+        messages = get_direct_messages(
+            supabase, conversation.get("id")
+        )
+
+        last = messages[-1] if messages else {}
+
+        preview = (
+            last.get("message_text")
+            or ("📎 Attachment" if last.get("attachment_path")
+                else "Start a conversation")
+        )
+
+        conversation_id = conversation.get("id")
+
+        with st.container(border=True):
+            avatar_col, details_col, profile_col = st.columns(
+                [1, 4, 0.8]
+            )
+
+            with avatar_col:
+                if st.button(
+                    "👤",
+                    key=f"eco_v3_avatar_{other_id}",
+                    help="View profile"
+                ):
+                    st.session_state["eco_chat_profile_id"] = str(other_id)
+                    st.rerun()
+
+            with details_col:
+                # The conversation itself is now the clickable item.
+                if st.button(
+                    f"{name}\n@{username}\n{str(preview)[:65]}",
+                    key=f"eco_v3_open_{conversation_id}",
+                    use_container_width=True
+                ):
+                    st.session_state[
+                        "eco_active_conversation"
+                    ] = conversation_id
+                    st.rerun()
+
+                if last.get("created_at"):
+                    st.caption(
+                        str(last["created_at"]).replace("T", " ")[:16]
+                    )
+
+            with profile_col:
+                if st.button(
+                    "ⓘ",
+                    key=f"eco_v3_info_{other_id}",
+                    help="View profile"
+                ):
+                    st.session_state["eco_chat_profile_id"] = str(other_id)
+                    st.rerun()
+
+    st.caption("Powered by Next Gen Impact Hub (NGIH)")
+
+
+# ==========================================================
+# END INBOX CLICK FIX
+# ==========================================================
+
+# ==========================================================
+# ECOLOOP — CLEAN WHATSAPP / INSTAGRAM STYLE INBOX
+# ==========================================================
+
+def render_chats_page(supabase, user_id):
+
+    profile_id = st.session_state.get("eco_chat_profile_id")
+
+    if profile_id:
+        eco_chat_profile_viewer(supabase, profile_id)
+        return
+
+    active = st.session_state.get("eco_active_conversation")
+
+    if active:
+        render_direct_chat(supabase, user_id, active)
+        return
+
+    st.markdown("""
+    <style>
+    div.st-key-eco_v4_compose button {
+        position: fixed;
+        right: 22px;
+        bottom: 85px;
+        z-index: 999999;
+        width: 55px;
+        height: 55px;
+        min-height: 55px;
+        border-radius: 50%;
+        background: #20C875;
+        color: white;
+        border: none;
+        font-size: 25px;
+        box-shadow: 0 4px 15px rgba(0,0,0,.3);
+    }
+
+    div.st-key-eco_v4_compose button:hover {
+        background: #159B5A;
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    title_col, compose_col = st.columns([5, 1])
+
+    with title_col:
+        st.markdown("## Messages")
+
+    with compose_col:
+        st.write("")
+
+    with st.container(key="eco_v4_compose"):
+        if st.button("✎", key="eco_v4_compose_button",
+                     help="New message"):
+            st.session_state["eco_show_new_chat"] = True
+            st.rerun()
+
+    if st.session_state.get("eco_show_new_chat"):
+        if st.button("← Back", key="eco_v4_back"):
+            st.session_state["eco_show_new_chat"] = False
+            st.rerun()
+
+        render_new_chat_picker(supabase, user_id)
+        return
+
+    search = st.text_input(
+        "Search",
+        placeholder="Search people...",
+        key="eco_v4_search"
+    )
+
+    conversations = get_direct_conversations(supabase, user_id)
+
+    if not conversations:
+        st.info("Your conversations will appear here.")
+        return
+
+    for conversation in conversations:
+
+        other_id = get_other_conversation_user(
+            conversation, user_id
+        )
+
+        profile = eco_profile(supabase, other_id) or {}
+
+        name = profile.get("display_name") or "EcoLoop Member"
+        username = profile.get("username") or "member"
+        avatar = profile.get("avatar_url")
+
+        if search:
+            term = search.strip().lower().lstrip("@")
+
+            if (
+                term not in name.lower()
+                and term not in username.lower()
+            ):
+                continue
+
+        messages = get_direct_messages(
+            supabase,
+            conversation.get("id")
+        )
+
+        last = messages[-1] if messages else {}
+
+        preview = (
+            last.get("message_text")
+            or (
+                "📎 Attachment"
+                if last.get("attachment_path")
+                else "Start a conversation"
+            )
+        )
+
+        timestamp = last.get("created_at") or ""
+        conversation_id = conversation.get("id")
+
+        with st.container(border=True):
+
+            avatar_col, details_col, profile_col = st.columns(
+                [1, 4, 0.7]
+            )
+
+            with avatar_col:
+                if avatar:
+                    eco_show_avatar(supabase, avatar, 54)
+                else:
+                    st.markdown("### 👤")
+
+            with details_col:
+
+                if st.button(
+                    f"{name}  ·  @{username}\n{str(preview)[:65]}",
+                    key=f"eco_v4_conversation_{conversation_id}",
+                    use_container_width=True
+                ):
+                    st.session_state[
+                        "eco_active_conversation"
+                    ] = conversation_id
+                    st.rerun()
+
+                if timestamp:
+                    st.caption(
+                        str(timestamp).replace("T", " ")[:16]
+                    )
+
+            with profile_col:
+                if st.button(
+                    "ⓘ",
+                    key=f"eco_v4_profile_{other_id}",
+                    help="View profile"
+                ):
+                    st.session_state[
+                        "eco_chat_profile_id"
+                    ] = str(other_id)
+                    st.rerun()
+
+    st.caption("Powered by Next Gen Impact Hub (NGIH)")
+
+
+# ==========================================================
+# END — CLEAN INBOX
+# ==========================================================
