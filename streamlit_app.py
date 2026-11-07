@@ -1301,17 +1301,19 @@ def registration_form():
         st.rerun()
       
 
-
 # =====================================================
 # PAGE 4 — MY PROFILE
 # =====================================================
 
 def account_page():
 
-    st.title("My Profile")
-
     if not require_login():
         return
+
+    render_account_profiles(
+        supabase,
+        page="profile"
+    )
 
     # -----------------------------------------------
     # LOAD MEMBER PROFILE
