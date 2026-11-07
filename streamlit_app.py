@@ -3736,3 +3736,67 @@ st.caption("Designed by Munashe Roy Mutopa — General Coordinator")
 st.caption("Version 2.0")
 
 st.caption("© 2026 Next Gen Impact Hub. All rights reserved.")
+
+# ============================================================
+# OVERRIDE - MY PROFILE - PASTE AT BOTTOM ONLY - DO NOT EDIT TOP
+# This adds profile picture upload + tappable picture to Page 4
+# ============================================================
+
+def _ecoloop_my_profile_override(supabase, user_id):
+    # 1. Show current picture - tappable / big
+    try:
+        res = supabase.table("member_profiles").select("*").eq("user_id", user_id).single().execute()
+        me = res.data or {}
+    except Exception:
+        me = {}
+
+    st.markdown("### 👤 My Profile")
+    if me.get("avatar_url"):
+        st.image(me.get("avatar_url"), width=200, caption="Tap to view - this is your profile picture")
+    else:
+        st.info("No profile picture yet - upload one below")
+
+    st.write(f"**{me.get('display_name') or ''}**")
+    st.write(f"@{me.get('username') or ''}")
+    st.write(me.get("bio") or "")
+
+    # 2. Change profile picture - this uses the fixed upload from Community Hub
+    # It fixes the 403 you saw for profile picture
+    pic = st.file_uploader("📷 Change profile picture", type=["jpg","jpeg","png"], key="my_profile_pic_bottom")
+    if pic is not None:
+        if st.button("Upload new picture", key="upload_my_pic_bottom"):
+            try:
+                import uuid as _uuid
+                path = f"avatars/{user_id}/{_uuid.uuid4()}.jpg"
+                supabase.storage.from_("community-media").upload(path, pic.getvalue(), {"content-type": pic.type})
+                try:
+                    url = supabase.storage.from_("community-media").get_public_url(path)
+                except Exception:
+                    url = supabase.storage.from_("community-media").create_signed_url(path, 60*60*24*365).get("signedURL", "")
+                supabase.table("member_profiles").update({"avatar_url": url}).eq("user_id", user_id).execute()
+                st.success("Profile picture updated!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Could not upload profile picture: {e}")
+
+# Save original and override render_account_profiles
+try:
+    _orig_account_profiles = render_account_profiles
+except Exception:
+    _orig_account_profiles = None
+
+def render_account_profiles(supabase, page="profile", **kwargs):
+    # First show the original profile form (bio, location, etc.) - don't break it
+    if _orig_account_profiles is not None:
+        try:
+            _orig_account_profiles(supabase, page=page, **kwargs)
+        except TypeError:
+            _orig_account_profiles(supabase, page)
+    # Then show our picture block at bottom
+    try:
+        # get user_id from supabase auth
+        uid = supabase.auth.get_user().user.id if hasattr(supabase, "auth") else None
+        if uid:
+            _ecoloop_my_profile_override(supabase, uid)
+    except Exception as e:
+        st.info(f"Picture block could not load: {e}")
