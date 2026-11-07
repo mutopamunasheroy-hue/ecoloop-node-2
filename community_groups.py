@@ -1727,3 +1727,110 @@ def render_community_groups_page(supabase, user_id):
 
     st.divider()
     st.caption("Powered by Next Gen Impact Hub (NGIH)")
+    # ==========================================================
+# DISCOVER FIX — SAFE MEMBER DIRECTORY
+# ==========================================================
+
+def render_people_directory(supabase, user_id):
+
+    selected_id = st.session_state.get("eco_view_profile_id")
+
+    if selected_id:
+        try:
+            result = (
+                supabase.table("member_profiles")
+                .select("*")
+                .eq("user_id", str(selected_id))
+                .limit(1)
+                .execute()
+            )
+
+            if result.data:
+                render_public_profile(
+                    supabase,
+                    user_id,
+                    result.data[0]
+                )
+                return
+
+        except Exception as e:
+            st.error(f"Could not open profile: {e}")
+
+        st.session_state.pop("eco_view_profile_id", None)
+
+    st.subheader("Discover People")
+    st.caption("Find people and explore their profiles.")
+
+    search = st.text_input(
+        "Search by username",
+        key="eco_people_search"
+    )
+
+    members = get_member_directory(supabase, search)
+
+    members = [
+        member for member in members
+        if str(member.get("user_id")) != str(user_id)
+    ]
+
+    if not members:
+        st.info("No members found.")
+        return
+
+    for member in members:
+
+        member_id = str(member.get("user_id"))
+        name = member.get("display_name") or "EcoLoop Member"
+        username = member.get("username") or "member"
+        avatar = member.get("avatar_url") or ""
+        bio = member.get("bio") or ""
+        location = member.get("location") or ""
+
+        with st.container(border=True):
+
+            col1, col2 = st.columns([1, 4])
+
+            with col1:
+
+                image_displayed = False
+
+                if avatar and avatar.startswith("profiles/"):
+
+                    try:
+                        avatar_url = get_story_media_url(
+                            supabase,
+                            avatar
+                        )
+
+                        if (
+                            avatar_url
+                            and isinstance(avatar_url, str)
+                            and avatar_url.startswith("http")
+                        ):
+                            st.image(avatar_url, width=70)
+                            image_displayed = True
+
+                    except Exception:
+                        image_displayed = False
+
+                if not image_displayed:
+                    st.markdown("### 👤")
+
+            with col2:
+
+                st.markdown(f"**{eco_escape(name)}**")
+                st.caption(f"@{eco_escape(username)}")
+
+                if bio:
+                    st.write(bio)
+
+                if location:
+                    st.caption(f"📍 {eco_escape(location)}")
+
+                if st.button(
+                    "View Profile",
+                    key=f"eco_view_profile_{member_id}",
+                    use_container_width=True
+                ):
+                    st.session_state["eco_view_profile_id"] = member_id
+                    st.rerun()
