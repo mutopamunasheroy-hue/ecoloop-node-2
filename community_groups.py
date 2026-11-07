@@ -1727,7 +1727,8 @@ def render_community_groups_page(supabase, user_id):
 
     st.divider()
     st.caption("Powered by Next Gen Impact Hub (NGIH)")
-    # ==========================================================
+    
+# ==========================================================
 # DISCOVER FIX — SAFE MEMBER DIRECTORY
 # ==========================================================
 
