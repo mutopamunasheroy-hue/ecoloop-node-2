@@ -807,30 +807,16 @@ def render_chats_page(supabase, user_id):
             with col3:
                 if st.button(
                     "Open",
-                    key=f"eco_open_chat_{conversation.get('id')}"
+                    key=f"eco_open_chat_{conversation.get('id')}",
+                    use_container_width=True
                 ):
                     st.session_state["eco_active_conversation"] = conversation.get("id")
                     st.rerun()
 
                 if st.button(
                     "Profile",
-                    key=f"eco_chat_profile_{item['user_id']}"
-                ):
-                    st.session_state["eco_view_profile_id"] = str(item["user_id"])
-                    st.session_state["eco_community_section"] = "Discover People"
-                    st.rerun()
-
-            with col3:
-                if st.button(
-                    "Open",
-                    key=f"eco_open_chat_{conversation.get('id')}"
-                ):
-                    st.session_state["eco_active_conversation"] = conversation.get("id")
-                    st.rerun()
-
-                if st.button(
-                    "Profile",
-                    key=f"eco_chat_profile_{item['user_id']}"
+                    key=f"eco_chat_profile_{item['user_id']}",
+                    use_container_width=True
                 ):
                     st.session_state["eco_view_profile_id"] = str(item["user_id"])
                     st.session_state["eco_community_section"] = "Discover People"
