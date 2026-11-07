@@ -2041,3 +2041,37 @@ def render_community_groups_page(supabase, user_id):
 
     st.divider()
     st.caption("Powered by Next Gen Impact Hub (NGIH)")
+
+# ==========================================================
+# FIX — DISCOVER PEOPLE SEARCH
+# Searches BOTH display names and usernames
+# ==========================================================
+
+def get_member_directory(supabase, search=""):
+    try:
+        result = (
+            supabase.table("member_profiles")
+            .select("*")
+            .order("username")
+            .limit(1000)
+            .execute()
+        )
+
+        members = result.data or []
+
+        if not search or not search.strip():
+            return members
+
+        term = search.strip().lower().lstrip("@")
+
+        return [
+            member for member in members
+            if (
+                term in str(member.get("username") or "").lower()
+                or term in str(member.get("display_name") or "").lower()
+            )
+        ]
+
+    except Exception as e:
+        st.error(f"Could not search members: {e}")
+        return []
