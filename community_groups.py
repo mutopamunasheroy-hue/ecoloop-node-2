@@ -74,6 +74,7 @@ def render_community_groups_page(*args, **kwargs):
         margin:0;
         font-weight:800;
         letter-spacing:.2px;
+        color:white !important;
     }
     .wa-head p {
         font-size:12px;
@@ -248,6 +249,26 @@ def render_community_groups_page(*args, **kwargs):
         except Exception as error:
             st.error(f"Upload failed: {error}")
             return None
+
+    # FIX: avatar_url may be a storage path, not a full URL.
+    # st.image() treats non-http strings as local files -> FileNotFoundError.
+    def avatar_src(profile):
+        """Return a usable image URL for a profile's avatar, or ''."""
+        raw = (profile or {}).get("avatar_url")
+        if not raw:
+            return ""
+        return storage_url(raw)
+
+    def show_avatar(profile, width=110):
+        """Safely render an avatar. Returns True if shown, else False."""
+        src = avatar_src(profile)
+        if not src:
+            return False
+        try:
+            st.image(src, width=width)
+            return True
+        except Exception:
+            return False
 
     def search_by_username(query, limit=20):
         query = (query or "").strip().replace("@", "").strip()
@@ -627,8 +648,8 @@ def render_community_groups_page(*args, **kwargs):
             unsafe_allow_html=True,
         )
 
-        if profile.get("avatar_url"):
-            st.image(profile.get("avatar_url"), width=110)
+        # FIX: resolve storage path to a real URL
+        show_avatar(profile, 110)
 
         st.markdown(f"### {esc(get_name(profile))}", unsafe_allow_html=True)
         st.write(f"**{esc(profile.get('display_name') or '')}**")
@@ -972,9 +993,18 @@ def render_community_groups_page(*args, **kwargs):
                     "and choose a destination."
                 )
 
+            # Cache profiles for this render pass (avoids one query per message)
+            profile_cache = {}
+
+            def cached_profile(user_id):
+                key = str(user_id)
+                if key not in profile_cache:
+                    profile_cache[key] = get_profile(user_id)
+                return profile_cache[key]
+
             # Render messages
             for message in messages:
-                profile = get_profile(message.get("sender_id"))
+                profile = cached_profile(message.get("sender_id"))
                 mine = str(message.get("sender_id")) == str(uid)
                 bubble_class = "bubble-mine" if mine else "bubble-theirs"
 
@@ -984,10 +1014,12 @@ def render_community_groups_page(*args, **kwargs):
                     else f'<div class="name">{esc(get_name(profile))}</div>'
                 )
 
+                # FIX: resolve avatar path to a real URL for the HTML <img>
+                _avatar = avatar_src(profile) if not mine else ""
                 avatar_html = (
-                    f'<img src="{esc(profile.get("avatar_url"))}" '
+                    f'<img src="{esc(_avatar)}" '
                     'width="26" style="border-radius:50%;"> '
-                    if not mine and profile.get("avatar_url")
+                    if _avatar
                     else ""
                 )
 
@@ -1019,12 +1051,15 @@ def render_community_groups_page(*args, **kwargs):
                     )
 
                     if attachment_url:
-                        if (
-                            message.get("attachment_type") or ""
-                        ).startswith("video"):
-                            st.video(attachment_url)
-                        else:
-                            st.image(attachment_url, width=260)
+                        try:
+                            if (
+                                message.get("attachment_type") or ""
+                            ).startswith("video"):
+                                st.video(attachment_url)
+                            else:
+                                st.image(attachment_url, width=260)
+                        except Exception:
+                            st.caption("Attachment unavailable")
 
                 # Reactions: existing database table supports Chat Rooms
                 if selected_type == "room":
@@ -1743,9 +1778,8 @@ def render_community_groups_page(*args, **kwargs):
                     column = story_columns[index % len(story_columns)]
 
                     with column:
-                        if profile.get("avatar_url"):
-                            st.image(profile["avatar_url"], width=60)
-                        else:
+                        # FIX: resolve avatar path; fall back to initials
+                        if not show_avatar(profile, 60):
                             st.markdown(
                                 f"**{esc(get_name(profile)[:2].upper())}**"
                             )
@@ -1811,10 +1845,13 @@ def render_community_groups_page(*args, **kwargs):
                     media_url = storage_url(story.get("media_url"))
 
                     if media_url:
-                        if story.get("media_type") == "video":
-                            st.video(media_url)
-                        else:
-                            st.image(media_url, width=320)
+                        try:
+                            if story.get("media_type") == "video":
+                                st.video(media_url)
+                            else:
+                                st.image(media_url, width=320)
+                        except Exception:
+                            st.caption("Media unavailable")
 
                     if str(story_user) == str(uid):
                         try:
@@ -1850,8 +1887,8 @@ def render_community_groups_page(*args, **kwargs):
                 unsafe_allow_html=True,
             )
 
-            if my_profile.get("avatar_url"):
-                st.image(my_profile.get("avatar_url"), width=110)
+            # FIX: this was the line that crashed the app
+            show_avatar(my_profile, 110)
 
             st.markdown(
                 f"### {esc(get_name(my_profile))}",
