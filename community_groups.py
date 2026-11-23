@@ -10,19 +10,23 @@ def render_community_groups_page(*args, **kwargs):
         kwargs.get("supabase")
         or (args[0] if args else st.session_state.get("supabase_client"))
     )
-    uid = (
-        kwargs.get("user_id")
-        or (args[1] if len(args) > 1 else None)
-        or st.session_state.get("uid")
-        or st.session_state.get("user_id")
-    )
+
+    if not supabase:
+        st.error("Supabase connection is unavailable.")
+        return
+
+    try:
+        auth_user = supabase.auth.get_user().user
+        uid = str(auth_user.id) if auth_user else None
+    except Exception:
+        uid = None
 
     if not uid:
-        try:
-            user = supabase.auth.get_user().user
-            uid = user.id if user else None
-        except Exception:
-            pass
+        uid = (
+            kwargs.get("user_id")
+            or st.session_state.get("uid")
+            or st.session_state.get("user_id")
+        )
 
     if not uid:
         st.warning("Please log in to access Community.")
@@ -47,8 +51,7 @@ def render_community_groups_page(*args, **kwargs):
         if key not in st.session_state:
             st.session_state[key] = value
 
-    # Correct old navigation values BEFORE creating the radio widget.
-    if st.session_state.get("eco_new_nav") not in NAV_OPTIONS:
+    if st.session_state["eco_new_nav"] not in NAV_OPTIONS:
         st.session_state["eco_new_nav"] = "EcoLoop Connect"
 
     st.markdown("""
@@ -121,7 +124,7 @@ def render_community_groups_page(*args, **kwargs):
     """, unsafe_allow_html=True)
 
     # --------------------------------------------------
-    # GENERAL HELPERS
+    # HELPERS
     # --------------------------------------------------
 
     def esc(value):
@@ -163,24 +166,49 @@ def render_community_groups_page(*args, **kwargs):
             try:
                 return supabase.storage.from_(BUCKET).get_public_url(str(path))
             except Exception:
-                pass
+                return ""
         return ""
 
     def upload_media(file, folder):
         if file is None:
             return None
+
         try:
+            # Confirm the authenticated Supabase user before uploading.
+            current_user = supabase.auth.get_user().user
+            authenticated_uid = str(current_user.id) if current_user else None
+
+            if not authenticated_uid or authenticated_uid != str(uid):
+                st.error(
+                    "Your login session could not be verified. "
+                    "Please sign out and sign in again."
+                )
+                return None
+
             extension = (
                 file.name.rsplit(".", 1)[-1].lower()
                 if "." in file.name else "jpg"
             )
-            path = f"{uid}/{folder}/{uuid.uuid4().hex}.{extension}"
-            supabase.storage.from_(BUCKET).upload(
+
+            # Every upload goes inside the authenticated user's own folder.
+            path = (
+                f"{authenticated_uid}/{folder}/"
+                f"{uuid.uuid4().hex}.{extension}"
+            )
+
+            content_type = file.type or "application/octet-stream"
+
+            result = supabase.storage.from_(BUCKET).upload(
                 path,
                 file.getvalue(),
-                {"content-type": file.type},
+                {
+                    "content-type": content_type,
+                    "upsert": "false",
+                },
             )
+
             return path
+
         except Exception as error:
             st.error(f"Upload failed: {error}")
             return None
@@ -273,7 +301,6 @@ def render_community_groups_page(*args, **kwargs):
         try:
             conversation_id = get_conversation(other_user_id)
 
-            # Reopen this user's hidden conversation.
             (
                 supabase.table("hidden_conversations")
                 .delete()
@@ -285,9 +312,6 @@ def render_community_groups_page(*args, **kwargs):
             st.session_state["eco_new_chat_id"] = conversation_id
             st.session_state["eco_new_chat_user"] = other_user_id
             st.session_state["eco_new_profile"] = None
-
-            # Do NOT modify eco_new_nav here.
-            # The chat screen is displayed before the navigation widget.
             st.rerun()
 
         except Exception as error:
@@ -337,7 +361,7 @@ def render_community_groups_page(*args, **kwargs):
                 )
 
     # --------------------------------------------------
-    # TOP HEADER
+    # HEADER
     # --------------------------------------------------
 
     st.button(
@@ -392,7 +416,10 @@ def render_community_groups_page(*args, **kwargs):
 
         st.divider()
         st.markdown("### About")
-        st.write(profile.get("bio") or "No About information has been added yet.")
+        st.write(
+            profile.get("bio")
+            or "No About information has been added yet."
+        )
 
         if profile.get("location"):
             st.write(f"📍 Location: {profile['location']}")
@@ -466,8 +493,13 @@ def render_community_groups_page(*args, **kwargs):
 
                 if avatar_file:
                     avatar_path = upload_media(avatar_file, "avatars")
-                    if avatar_path:
-                        update_data["avatar_url"] = avatar_path
+                    if not avatar_path:
+                        st.error(
+                            "Profile was not saved because the picture "
+                            "could not be uploaded."
+                        )
+                        return
+                    update_data["avatar_url"] = avatar_path
 
                 try:
                     (
@@ -599,7 +631,6 @@ def render_community_groups_page(*args, **kwargs):
         st.divider()
         st.markdown("### Send a message")
 
-        # A new version creates fresh input and upload widgets after sending.
         version_state_key = f"eco_new_compose_version_{selected_chat}"
         if version_state_key not in st.session_state:
             st.session_state[version_state_key] = 0
@@ -665,9 +696,9 @@ def render_community_groups_page(*args, **kwargs):
                         ),
                     }).execute()
 
-                    # Increase version instead of editing widget state.
-                    # The next run displays empty message and upload controls.
-                    st.session_state[version_state_key] = compose_version + 1
+                    st.session_state[version_state_key] = (
+                        compose_version + 1
+                    )
                     st.rerun()
 
                 except Exception as error:
@@ -701,6 +732,31 @@ def render_community_groups_page(*args, **kwargs):
             '</div>',
             unsafe_allow_html=True,
         )
+
+        # MY PROFILE IS NOW AT THE TOP.
+        my_profile = get_profile(uid)
+
+        profile_col1, profile_col2, profile_col3 = st.columns([1, 3, 2])
+
+        with profile_col1:
+            show_avatar(my_profile, 48)
+
+        with profile_col2:
+            st.write("**My Profile**")
+            st.caption("View and edit your profile")
+
+        with profile_col3:
+            if st.button(
+                "View Profile",
+                key="eco_new_my_profile_top",
+                use_container_width=True,
+            ):
+                st.session_state["eco_new_profile"] = uid
+                st.rerun()
+
+        st.divider()
+
+        st.markdown("### Find People")
 
         search = st.text_input(
             "Find people",
@@ -747,7 +803,7 @@ def render_community_groups_page(*args, **kwargs):
 
                 st.divider()
 
-        st.markdown("### Recent conversations")
+        st.markdown("### Recent Conversations")
 
         try:
             conversations = (
@@ -880,7 +936,6 @@ def render_community_groups_page(*args, **kwargs):
                         try:
                             hide_conversation(item["other_id"])
                             st.session_state["eco_new_delete_chat"] = None
-                            st.session_state["eco_new_delete_chat_user"] = None
                             st.session_state["eco_new_notice"] = (
                                 "Chat removed from your list."
                             )
@@ -895,20 +950,9 @@ def render_community_groups_page(*args, **kwargs):
                         use_container_width=True,
                     ):
                         st.session_state["eco_new_delete_chat"] = None
-                        st.session_state["eco_new_delete_chat_user"] = None
                         st.rerun()
 
             st.divider()
-
-        st.markdown("### Your profile")
-
-        if st.button(
-            "👤 View and edit my profile",
-            key="eco_new_my_profile",
-            use_container_width=True,
-        ):
-            st.session_state["eco_new_profile"] = uid
-            st.rerun()
 
     # --------------------------------------------------
     # STORIES
@@ -978,7 +1022,6 @@ def render_community_groups_page(*args, **kwargs):
                         except Exception as error:
                             st.error(f"Could not post Story: {error}")
 
-        # Load active Stories.
         try:
             stories = (
                 supabase.table("stories")
@@ -1005,7 +1048,6 @@ def render_community_groups_page(*args, **kwargs):
             except Exception:
                 continue
 
-        # Group active Stories by owner.
         story_users = []
 
         for story in active_stories:
@@ -1018,7 +1060,6 @@ def render_community_groups_page(*args, **kwargs):
 
         for story_owner in story_users:
             profile = get_profile(story_owner)
-
             owner_stories = [
                 story for story in active_stories
                 if str(story.get("user_id")) == story_owner
@@ -1045,10 +1086,6 @@ def render_community_groups_page(*args, **kwargs):
                     st.rerun()
 
             st.divider()
-
-        # --------------------------------------------------
-        # STORY VIEWER
-        # --------------------------------------------------
 
         story_user = st.session_state.get("eco_new_story_user")
 
@@ -1101,7 +1138,6 @@ def render_community_groups_page(*args, **kwargs):
                     f"Posted {format_time(story.get('created_at'))}"
                 )
 
-                # Record views by other users.
                 if not is_owner:
                     try:
                         already_viewed = (
@@ -1121,7 +1157,6 @@ def render_community_groups_page(*args, **kwargs):
                     except Exception:
                         pass
 
-                # Story owner can see viewers and delete their Story.
                 if is_owner:
                     try:
                         views = (
@@ -1187,7 +1222,6 @@ def render_community_groups_page(*args, **kwargs):
                                     st.session_state[
                                         "eco_new_delete_story"
                                     ] = None
-
                                     st.session_state["eco_new_notice"] = (
                                         "Your Story has been deleted."
                                     )
@@ -1209,7 +1243,6 @@ def render_community_groups_page(*args, **kwargs):
                                 ] = None
                                 st.rerun()
 
-                # Other viewers can reply privately to the Story owner.
                 else:
                     st.markdown("#### Reply privately")
 
@@ -1266,10 +1299,9 @@ def render_community_groups_page(*args, **kwargs):
                                     "attachment_name": None,
                                 }).execute()
 
-                                st.session_state[
-                                    "eco_new_story_reply_version_" + str(story_id)
-                                ] = reply_version + 1
-
+                                st.session_state[reply_version_key] = (
+                                    reply_version + 1
+                                )
                                 st.session_state["eco_new_chat_id"] = (
                                     conversation_id
                                 )
@@ -1280,8 +1312,6 @@ def render_community_groups_page(*args, **kwargs):
                                 st.session_state["eco_new_notice"] = (
                                     "Your private Story reply has been sent."
                                 )
-
-                                # Do NOT change eco_new_nav after its widget exists.
                                 st.rerun()
 
                             except Exception as error:
