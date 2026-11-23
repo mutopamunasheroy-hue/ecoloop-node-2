@@ -3,17 +3,14 @@ import streamlit as st
 import uuid
 from datetime import datetime, timezone
 
-
 BUCKET = "community-media"
 
 
-# =========================================================
+# =====================================================
 # PROFILE DATA
-# =========================================================
+# =====================================================
 
 def get_member_profile(supabase, user_id):
-    """Retrieve a member profile from Supabase."""
-
     if not supabase or not user_id:
         return {}
 
@@ -25,79 +22,91 @@ def get_member_profile(supabase, user_id):
             .limit(1)
             .execute()
         )
-
-        if response.data:
-            return response.data[0]
-
+        return response.data[0] if response.data else {}
     except Exception as error:
         st.error(f"Could not load profile: {error}")
-
-    return {}
+        return {}
 
 
 def get_display_name(profile):
-    """Return the best available display name."""
-
-    if not profile:
-        return "EcoLoop Member"
-
     return (
-        profile.get("display_name")
-        or profile.get("username")
+        (profile or {}).get("display_name")
+        or (profile or {}).get("username")
         or "EcoLoop Member"
     )
 
 
 def get_avatar_url(supabase, profile):
-    """Resolve profile avatar URL."""
-
-    if not profile:
-        return None
-
-    avatar = profile.get("avatar_url")
+    avatar = (profile or {}).get("avatar_url")
 
     if not avatar:
         return None
 
-    # Already a complete URL
     if str(avatar).startswith("http"):
         return avatar
 
     try:
-        return (
-            supabase.storage
-            .from_(BUCKET)
-            .get_public_url(str(avatar))
-        )
+        return supabase.storage.from_(BUCKET).get_public_url(str(avatar))
     except Exception:
         return None
 
 
-# =========================================================
+def clean_social(value):
+    value = (value or "").strip()
+    if not value:
+        return ""
+
+    if value.startswith("@"):
+        return value[1:]
+
+    return value
+
+
+def social_link(platform, value):
+    value = clean_social(value)
+
+    if not value:
+        return
+
+    if value.startswith("http"):
+        url = value
+        label = value
+    else:
+        handles = {
+            "Instagram": f"https://instagram.com/{value}",
+            "Facebook": f"https://facebook.com/{value}",
+            "TikTok": f"https://tiktok.com/@{value}",
+            "LinkedIn": (
+                value if "/" in value
+                else f"https://linkedin.com/in/{value}"
+            ),
+        }
+
+        url = handles.get(platform, value)
+        label = f"@{value}" if platform != "LinkedIn" else value
+
+    st.markdown(f"**{platform}:** [{label}]({url})")
+
+
+# =====================================================
 # PROFILE PHOTO UPLOAD
-# =========================================================
+# =====================================================
 
 def upload_profile_photo(supabase, user_id, uploaded_file):
-    """Upload a profile photo to the community-media bucket."""
-
     if uploaded_file is None:
         return None
 
     try:
         current_user = supabase.auth.get_user().user
+        authenticated_uid = str(current_user.id) if current_user else None
 
-        authenticated_uid = (
-            str(current_user.id) if current_user else None
-        )
-
-        if not authenticated_uid or authenticated_uid != str(user_id):
+        if authenticated_uid != str(user_id):
             st.error("Your login session could not be verified.")
             return None
 
         extension = (
             uploaded_file.name.rsplit(".", 1)[-1].lower()
-            if "." in uploaded_file.name
-            else "jpg"
+            if "." in uploaded_file.name else "jpg"
             )
 
         path = (
@@ -122,9 +131,9 @@ def upload_profile_photo(supabase, user_id, uploaded_file):
         return None
 
 
-# =========================================================
-# PROFILE SAVE
-# =========================================================
+# =====================================================
+# SAVE PROFILE
+# =====================================================
 
 def save_member_profile(
     supabase,
@@ -135,9 +144,11 @@ def save_member_profile(
     location,
     interests,
     avatar_url=None,
+    instagram="",
+    facebook="",
+    tiktok="",
+    linkedin="",
 ):
-    """Save profile details using the existing member_profiles table."""
-
     if not supabase or not user_id:
         return False
 
@@ -149,17 +160,20 @@ def save_member_profile(
             "bio": bio.strip(),
             "location": location.strip(),
             "interests": interests.strip(),
+            "instagram": instagram.strip(),
+            "facebook": facebook.strip(),
+            "tiktok": tiktok.strip(),
+            "linkedin": linkedin.strip(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
         if avatar_url:
             profile_data["avatar_url"] = avatar_url
 
-        (
-            supabase.table("member_profiles")
-            .upsert(profile_data, on_conflict="user_id")
-            .execute()
-        )
+        supabase.table("member_profiles").upsert(
+            profile_data,
+            on_conflict="user_id"
+        ).execute()
 
         return True
 
@@ -168,32 +182,18 @@ def save_member_profile(
         return False
 
 
-# =========================================================
+# =====================================================
 # PROFILE CARD
-# =========================================================
+# =====================================================
 
-def render_profile_card(
-    supabase,
-    profile,
-    key=None,
-    show_button=True,
-):
-    """Display a clean member card.
-
-    Returns True when the View Profile button is clicked.
-    """
-
+def render_profile_card(supabase, profile, key=None, show_button=True):
     if not profile:
         return False
 
-    name = get_display_name(profile)
-    username = profile.get("username", "")
-    bio = profile.get("bio", "")
-    location = profile.get("location", "")
     avatar = get_avatar_url(supabase, profile)
+    name = get_display_name(profile)
 
     with st.container(border=True):
-
         col1, col2 = st.columns([1, 3])
 
         with col1:
@@ -205,18 +205,18 @@ def render_profile_card(
         with col2:
             st.markdown(f"**{name}**")
 
-            if username:
-                st.caption(f"@{username}")
+            if profile.get("username"):
+                st.caption(f"@{profile['username']}")
 
-            if location:
-                st.caption(f"📍 {location}")
+            if profile.get("location"):
+                st.caption(f"📍 {profile['location']}")
 
+        bio = profile.get("bio", "")
         if bio:
             st.write(bio[:120] + ("..." if len(bio) > 120 else ""))
 
         if show_button:
             button_key = key or str(profile.get("user_id", uuid.uuid4()))
-
             return st.button(
                 "View Profile",
                 key=f"profile_view_{button_key}",
@@ -226,69 +226,76 @@ def render_profile_card(
     return False
 
 
-# =========================================================
+# =====================================================
 # FULL PROFILE VIEW
-# =========================================================
+# =====================================================
 
 def render_profile_view(supabase, profile):
-    """Display the full profile of a selected member."""
-
     if not profile:
         st.info("Profile not found.")
         return
 
     name = get_display_name(profile)
-    username = profile.get("username", "")
-    bio = profile.get("bio", "")
-    location = profile.get("location", "")
-    interests = profile.get("interests", "")
     avatar = get_avatar_url(supabase, profile)
 
     st.markdown("---")
 
-    col1, col2 = st.columns([1, 2])
+    with st.container(border=True):
+        col1, col2 = st.columns([1, 2])
 
-    with col1:
-        if avatar:
-            st.image(avatar, width=160)
-        else:
-            st.markdown("## 👤")
+        with col1:
+            if avatar:
+                st.image(avatar, width=160)
+            else:
+                st.markdown("## 👤")
 
-    with col2:
-        st.markdown(f"# {name}")
+        with col2:
+            st.markdown(f"# {name}")
 
-        if username:
-            st.markdown(f"**@{username}**")
+            if profile.get("username"):
+                st.markdown(f"**@{profile['username']}**")
 
-        if location:
-            st.markdown(f"📍 {location}")
+            if profile.get("location"):
+                st.write(f"📍 {profile['location']}")
 
-    st.markdown("### About")
+            if profile.get("country"):
+                st.write(f"🌍 From {profile['country']}")
 
-    if bio:
-        st.write(bio)
-    else:
-        st.caption("This member hasn't added a bio yet.")
+        st.markdown("### About")
+        st.write(profile.get("bio") or "No bio added yet.")
 
-    st.markdown("### Interests")
+        st.markdown("### Interests")
+        st.write(profile.get("interests") or "No interests added yet.")
 
-    if interests:
-        st.write(interests)
-    else:
-        st.caption("No interests added yet.")
+        st.divider()
+
+        st.markdown("### Social links")
+
+        found_social = False
+
+        for platform, field in [
+            ("Instagram", "instagram"),
+            ("Facebook", "facebook"),
+            ("TikTok", "tiktok"),
+            ("LinkedIn", "linkedin"),
+        ]:
+            if profile.get(field):
+                social_link(platform, profile[field])
+                found_social = True
+
+        if not found_social:
+            st.caption("No social links added yet.")
 
     st.markdown("---")
 
 
-# =========================================================
-# MY PROFILE PAGE
-# =========================================================
+# =====================================================
+# MY PROFILE + EDIT PROFILE
+# =====================================================
 
 def render_profile_page(supabase, user_id):
-    """Render the member's own profile and profile editor."""
-
-    st.markdown("## 👤 My Profile")
-    st.caption("Your identity and presence in the EcoLoop community.")
+    st.markdown("## 👤 My EcoLoop Profile")
+    st.caption("Manage your identity and connections in EcoLoop Node.")
 
     if not user_id:
         st.warning("Please sign in to view your profile.")
@@ -300,122 +307,194 @@ def render_profile_page(supabase, user_id):
     username = profile.get("username", "")
     bio = profile.get("bio", "")
     location = profile.get("location", "")
+    country = profile.get("country", "")
     interests = profile.get("interests", "")
-
+    instagram = profile.get("instagram", "")
+    facebook = profile.get("facebook", "")
+    tiktok = profile.get("tiktok", "")
+    linkedin = profile.get("linkedin", "")
     avatar = get_avatar_url(supabase, profile)
 
-    # Current profile preview
-    with st.container(border=True):
+    tab1, tab2 = st.tabs(["My Profile", "Edit Profile"])
 
-        col1, col2 = st.columns([1, 2])
+    # -------------------------------------------------
+    # MY PROFILE
+    # -------------------------------------------------
 
-        with col1:
+    with tab1:
+        with st.container(border=True):
+
             if avatar:
-                st.image(avatar, width=110)
+                st.image(avatar, width=160)
             else:
-                st.markdown("### 👤")
+                st.markdown("## 👤")
 
-        with col2:
-            st.markdown(f"### {name or 'Your Name'}")
+            st.markdown(f"# {name or 'Your Name'}")
 
             if username:
-                st.caption(f"@{username}")
+                st.markdown(f"**@{username}**")
 
             if location:
-                st.caption(f"📍 {location}")
+                st.write(f"📍 {location}")
 
-        if bio:
-            st.write(bio)
+            if country:
+                st.write(f"🌍 From {country}")
 
-    st.markdown("### Edit Profile")
+            st.markdown("### About")
+            st.write(bio or "Tell the community about yourself.")
 
-    with st.form("ecoloop_profile_form", clear_on_submit=False):
+            st.markdown("### Interests")
+            st.write(interests or "No interests added yet.")
 
-        display_name = st.text_input(
-            "Display name",
-            value=name,
-            max_chars=60,
-            placeholder="What should people call you?",
-        )
+            st.divider()
 
-        new_username = st.text_input(
-            "Username",
-            value=username,
-            max_chars=30,
-            placeholder="Choose a username",
-        )
+            st.markdown("### Social links")
 
-        new_location = st.text_input(
-            "Location",
-            value=location,
-            max_chars=100,
-            placeholder="City or community",
-        )
+            has_social = False
 
-        new_bio = st.text_area(
-            "About me",
-            value=bio,
-            max_chars=500,
-            height=120,
-            placeholder="Tell the community a little about yourself...",
-        )
+            for platform, field in [
+                ("Instagram", "instagram"),
+                ("Facebook", "facebook"),
+                ("TikTok", "tiktok"),
+                ("LinkedIn", "linkedin"),
+            ]:
+                if profile.get(field):
+                    social_link(platform, profile[field])
+                    has_social = True
 
-        new_interests = st.text_area(
-            "Interests",
-            value=interests,
-            max_chars=300,
-            height=100,
-            placeholder="Environment, technology, innovation, community...",
-        )
+            if not has_social:
+                st.caption("Add your social media accounts in Edit Profile.")
 
-        uploaded_photo = st.file_uploader(
-            "Profile photo",
-            type=["jpg", "jpeg", "png", "webp"],
-            key="ecoloop_profile_photo",
-        )
+    # -------------------------------------------------
+    # EDIT PROFILE
+    # -------------------------------------------------
 
-        save_button = st.form_submit_button(
-            "Save Profile",
-            use_container_width=True,
-        )
+    with tab2:
+        st.markdown("### Edit your profile")
+        st.caption("Your public identity in the EcoLoop community.")
 
-    if save_button:
+        if avatar:
+            st.image(avatar, width=120)
 
-        new_avatar_url = profile.get("avatar_url")
+        with st.form("ecoloop_profile_form", clear_on_submit=False):
 
-        if uploaded_photo is not None:
-            uploaded_path = upload_profile_photo(
-                supabase,
-                user_id,
-                uploaded_photo,
+            display_name = st.text_input(
+                "Display name",
+                value=name,
+                max_chars=60,
             )
 
-            if uploaded_path:
-                new_avatar_url = uploaded_path
+            new_username = st.text_input(
+                "Username",
+                value=username,
+                max_chars=30,
+            )
 
-        saved = save_member_profile(
-            supabase=supabase,
-            user_id=user_id,
-            display_name=display_name,
-            username=new_username,
-            bio=new_bio,
-            location=new_location,
-            interests=new_interests,
-            avatar_url=new_avatar_url,
-        )
+            new_location = st.text_input(
+                "Current location",
+                value=location,
+                max_chars=100,
+            )
 
-        if saved:
-            st.success("Profile saved successfully!")
-            st.rerun()
+            new_country = st.text_input(
+                "Country of origin",
+                value=country,
+                max_chars=100,
+            )
+
+            new_bio = st.text_area(
+                "Bio",
+                value=bio,
+                max_chars=500,
+                height=120,
+            )
+
+            new_interests = st.text_area(
+                "Interests",
+                value=interests,
+                max_chars=300,
+                height=100,
+            )
+
+            st.markdown("### Social media")
+
+            new_instagram = st.text_input(
+                "Instagram",
+                value=instagram,
+                placeholder="@username or profile link",
+            )
+
+            new_facebook = st.text_input(
+                "Facebook",
+                value=facebook,
+                placeholder="Username or profile link",
+            )
+
+            new_tiktok = st.text_input(
+                "TikTok",
+                value=tiktok,
+                placeholder="@username or profile link",
+            )
+
+            new_linkedin = st.text_input(
+                "LinkedIn",
+                value=linkedin,
+                placeholder="Username or profile link",
+            )
+
+            uploaded_photo = st.file_uploader(
+                "Profile picture",
+                type=["jpg", "jpeg", "png", "webp"],
+                key="ecoloop_profile_photo",
+            )
+
+            save_button = st.form_submit_button(
+                "Save Profile",
+                use_container_width=True,
+            )
+
+        if save_button:
+
+            new_avatar = profile.get("avatar_url")
+
+            if uploaded_photo is not None:
+                uploaded_path = upload_profile_photo(
+                    supabase,
+                    user_id,
+                    uploaded_photo,
+                )
+
+                if uploaded_path:
+                    new_avatar = uploaded_path
+                else:
+                    st.warning("Photo upload failed. Other changes were not saved.")
+                    st.stop()
+
+            saved = save_member_profile(
+                supabase=supabase,
+                user_id=user_id,
+                display_name=display_name,
+                username=new_username,
+                bio=new_bio,
+                location=new_location,
+                interests=new_interests,
+                avatar_url=new_avatar,
+                instagram=new_instagram,
+                facebook=new_facebook,
+                tiktok=new_tiktok,
+                linkedin=new_linkedin,
+            )
+
+            if saved:
+                st.success("Profile saved successfully!")
+                st.rerun()
 
 
-# =========================================================
+# =====================================================
 # PROFILE LOOKUP
-# =========================================================
+# =====================================================
 
 def render_member_profile(supabase, user_id):
-    """Retrieve and display another member's full profile."""
-
     profile = get_member_profile(supabase, user_id)
 
     if profile:
