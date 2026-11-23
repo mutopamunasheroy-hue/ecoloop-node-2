@@ -297,6 +297,10 @@ def render_profile_page(supabase, user_id):
     st.markdown("## 👤 My EcoLoop Profile")
     st.caption("Manage your identity and connections in EcoLoop Node.")
 
+    # Display confirmation after saving
+    if st.session_state.pop("profile_saved", False):
+        st.success("Profile saved successfully!")
+
     if not user_id:
         st.warning("Please sign in to view your profile.")
         return
@@ -316,6 +320,7 @@ def render_profile_page(supabase, user_id):
     avatar = get_avatar_url(supabase, profile)
 
     tab1, tab2 = st.tabs(["My Profile", "Edit Profile"])
+
 
     # -------------------------------------------------
     # MY PROFILE
