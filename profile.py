@@ -490,9 +490,13 @@ def render_profile_page(supabase, user_id):
                 linkedin=new_linkedin,
             )
 
+            
             if saved:
-                st.success("Profile saved successfully!")
+                st.session_state["profile_saved"] = True
                 st.rerun()
+            else:
+                st.error("Profile could not be saved. Please try again.")
+
 
 
 # =====================================================
