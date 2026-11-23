@@ -1306,7 +1306,6 @@ def registration_form():
 # PAGE 4 — MY PROFILE
 # =====================================================
 
-
 def account_page():
 
     if not require_login():
@@ -1317,9 +1316,17 @@ def account_page():
         return
 
     try:
-        render_account_profiles(
+        current_user = supabase.auth.get_user().user
+
+        if not current_user:
+            st.warning("Please log in to view your profile.")
+            return
+
+        user_id = str(current_user.id)
+
+        render_profile_page(
             supabase,
-            page="profile"
+            user_id
         )
 
     except Exception as error:
