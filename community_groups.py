@@ -1,3 +1,4 @@
+
 import streamlit as st
 import uuid
 import html
@@ -18,168 +19,101 @@ def render_community_groups_page(*args, **kwargs):
 
     if not uid:
         try:
-            u = supabase.auth.get_user().user
-            if u:
-                uid = u.id
+            user = supabase.auth.get_user().user
+            uid = user.id if user else None
         except Exception:
             pass
 
     if not uid:
-        st.warning("Login first to open Community.")
+        st.warning("Please log in to access Community.")
         return
 
     BUCKET = "community-media"
 
-    # ---------- STATE ----------
+    # --------------------------------------------------
+    # STATE
+    # --------------------------------------------------
     defaults = {
-        "eco_nav": "Chats",
-        "eco_sel": None,
-        "eco_sel_type": None,
-        "eco_room_info": None,
-        "eco_profile_view": None,
-        "eco_notice": None,
-        "eco_last_created": None,
-        "eco_last_seen": {},
-        "eco_reply_to": None,
-        "eco_forward": None,
-        "eco_show_new": False,
-        "eco_msg_opt": None,
-        "eco_story_user": None,
-        "eco_show_create_room": False,
+        "eco_new_nav": "Chats",
+        "eco_new_chat_id": None,
+        "eco_new_chat_user": None,
+        "eco_new_profile": None,
+        "eco_new_notice": None,
+        "eco_new_story_user": None,
+        "eco_new_search": "",
     }
 
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
 
-    # ---------- STYLE ----------
+    # --------------------------------------------------
+    # STYLING
+    # --------------------------------------------------
     st.markdown("""
     <style>
-    .stApp, [data-testid="stAppViewContainer"] {
-        background:#ECE5DD !important;
-    }
     .block-container {
-        max-width:520px !important;
-        padding:0 0 92px 0 !important;
+        max-width: 650px !important;
+        padding-top: 1rem !important;
+        padding-bottom: 5rem !important;
     }
-    header { visibility:hidden; }
-
-    .wa-head {
-        background:#075E54;
-        color:white;
-        padding:15px 16px;
+    .community-heading {
+        background: #075E54;
+        color: white;
+        padding: 20px;
+        border-radius: 16px;
+        margin: 10px 0 16px 0;
     }
-    .wa-head h1 {
-        font-size:21px;
-        margin:0;
-        font-weight:800;
-        letter-spacing:.2px;
-        color:white !important;
+    .community-heading h1 {
+        color: white !important;
+        font-size: 27px;
+        margin: 0;
     }
-    .wa-head p {
-        font-size:12px;
-        margin:3px 0 0 0;
-        color:#D9FDD3;
+    .community-heading p {
+        color: #D9FDD3;
+        margin: 5px 0 0 0;
+        font-size: 14px;
     }
-    .card {
-        background:white;
-        padding:14px;
-        border-radius:14px;
-        margin:10px;
-        border:1px solid #e9e9e9;
+    .community-card {
+        background: white;
+        padding: 14px;
+        border-radius: 14px;
+        border: 1px solid #e7e7e7;
+        margin: 8px 0;
     }
-    .bubble-mine {
-        background:#D9FDD3;
-        padding:9px 11px;
-        border-radius:14px 14px 0 14px;
-        margin:6px 0 6px 52px;
+    .message-mine {
+        background: #D9FDD3;
+        padding: 11px;
+        border-radius: 13px 13px 0 13px;
+        margin: 8px 0 8px 35px;
+        overflow-wrap: anywhere;
     }
-    .bubble-theirs {
-        background:white;
-        padding:9px 11px;
-        border-radius:14px 14px 14px 0;
-        margin:6px 52px 6px 0;
-        border:1px solid #eee;
+    .message-other {
+        background: white;
+        padding: 11px;
+        border-radius: 13px 13px 13px 0;
+        border: 1px solid #eeeeee;
+        margin: 8px 35px 8px 0;
+        overflow-wrap: anywhere;
     }
-    .name {
-        font-weight:800;
-        font-size:13px;
-        color:#075E54;
+    .message-time {
+        color: #667781;
+        font-size: 10px;
+        text-align: right;
+        margin-top: 5px;
     }
-    .time {
-        font-size:11px;
-        color:#667781;
-        text-align:right;
-    }
-    .pending-box {
-        background:#FFF3CD;
-        padding:10px;
-        border-radius:10px;
-        border:1px solid #FFC107;
-        margin:10px;
-    }
-    .notice-box {
-        background:#D1E7DD;
-        padding:10px;
-        border-radius:10px;
-        border:1px solid #198754;
-        margin:10px;
-    }
-    .reply-box {
-        background:#F0F2F5;
-        padding:8px 10px;
-        border-radius:10px;
-        margin:10px;
-        border-left:4px solid #075E54;
-        font-size:13px;
-    }
-    .inbox-wrap div[data-testid="stButton"] > button {
-        background:white !important;
-        border:none !important;
-        border-bottom:1px solid #f0f0f0 !important;
-        border-radius:0 !important;
-        text-align:left !important;
-        padding:13px 12px !important;
-        box-shadow:none !important;
-        color:#111 !important;
-        width:100% !important;
-        min-height:64px;
-    }
-    .inbox-wrap div[data-testid="stButton"] > button:hover {
-        background:#F7F7F7 !important;
-    }
-    .bottom-bar {
-        position:fixed;
-        bottom:0;
-        left:50%;
-        transform:translateX(-50%);
-        width:100%;
-        max-width:520px;
-        background:white;
-        border-top:1px solid #e0e0e0;
-        z-index:99;
-        padding-bottom:6px;
+    .community-muted {
+        color: #667781;
+        font-size: 12px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # ---------- HELPERS ----------
+    # --------------------------------------------------
+    # HELPERS
+    # --------------------------------------------------
     def esc(value):
-        return html.escape(str(value if value is not None else ""), quote=True)
-
-    def is_admin(role):
-        return str(role or "").strip().lower() == "admin"
-
-    def is_approved(status):
-        return str(status or "").strip().lower() == "approved"
-
-    def fmt_time(ts):
-        try:
-            return datetime.fromisoformat(
-                str(ts).replace("Z", "+00:00")
-            ).strftime("%H:%M")
-        except Exception:
-            return ""
+        return html.escape(str(value or ""), quote=True)
 
     def get_profile(user_id):
         if not user_id:
@@ -189,30 +123,18 @@ def render_community_groups_page(*args, **kwargs):
                 supabase.table("member_profiles")
                 .select("*")
                 .eq("user_id", user_id)
-                .single()
+                .limit(1)
                 .execute()
             )
-            return result.data or {}
+            return result.data[0] if result.data else {}
         except Exception:
             return {}
 
-    def get_name(profile):
+    def display_name(profile):
         username = (profile.get("username") or "").strip()
-        return f"@{username}" if username else (
-            profile.get("display_name") or "User"
-        )
-
-    def show_social_handles(profile):
-        fields = {
-            "Instagram": "instagram_handle",
-            "Facebook": "facebook_handle",
-            "TikTok": "tiktok_handle",
-            "LinkedIn": "linkedin_handle",
-        }
-        for label, column in fields.items():
-            value = profile.get(column)
-            if value:
-                st.write(f"**{label}:** {esc(value)}")
+        if username:
+            return "@" + username
+        return profile.get("display_name") or "Community member"
 
     def storage_url(path):
         if not path:
@@ -225,1746 +147,759 @@ def render_community_groups_page(*args, **kwargs):
             )
             if isinstance(result, dict):
                 return result.get("signedURL") or result.get("signedUrl") or ""
-            return str(result)
+            return ""
         except Exception:
             try:
                 return supabase.storage.from_(BUCKET).get_public_url(str(path))
             except Exception:
                 return ""
 
-    def upload(file, folder):
+    def upload_media(file, folder):
+        if file is None:
+            return None
+
         try:
-            ext = (
-                str(file.name).split(".")[-1].lower()
-                if "." in str(file.name)
-                else "jpg"
+            extension = (
+                file.name.rsplit(".", 1)[-1].lower()
+                if "." in file.name else "jpg"
             )
-            path = f"{uid}/{folder}/{uuid.uuid4().hex[:12]}.{ext}"
+            path = (
+                f"{uid}/{folder}/"
+                f"{uuid.uuid4().hex}.{extension}"
+            )
+
             supabase.storage.from_(BUCKET).upload(
                 path,
                 file.getvalue(),
                 {"content-type": file.type},
             )
             return path
+
         except Exception as error:
             st.error(f"Upload failed: {error}")
             return None
 
-    # FIX: avatar_url may be a storage path, not a full URL.
-    # st.image() treats non-http strings as local files -> FileNotFoundError.
-    def avatar_src(profile):
-        """Return a usable image URL for a profile's avatar, or ''."""
-        raw = (profile or {}).get("avatar_url")
-        if not raw:
-            return ""
-        return storage_url(raw)
+    def show_avatar(profile, width=65):
+        path = profile.get("avatar_url")
+        url = storage_url(path)
 
-    def show_avatar(profile, width=110):
-        """Safely render an avatar. Returns True if shown, else False."""
-        src = avatar_src(profile)
-        if not src:
-            return False
-        try:
-            st.image(src, width=width)
-            return True
-        except Exception:
-            return False
+        if url:
+            try:
+                st.image(url, width=width)
+                return
+            except Exception:
+                pass
 
-    def search_by_username(query, limit=20):
-        query = (query or "").strip().replace("@", "").strip()
+        name = display_name(profile)
+        initials = name.replace("@", "")[:2].upper() or "U"
+        st.markdown(f"**{initials}**")
+
+    def search_members(query, limit=25):
+        query = (query or "").strip().replace("@", "")
         if not query:
             return []
 
         try:
-            results = (
+            result = (
                 supabase.table("member_profiles")
                 .select("*")
                 .ilike("username", f"%{query}%")
                 .limit(limit)
                 .execute()
-                .data or []
             )
+            profiles = result.data or []
+
+            profiles.sort(
+                key=lambda p: (
+                    not (p.get("username") or "").lower().startswith(
+                        query.lower()
+                    ),
+                    (p.get("username") or "").lower(),
+                )
+            )
+            return profiles
+
         except Exception:
             return []
 
-        query_lower = query.lower()
-        starts = [
-            row for row in results
-            if (row.get("username") or "").lower().startswith(query_lower)
-        ]
-        others = [row for row in results if row not in starts]
+    def get_other_user(conversation):
+        if str(conversation.get("user_one_id")) == str(uid):
+            return conversation.get("user_two_id")
+        return conversation.get("user_one_id")
 
-        starts.sort(key=lambda row: (row.get("username") or "").lower())
-        others.sort(key=lambda row: (row.get("username") or "").lower())
+    def open_chat(other_user_id):
+        if not other_user_id or str(other_user_id) == str(uid):
+            return
 
-        return starts + others
-
-    def get_app_url():
-        try:
-            headers = st.context.headers
-            host = headers.get("host") or ""
-            return f"https://{host}" if host else None
-        except Exception:
-            return None
-
-    def open_dm(other_id):
         try:
             existing = (
                 supabase.table("direct_conversations")
                 .select("*")
                 .or_(
-                    f"and(user_one_id.eq.{uid},user_two_id.eq.{other_id}),"
-                    f"and(user_one_id.eq.{other_id},user_two_id.eq.{uid})"
+                    f"and(user_one_id.eq.{uid},user_two_id.eq.{other_user_id}),"
+                    f"and(user_one_id.eq.{other_user_id},user_two_id.eq.{uid})"
                 )
                 .execute()
                 .data or []
             )
 
             if existing:
-                conversation_id = existing[0].get("id")
+                conversation_id = existing[0]["id"]
             else:
                 created = (
                     supabase.table("direct_conversations")
                     .insert({
                         "user_one_id": uid,
-                        "user_two_id": other_id,
+                        "user_two_id": other_user_id,
                     })
                     .execute()
                 )
-                conversation_id = created.data[0].get("id")
+                conversation_id = created.data[0]["id"]
 
-            st.session_state["eco_sel"] = conversation_id
-            st.session_state["eco_sel_type"] = "dm"
-            st.session_state["eco_nav"] = "Chats"
-            st.session_state["eco_msg_opt"] = None
+            st.session_state["eco_new_chat_id"] = conversation_id
+            st.session_state["eco_new_chat_user"] = other_user_id
+            st.session_state["eco_new_profile"] = None
+            st.session_state["eco_new_nav"] = "Chats"
             st.rerun()
 
         except Exception as error:
-            st.error(f"Could not start chat: {error}")
+            st.error(f"Could not open chat: {error}")
 
-    def go(nav):
-        st.session_state["eco_nav"] = nav
-        st.session_state["eco_sel"] = None
-        st.session_state["eco_room_info"] = None
-        st.session_state["eco_profile_view"] = None
-        st.session_state["eco_msg_opt"] = None
-        st.session_state["eco_story_user"] = None
+    def back_to_chats():
+        st.session_state["eco_new_chat_id"] = None
+        st.session_state["eco_new_chat_user"] = None
+        st.session_state["eco_new_profile"] = None
         st.rerun()
 
-    def reply_preview(message, messages):
-        reply_id = message.get("reply_to_id")
-        if not reply_id:
-            return None
-
-        original = next(
-            (item for item in messages if str(item.get("id")) == str(reply_id)),
-            None,
-        )
-        if not original:
-            return "Original message unavailable"
-
-        original_text = original.get("message_text") or "Attachment"
-        return original_text[:100]
-
-    # ---------- HEADER ----------
-    st.markdown(
-        '<div class="wa-head">'
-        '<h1>EcoLoop Community Hub</h1>'
-        '<p>Next Gen Impact Hub (NGIH) • Community</p>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    if st.session_state.get("eco_notice"):
-        st.markdown(
-            f'<div class="notice-box">{esc(st.session_state["eco_notice"])}</div>',
-            unsafe_allow_html=True,
-        )
-        if st.button("Dismiss", key="dismiss_n"):
-            st.session_state["eco_notice"] = None
-            st.rerun()
-
-    # ---------- LOAD DATA ----------
-    try:
-        memberships = (
-            supabase.table("group_memberships")
-            .select("group_id,membership_role,status")
-            .eq("user_id", uid)
-            .execute()
-            .data or []
-        )
-
-        group_ids = [item.get("group_id") for item in memberships]
-
-        my_rooms = (
-            supabase.table("community_groups")
-            .select("*")
-            .in_("id", group_ids)
-            .execute()
-            .data or []
-        ) if group_ids else []
-
-        membership_map = {
-            item.get("group_id"): item for item in memberships
-        }
-
-    except Exception:
-        my_rooms = []
-        membership_map = {}
-
-    try:
-        my_dms = (
-            supabase.table("direct_conversations")
-            .select("*")
-            .or_(f"user_one_id.eq.{uid},user_two_id.eq.{uid}")
-            .execute()
-            .data or []
-        )
-    except Exception:
-        my_dms = []
-
-    def enrich_dm(conversation):
-        other_id = (
-            conversation.get("user_two_id")
-            if str(conversation.get("user_one_id")) == str(uid)
-            else conversation.get("user_one_id")
-        )
-
-        profile = get_profile(other_id)
-        last_text = ""
-        last_at = ""
-        last_sender = ""
-
+    def format_time(value):
         try:
-            latest = (
-                supabase.table("direct_messages")
-                .select("message_text,created_at,sender_id,attachment_path")
-                .eq("conversation_id", conversation.get("id"))
-                .order("created_at", desc=True)
-                .limit(1)
-                .execute()
-                .data or []
-            )
-
-            if latest:
-                item = latest[0]
-                last_text = item.get("message_text") or (
-                    "📷 Attachment" if item.get("attachment_path") else ""
-                )
-                last_at = item.get("created_at") or ""
-                last_sender = str(item.get("sender_id") or "")
-
+            return datetime.fromisoformat(
+                str(value).replace("Z", "+00:00")
+            ).astimezone().strftime("%d %b, %H:%M")
         except Exception:
-            pass
+            return ""
 
-        return {
-            "type": "dm",
-            "id": conversation.get("id"),
-            "other_id": other_id,
-            "name": get_name(profile),
-            "profile": profile,
-            "last_text": last_text,
-            "last_at": last_at,
-            "last_sender": last_sender,
-        }
-
-    def enrich_room(group):
-        membership = membership_map.get(group.get("id"), {})
-        last_text = ""
-        last_at = ""
-        last_sender = ""
-
-        try:
-            latest = (
-                supabase.table("group_messages")
-                .select("message_text,created_at,sender_id,attachment_path")
-                .eq("group_id", group.get("id"))
-                .order("created_at", desc=True)
-                .limit(1)
-                .execute()
-                .data or []
-            )
-
-            if latest:
-                item = latest[0]
-                last_text = item.get("message_text") or (
-                    "📷 Attachment" if item.get("attachment_path") else ""
-                )
-                last_at = item.get("created_at") or ""
-                last_sender = str(item.get("sender_id") or "")
-
-        except Exception:
-            pass
-
-        return {
-            "type": "room",
-            "id": group.get("id"),
-            "name": group.get("name"),
-            "desc": group.get("description"),
-            "code": group.get("invite_code"),
-            "created_by": group.get("created_by"),
-            "my_role": membership.get("membership_role"),
-            "my_status": membership.get("status"),
-            "last_text": last_text,
-            "last_at": last_at,
-            "last_sender": last_sender,
-        }
-
-    dm_list = sorted(
-        [enrich_dm(item) for item in my_dms],
-        key=lambda item: item.get("last_at") or "",
-        reverse=True,
+    # --------------------------------------------------
+    # TOP-LEVEL NAVIGATION
+    # --------------------------------------------------
+    st.button(
+        "← Back to Dashboard",
+        key="eco_new_back_dashboard",
+        use_container_width=False,
+        on_click=lambda: st.session_state.update({
+            kwargs.get("dashboard_state_key", "page"):
+                kwargs.get("dashboard_page", "Dashboard"),
+            "eco_new_chat_id": None,
+            "eco_new_chat_user": None,
+            "eco_new_profile": None,
+        }),
     )
 
-    room_list = sorted(
-        [enrich_room(item) for item in my_rooms],
-        key=lambda item: item.get("last_at") or "",
-        reverse=True,
-    )
+    # If your main app uses a different dashboard state variable,
+    # pass dashboard_state_key and dashboard_page when calling this function.
 
-    dm_list = list({str(item["id"]): item for item in dm_list}.values())
-    room_list = list({str(item["id"]): item for item in room_list}.values())
+    st.markdown("""
+    <div class="community-heading">
+        <h1>Community</h1>
+        <p>Connect. Communicate. Share.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    def is_unread(conversation):
-        key = f"{conversation['type']}_{conversation['id']}"
-        seen = st.session_state["eco_last_seen"].get(key, "")
+    if st.session_state.get("eco_new_notice"):
+        st.success(st.session_state["eco_new_notice"])
+        st.session_state["eco_new_notice"] = None
 
-        return bool(
-            conversation.get("last_at")
-            and conversation.get("last_sender")
-            and str(conversation.get("last_sender")) != str(uid)
-            and str(conversation.get("last_at")) > str(seen)
+    # --------------------------------------------------
+    # PROFILE SCREEN
+    # --------------------------------------------------
+    profile_target = st.session_state.get("eco_new_profile")
+
+    if profile_target:
+        profile = get_profile(profile_target)
+
+        st.button(
+            "← Back to Community",
+            key="eco_new_profile_back",
+            on_click=lambda: st.session_state.update({
+                "eco_new_profile": None
+            }),
         )
 
-    def mark_read(conversation):
-        if conversation.get("last_at"):
-            key = f"{conversation['type']}_{conversation['id']}"
-            st.session_state["eco_last_seen"][key] = conversation.get("last_at")
+        st.divider()
 
-    def inbox_label(conversation):
-        unread = "  ●" if is_unread(conversation) else ""
-        time_label = (
-            fmt_time(conversation.get("last_at"))
-            if conversation.get("last_at")
-            else ""
-        )
-        preview = (conversation.get("last_text") or "No messages yet")[:42]
+        col1, col2 = st.columns([1, 3])
 
-        suffix = (
-            " • pending"
-            if conversation["type"] == "room"
-            and str(conversation.get("my_status") or "").lower() == "pending"
-            else ""
-        )
+        with col1:
+            show_avatar(profile, 100)
 
-        return (
-            f"{conversation.get('name')}{suffix}   {time_label}{unread}\n"
-            f"{preview}"
-        )
+        with col2:
+            st.subheader(display_name(profile))
+            st.caption(profile.get("display_name") or "Community member")
 
-    # ---------- INVITATION LINK ----------
-    try:
-        query_params = st.query_params
-        room_code = query_params.get("room", None)
-        if isinstance(room_code, list):
-            room_code = room_code[0] if room_code else None
-    except Exception:
-        room_code = None
+            if profile.get("username"):
+                st.caption("@" + profile["username"])
 
-    if room_code and not st.session_state.get("eco_sel"):
-        clean_code = str(room_code).strip().upper()
-        st.info(f"Invitation for Chat Room code: {esc(clean_code)}")
+        st.divider()
+        st.markdown("### About")
 
-        try:
-            result = (
-                supabase.table("community_groups")
-                .select("*")
-                .eq("invite_code", clean_code)
-                .single()
-                .execute()
-            )
+        st.write(profile.get("bio") or "No About information has been added yet.")
 
-            if result.data:
-                invited_room = result.data
+        if profile.get("location"):
+            st.write(f"📍 Location: {profile['location']}")
 
-                st.write(
-                    f"**{esc(invited_room.get('name'))}** — "
-                    f"{esc(invited_room.get('description') or '')}"
-                )
-
-                existing = (
-                    supabase.table("group_memberships")
-                    .select("*")
-                    .eq("group_id", invited_room.get("id"))
-                    .eq("user_id", uid)
-                    .execute()
-                    .data or []
-                )
-
-                if existing:
-                    status = str(existing[0].get("status") or "").lower()
-                    st.write(f"Status: **{esc(status)}**")
-
-                    if status == "approved":
-                        if st.button("Open This Chat Room", key="open_invited"):
-                            st.session_state["eco_sel"] = invited_room.get("id")
-                            st.session_state["eco_sel_type"] = "room"
-                            st.rerun()
-
-                    elif status == "pending":
-                        st.warning("Pending approval — you cannot send yet.")
-
-                else:
-                    if st.button("Request to Join", key="join_invited"):
-                        supabase.table("group_memberships").insert({
-                            "group_id": invited_room.get("id"),
-                            "user_id": uid,
-                            "membership_role": "member",
-                            "status": "pending",
-                        }).execute()
-
-                        st.session_state["eco_notice"] = (
-                            "Join request sent — pending approval"
-                        )
-                        st.rerun()
-
-            else:
-                st.error("Invitation code not found.")
-
-        except Exception as error:
-            st.error(f"Could not load invitation: {error}")
-
-    # ---------- PROFILE VIEW ----------
-    if st.session_state.get("eco_profile_view"):
-        profile_id = st.session_state["eco_profile_view"]
-        profile = get_profile(profile_id)
-
-        if st.button("⬅ Back", key="back_profile"):
-            st.session_state["eco_profile_view"] = None
-            st.rerun()
-
-        st.markdown(
-            '<div class="card" style="text-align:center;">',
-            unsafe_allow_html=True,
-        )
-
-        # FIX: resolve storage path to a real URL
-        show_avatar(profile, 110)
-
-        st.markdown(f"### {esc(get_name(profile))}", unsafe_allow_html=True)
-        st.write(f"**{esc(profile.get('display_name') or '')}**")
-        st.write(esc(profile.get("bio") or "No bio yet"))
-        st.write(
-            f"📍 {esc(profile.get('location') or '—')} • "
-            f"{esc(profile.get('country_of_origin') or '')}"
-        )
+        if profile.get("country_of_origin"):
+            st.write(f"🌍 Country: {profile['country_of_origin']}")
 
         if profile.get("interests"):
-            st.write(f"✨ Interests: {esc(profile.get('interests'))}")
+            st.write(f"✨ Interests: {profile['interests']}")
 
-        show_social_handles(profile)
+        social_fields = {
+            "Instagram": "instagram_handle",
+            "Facebook": "facebook_handle",
+            "TikTok": "tiktok_handle",
+            "LinkedIn": "linkedin_handle",
+        }
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        for label, column in social_fields.items():
+            if profile.get(column):
+                st.write(f"**{label}:** {profile[column]}")
 
-        if str(profile_id) != str(uid):
+        if str(profile_target) != str(uid):
+            st.divider()
             if st.button(
                 "💬 Message",
+                key="eco_new_profile_message",
                 use_container_width=True,
-                key="msg_profile_btn",
             ):
-                open_dm(profile_id)
+                open_chat(profile_target)
+
         else:
             st.caption("This is your profile.")
 
-    # ---------- ROOM INFO ----------
-    elif st.session_state.get("eco_room_info"):
-        room = st.session_state["eco_room_info"]
+            st.divider()
+            st.markdown("### Edit your profile")
 
-        if st.button("⬅ Back to Chat", key="back_roominfo"):
-            st.session_state["eco_room_info"] = None
-            st.rerun()
+            avatar_file = st.file_uploader(
+                "Upload profile picture",
+                type=["jpg", "jpeg", "png", "webp"],
+                key="eco_new_avatar_upload",
+            )
 
-        st.markdown(
-            f'<div class="card"><h3>👥 {esc(room.get("name"))}</h3>'
-            f'<p style="color:#667781;">{esc(room.get("desc") or "")}</p></div>',
-            unsafe_allow_html=True,
+            display_name_input = st.text_input(
+                "Display name",
+                value=profile.get("display_name") or "",
+                key="eco_new_display_name",
+            )
+
+            bio_input = st.text_area(
+                "About",
+                value=profile.get("bio") or "",
+                key="eco_new_bio",
+            )
+
+            location_input = st.text_input(
+                "Location",
+                value=profile.get("location") or "",
+                key="eco_new_location",
+            )
+
+            interests_input = st.text_input(
+                "Interests",
+                value=profile.get("interests") or "",
+                key="eco_new_interests",
+            )
+
+            if st.button(
+                "Save Profile",
+                key="eco_new_save_profile",
+                use_container_width=True,
+            ):
+                update_data = {
+                    "display_name": display_name_input.strip(),
+                    "bio": bio_input.strip(),
+                    "location": location_input.strip(),
+                    "interests": interests_input.strip(),
+                }
+
+                if avatar_file:
+                    avatar_path = upload_media(avatar_file, "avatars")
+                    if avatar_path:
+                        update_data["avatar_url"] = avatar_path
+
+                try:
+                    (
+                        supabase.table("member_profiles")
+                        .update(update_data)
+                        .eq("user_id", uid)
+                        .execute()
+                    )
+                    st.success("Profile updated.")
+                    st.rerun()
+                except Exception as error:
+                    st.error(f"Could not update profile: {error}")
+
+        return
+
+    # --------------------------------------------------
+    # INDIVIDUAL CHAT SCREEN
+    # --------------------------------------------------
+    selected_chat = st.session_state.get("eco_new_chat_id")
+
+    if selected_chat:
+        other_id = st.session_state.get("eco_new_chat_user")
+        other_profile = get_profile(other_id)
+
+        st.button(
+            "← Back to Chats",
+            key="eco_new_chat_back",
+            on_click=back_to_chats,
         )
 
-        st.markdown(
-            f'<div class="card">Invite Code: <b>{esc(room.get("code") or "")}</b>'
-            '<br><span style="font-size:12px;color:#667781;">'
-            'Share the code or link below</span></div>',
-            unsafe_allow_html=True,
-        )
+        col1, col2 = st.columns([1, 4])
 
-        app_url = get_app_url()
-        if app_url and room.get("code"):
-            st.code(f"{app_url}/?room={room.get('code')}")
+        with col1:
+            show_avatar(other_profile, 55)
 
-        is_creator = str(room.get("created_by")) == str(uid)
+        with col2:
+            st.markdown(f"**{esc(display_name(other_profile))}**")
+            if st.button(
+                "View Profile",
+                key="eco_new_chat_view_profile",
+            ):
+                st.session_state["eco_new_profile"] = other_id
+                st.rerun()
+
+        st.divider()
 
         try:
-            me = (
-                supabase.table("group_memberships")
+            messages = (
+                supabase.table("direct_messages")
                 .select("*")
-                .eq("group_id", room["id"])
-                .eq("user_id", uid)
-                .single()
+                .eq("conversation_id", selected_chat)
+                .order("created_at")
                 .execute()
-                .data or {}
+                .data or []
             )
-        except Exception:
-            me = {}
+        except Exception as error:
+            messages = []
+            st.error(f"Could not load messages: {error}")
 
-        st.write(
-            f"You are: **{'👑 Creator' if is_creator else me.get('membership_role', 'Member')}** "
-            f"— {me.get('status', '')}"
+        for message in messages:
+            mine = str(message.get("sender_id")) == str(uid)
+            css_class = "message-mine" if mine else "message-other"
+
+            sender_profile = (
+                get_profile(message.get("sender_id"))
+                if not mine else {}
+            )
+
+            sender_label = (
+                f'<div><b>{esc(display_name(sender_profile))}</b></div>'
+                if not mine else ""
+            )
+
+            st.markdown(
+                f'<div class="{css_class}">'
+                f'{sender_label}'
+                f'{esc(message.get("message_text") or "")}'
+                f'<div class="message-time">'
+                f'{format_time(message.get("created_at"))}'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
+
+            attachment = message.get("attachment_path")
+            if attachment:
+                media_url = storage_url(attachment)
+                if media_url:
+                    try:
+                        if str(message.get("attachment_type") or "").startswith("video"):
+                            st.video(media_url)
+                        else:
+                            st.image(media_url, width=280)
+                    except Exception:
+                        st.caption("Attachment unavailable.")
+
+        st.divider()
+        st.markdown("### Send a message")
+
+        message_text = st.text_area(
+            "Message",
+            key=f"eco_new_message_{selected_chat}",
+            placeholder="Write a message...",
+            label_visibility="collapsed",
+            height=90,
         )
 
-        if is_creator:
+        attachment_file = st.file_uploader(
+            "Attach a picture or video",
+            type=["jpg", "jpeg", "png", "webp", "mp4", "mov"],
+            key=f"eco_new_attachment_{selected_chat}",
+        )
+
+        if st.button(
+            "➤ Send",
+            key=f"eco_new_send_{selected_chat}",
+            use_container_width=True,
+        ):
+            attachment_path = None
+
+            if attachment_file:
+                attachment_path = upload_media(
+                    attachment_file,
+                    "direct-messages",
+                )
+
+            if message_text.strip() or attachment_path:
+                try:
+                    supabase.table("direct_messages").insert({
+                        "conversation_id": selected_chat,
+                        "sender_id": uid,
+                        "message_text": message_text.strip(),
+                        "attachment_path": attachment_path,
+                        "attachment_type": (
+                            attachment_file.type if attachment_file else None
+                        ),
+                        "attachment_name": (
+                            attachment_file.name if attachment_file else None
+                        ),
+                    }).execute()
+
+                    st.rerun()
+
+                except Exception as error:
+                    st.error(f"Message could not be sent: {error}")
+            else:
+                st.warning("Write a message or attach a file.")
+
+        return
+
+    # --------------------------------------------------
+    # COMMUNITY NAVIGATION
+    # --------------------------------------------------
+    selected_nav = st.radio(
+        "Community sections",
+        ["Chats", "Stories"],
+        horizontal=True,
+        key="eco_new_nav",
+        label_visibility="collapsed",
+    )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # CHATS
+    # --------------------------------------------------
+    if selected_nav == "Chats":
+        st.markdown("### 💬 Chats")
+
+        search = st.text_input(
+            "Search members by username",
+            placeholder="Search using @username...",
+            key="eco_new_member_search",
+        )
+
+        if search.strip():
+            results = search_members(search)
+
+            if not results:
+                st.info("No matching members found.")
+
+            for profile in results:
+                member_id = profile.get("user_id")
+
+                if str(member_id) == str(uid):
+                    continue
+
+                col1, col2, col3 = st.columns([1, 3, 2])
+
+                with col1:
+                    show_avatar(profile, 45)
+
+                with col2:
+                    st.write(f"**{display_name(profile)}**")
+                    st.caption(profile.get("display_name") or "Community member")
+
+                with col3:
+                    if st.button(
+                        "View Profile",
+                        key=f"eco_new_search_profile_{member_id}",
+                    ):
+                        st.session_state["eco_new_profile"] = member_id
+                        st.rerun()
+
+                    if st.button(
+                        "Message",
+                        key=f"eco_new_search_message_{member_id}",
+                    ):
+                        open_chat(member_id)
+
+                st.divider()
+
+        st.markdown("### Your conversations")
+
+        try:
+            conversations = (
+                supabase.table("direct_conversations")
+                .select("*")
+                .or_(f"user_one_id.eq.{uid},user_two_id.eq.{uid}")
+                .execute()
+                .data or []
+            )
+        except Exception as error:
+            conversations = []
+            st.error(f"Could not load chats: {error}")
+
+        conversation_items = []
+
+        for conversation in conversations:
+            other_id = get_other_user(conversation)
+            profile = get_profile(other_id)
+
             try:
-                pending = (
-                    supabase.table("group_memberships")
-                    .select("*")
-                    .eq("group_id", room["id"])
-                    .eq("status", "pending")
+                latest = (
+                    supabase.table("direct_messages")
+                    .select("message_text,created_at,attachment_path")
+                    .eq("conversation_id", conversation.get("id"))
+                    .order("created_at", desc=True)
+                    .limit(1)
                     .execute()
                     .data or []
                 )
             except Exception:
-                pending = []
+                latest = []
 
-            if pending:
-                st.markdown(
-                    '<div class="pending-box"><b>⏳ Pending Requests — Creator approval</b></div>',
-                    unsafe_allow_html=True,
-                )
-
-                for member in pending:
-                    member_profile = get_profile(member.get("user_id"))
-                    col1, col2, col3 = st.columns([3, 1, 1])
-
-                    with col1:
-                        st.write(esc(get_name(member_profile)))
-
-                    with col2:
-                        if st.button(
-                            "Approve",
-                            key=f"ap_{room['id']}_{member.get('user_id')}",
-                        ):
-                            supabase.table("group_memberships").update(
-                                {"status": "approved"}
-                            ).eq("group_id", room["id"]).eq(
-                                "user_id", member.get("user_id")
-                            ).execute()
-
-                            st.session_state["eco_notice"] = (
-                                f"Approved {get_name(member_profile)}"
-                            )
-                            st.rerun()
-
-                    with col3:
-                        if st.button(
-                            "Reject",
-                            key=f"rj_{room['id']}_{member.get('user_id')}",
-                        ):
-                            supabase.table("group_memberships").delete().eq(
-                                "group_id", room["id"]
-                            ).eq("user_id", member.get("user_id")).execute()
-
-                            st.session_state["eco_notice"] = "Rejected"
-                            st.rerun()
-
-        try:
-            members = (
-                supabase.table("group_memberships")
-                .select("*")
-                .eq("group_id", room["id"])
-                .execute()
-                .data or []
+            last_message = latest[0] if latest else {}
+            preview = (
+                last_message.get("message_text")
+                or ("📷 Attachment" if last_message.get("attachment_path") else "No messages yet")
             )
-        except Exception:
-            members = []
 
-        st.write(f"**Members ({len(members)})**")
+            conversation_items.append({
+                "id": conversation.get("id"),
+                "other_id": other_id,
+                "profile": profile,
+                "preview": preview,
+                "created_at": last_message.get("created_at") or "",
+            })
 
-        members.sort(
-            key=lambda item: (
-                str(item.get("status") or "").lower() != "approved"
-            )
+        conversation_items.sort(
+            key=lambda item: item.get("created_at") or "",
+            reverse=True,
         )
 
-        for member in members:
-            member_profile = get_profile(member.get("user_id"))
-            col1, col2, col3 = st.columns([3, 1, 1])
+        if not conversation_items:
+            st.info(
+                "You haven't started any conversations yet. "
+                "Search for a username above to find someone and start chatting."
+            )
+
+        for item in conversation_items:
+            col1, col2, col3 = st.columns([1, 3, 2])
 
             with col1:
+                show_avatar(item["profile"], 48)
+
+            with col2:
+                st.write(f"**{display_name(item['profile'])}**")
+                st.caption(str(item["preview"])[:65])
+
+            with col3:
                 if st.button(
-                    f"{get_name(member_profile)} — "
-                    f"{member.get('membership_role')} — "
-                    f"{member.get('status')}",
-                    key=f"mem_{room['id']}_{member.get('user_id')}",
+                    "Open Chat",
+                    key=f"eco_new_open_{item['id']}",
+                    use_container_width=True,
                 ):
-                    st.session_state["eco_profile_view"] = member.get("user_id")
+                    st.session_state["eco_new_chat_id"] = item["id"]
+                    st.session_state["eco_new_chat_user"] = item["other_id"]
                     st.rerun()
 
-            if (
-                is_creator
-                and str(member.get("user_id")) != str(uid)
-                and is_approved(member.get("status"))
-            ):
-                with col2:
-                    if not is_admin(member.get("membership_role")):
-                        if st.button(
-                            "Make Admin",
-                            key=f"mk_{room['id']}_{member.get('user_id')}",
-                        ):
-                            supabase.table("group_memberships").update(
-                                {"membership_role": "admin"}
-                            ).eq("group_id", room["id"]).eq(
-                                "user_id", member.get("user_id")
-                            ).execute()
-                            st.rerun()
-                    else:
-                        if st.button(
-                            "Remove Admin",
-                            key=f"rmad_{room['id']}_{member.get('user_id')}",
-                        ):
-                            supabase.table("group_memberships").update(
-                                {"membership_role": "member"}
-                            ).eq("group_id", room["id"]).eq(
-                                "user_id", member.get("user_id")
-                            ).execute()
-                            st.rerun()
-
-                with col3:
-                    if st.button(
-                        "Remove",
-                        key=f"rem_{room['id']}_{member.get('user_id')}",
-                    ):
-                        supabase.table("group_memberships").delete().eq(
-                            "group_id", room["id"]
-                        ).eq("user_id", member.get("user_id")).execute()
-                        st.rerun()
-
-        st.divider()
-
-        if not is_creator:
-            if st.button(
-                "🚪 Exit Chat Room",
-                use_container_width=True,
-                key=f"exit_{room['id']}",
-            ):
-                try:
-                    supabase.table("group_memberships").delete().eq(
-                        "group_id", room["id"]
-                    ).eq("user_id", uid).execute()
-
-                    st.session_state["eco_room_info"] = None
-                    st.session_state["eco_sel"] = None
-                    st.session_state["eco_notice"] = (
-                        "You exited the Chat Room."
-                    )
-                    st.rerun()
-
-                except Exception as error:
-                    st.error(f"Exit failed: {error}")
-        else:
-            st.caption("Creator cannot exit — would orphan the room.")
-
-    # ---------- CONVERSATION ----------
-    elif st.session_state.get("eco_sel"):
-        selected_id = st.session_state["eco_sel"]
-        selected_type = st.session_state["eco_sel_type"]
-
-        selected = next(
-            (
-                item for item in (
-                    dm_list if selected_type == "dm" else room_list
-                )
-                if str(item["id"]) == str(selected_id)
-            ),
-            None,
-        )
-
-        if not selected:
-            st.error("Chat not found.")
-            if st.button("Back", key="conv_notfound"):
-                st.session_state["eco_sel"] = None
-                st.rerun()
-
-        else:
-            mark_read(selected)
-
-            if selected_type == "room":
-                col1, col2 = st.columns([1, 5])
-
-                with col1:
-                    if st.button("⬅", key="conv_back_room"):
-                        st.session_state["eco_sel"] = None
-                        st.session_state["eco_msg_opt"] = None
-                        st.rerun()
-
-                with col2:
-                    st.markdown(
-                        f"**👥 {esc(selected.get('name'))}** • "
-                        f"{esc(selected.get('my_status') or '')}",
-                        unsafe_allow_html=True,
-                    )
-
-                    if st.button("ℹ️ Room Info", key="room_info_open"):
-                        st.session_state["eco_room_info"] = selected
-                        st.rerun()
-
-            else:
-                col1, col2 = st.columns([1, 5])
-
-                with col1:
-                    if st.button("⬅", key="conv_back_dm"):
-                        st.session_state["eco_sel"] = None
-                        st.session_state["eco_msg_opt"] = None
-                        st.rerun()
-
-                with col2:
-                    st.markdown(
-                        f"**👤 {esc(selected.get('name'))}**",
-                        unsafe_allow_html=True,
-                    )
-
-                    if st.button("👤 View Profile", key="dm_profile_open"):
-                        st.session_state["eco_profile_view"] = selected.get(
-                            "other_id"
-                        )
-                        st.rerun()
-
-            if (
-                selected_type == "room"
-                and not is_approved(selected.get("my_status"))
-            ):
-                st.warning(
-                    "Pending approval — only approved members can send. "
-                    f"Status: {esc(selected.get('my_status'))}"
-                )
-
-            # Load messages
-            if selected_type == "room":
-                try:
-                    messages = (
-                        supabase.table("group_messages")
-                        .select("*")
-                        .eq("group_id", selected_id)
-                        .order("created_at")
-                        .execute()
-                        .data or []
-                    )
-                except Exception:
-                    messages = []
-            else:
-                try:
-                    messages = (
-                        supabase.table("direct_messages")
-                        .select("*")
-                        .eq("conversation_id", selected_id)
-                        .order("created_at")
-                        .execute()
-                        .data or []
-                    )
-                except Exception:
-                    messages = []
-
-            # Persistent pinned messages for Chat Rooms
-            if selected_type == "room":
-                pinned_messages = [
-                    item for item in messages
-                    if item.get("is_pinned")
-                ]
-
-                for pinned_message in pinned_messages:
-                    st.markdown(
-                        '<div class="notice-box">📌 '
-                        f'{esc(pinned_message.get("message_text") or "Pinned attachment")}'
-                        '</div>',
-                        unsafe_allow_html=True,
-                    )
-
-            if st.session_state.get("eco_forward"):
-                st.info(
-                    "Forwarding ready — open Chats or Chat Rooms "
-                    "and choose a destination."
-                )
-
-            # Cache profiles for this render pass (avoids one query per message)
-            profile_cache = {}
-
-            def cached_profile(user_id):
-                key = str(user_id)
-                if key not in profile_cache:
-                    profile_cache[key] = get_profile(user_id)
-                return profile_cache[key]
-
-            # Render messages
-            for message in messages:
-                profile = cached_profile(message.get("sender_id"))
-                mine = str(message.get("sender_id")) == str(uid)
-                bubble_class = "bubble-mine" if mine else "bubble-theirs"
-
-                name_html = (
-                    ""
-                    if mine
-                    else f'<div class="name">{esc(get_name(profile))}</div>'
-                )
-
-                # FIX: resolve avatar path to a real URL for the HTML <img>
-                _avatar = avatar_src(profile) if not mine else ""
-                avatar_html = (
-                    f'<img src="{esc(_avatar)}" '
-                    'width="26" style="border-radius:50%;"> '
-                    if _avatar
-                    else ""
-                )
-
-                quoted = reply_preview(message, messages)
-                reply_html = (
-                    f'<div class="reply-box">↩️ {esc(quoted)}</div>'
-                    if quoted
-                    else ""
-                )
-
-                pinned_label = (
-                    '<div style="font-size:11px;color:#667781;">📌 Pinned</div>'
-                    if message.get("is_pinned")
-                    else ""
-                )
-
-                st.markdown(
-                    f'<div class="{bubble_class}">'
-                    f'{avatar_html}{name_html}{pinned_label}{reply_html}'
-                    f'<div>{esc(message.get("message_text") or "")}</div>'
-                    f'<div class="time">{fmt_time(message.get("created_at"))}</div>'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
-
-                if message.get("attachment_path"):
-                    attachment_url = storage_url(
-                        message.get("attachment_path")
-                    )
-
-                    if attachment_url:
-                        try:
-                            if (
-                                message.get("attachment_type") or ""
-                            ).startswith("video"):
-                                st.video(attachment_url)
-                            else:
-                                st.image(attachment_url, width=260)
-                        except Exception:
-                            st.caption("Attachment unavailable")
-
-                # Reactions: existing database table supports Chat Rooms
-                if selected_type == "room":
-                    try:
-                        reactions = (
-                            supabase.table("group_message_reactions")
-                            .select("*")
-                            .eq("message_id", message.get("id"))
-                            .execute()
-                            .data or []
-                        )
-                    except Exception:
-                        reactions = []
-
-                    if reactions:
-                        counts = {}
-                        for reaction in reactions:
-                            key = reaction.get("reaction")
-                            counts[key] = counts.get(key, 0) + 1
-
-                        st.caption(
-                            " ".join(
-                                f"{esc(key)} {count}"
-                                for key, count in counts.items()
-                            )
-                        )
-
-                if st.button("⋯", key=f"opt_{message.get('id')}"):
-                    current = st.session_state.get("eco_msg_opt")
-                    st.session_state["eco_msg_opt"] = (
-                        None if current == message.get("id")
-                        else message.get("id")
-                    )
-                    st.rerun()
-
-                if (
-                    st.session_state.get("eco_msg_opt")
-                    == message.get("id")
+                if st.button(
+                    "Profile",
+                    key=f"eco_new_open_profile_{item['id']}",
+                    use_container_width=True,
                 ):
-                    opt1, opt2, opt3, opt4 = st.columns(4)
-
-                    with opt1:
-                        if st.button(
-                            "↩️ Reply",
-                            key=f"rep_{message.get('id')}",
-                        ):
-                            st.session_state["eco_reply_to"] = {
-                                "id": message.get("id"),
-                                "text": (
-                                    message.get("message_text")
-                                    or "📷 Attachment"
-                                ),
-                            }
-                            st.session_state["eco_msg_opt"] = None
-                            st.rerun()
-
-                    with opt2:
-                        if st.button(
-                            "❤️ React",
-                            key=f"react_{message.get('id')}",
-                        ):
-                            if selected_type == "room":
-                                try:
-                                    existing_reaction = (
-                                        supabase.table("group_message_reactions")
-                                        .select("*")
-                                        .eq("message_id", message.get("id"))
-                                        .eq("user_id", uid)
-                                        .execute()
-                                        .data or []
-                                    )
-
-                                    if existing_reaction:
-                                        supabase.table(
-                                            "group_message_reactions"
-                                        ).delete().eq(
-                                            "message_id", message.get("id")
-                                        ).eq("user_id", uid).execute()
-                                    else:
-                                        supabase.table(
-                                            "group_message_reactions"
-                                        ).insert({
-                                            "message_id": message.get("id"),
-                                            "user_id": uid,
-                                            "reaction": "❤️",
-                                        }).execute()
-
-                                    st.session_state["eco_msg_opt"] = None
-                                    st.rerun()
-
-                                except Exception as error:
-                                    st.error(f"Reaction failed: {error}")
-                            else:
-                                st.info(
-                                    "DM reactions are not enabled in the "
-                                    "currently confirmed database schema."
-                                )
-
-                    with opt3:
-                        if st.button(
-                            "↪️ Forward",
-                            key=f"fwd_{message.get('id')}",
-                        ):
-                            st.session_state["eco_forward"] = {
-                                "text": message.get("message_text") or "",
-                                "attachment_path": message.get("attachment_path"),
-                                "attachment_name": message.get("attachment_name"),
-                                "attachment_type": message.get("attachment_type"),
-                                "source_type": selected_type,
-                                "source_message_id": message.get("id"),
-                            }
-
-                            st.session_state["eco_msg_opt"] = None
-                            st.session_state["eco_notice"] = (
-                                "Forwarding — choose a destination in Chats "
-                                "or Chat Rooms."
-                            )
-                            st.rerun()
-
-                    with opt4:
-                        if st.button(
-                            "📌 Pin",
-                            key=f"pin_{message.get('id')}",
-                        ):
-                            if selected_type == "room":
-                                try:
-                                    new_pin_state = not bool(
-                                        message.get("is_pinned")
-                                    )
-
-                                    update_data = {
-                                        "is_pinned": new_pin_state,
-                                        "pinned_by": uid if new_pin_state else None,
-                                        "pinned_at": (
-                                            datetime.now(timezone.utc).isoformat()
-                                            if new_pin_state
-                                            else None
-                                        ),
-                                    }
-
-                                    supabase.table("group_messages").update(
-                                        update_data
-                                    ).eq("id", message.get("id")).execute()
-
-                                    st.session_state["eco_msg_opt"] = None
-                                    st.rerun()
-
-                                except Exception as error:
-                                    st.error(f"Pin update failed: {error}")
-                            else:
-                                st.info(
-                                    "Persistent DM pins are not enabled "
-                                    "in the confirmed database schema."
-                                )
-
-            # Reply preview above composer
-            reply_to = st.session_state.get("eco_reply_to")
-
-            if reply_to:
-                reply_text = (
-                    reply_to.get("text", "")
-                    if isinstance(reply_to, dict)
-                    else str(reply_to)
-                )
-
-                st.markdown(
-                    f'<div class="reply-box">Replying to: '
-                    f'{esc(reply_text[:80])}</div>',
-                    unsafe_allow_html=True,
-                )
-
-                if st.button("Cancel Reply", key="cancel_reply"):
-                    st.session_state["eco_reply_to"] = None
+                    st.session_state["eco_new_profile"] = item["other_id"]
                     st.rerun()
 
-            # Composer
             st.divider()
 
-            message_input = st.text_input(
-                "Message",
-                key=f"msg_{selected_type}_{selected_id}",
-                label_visibility="collapsed",
-                placeholder="Type a message...",
-            )
-
-            attach_col, send_col = st.columns([3, 1])
-
-            with attach_col:
-                uploaded_file = st.file_uploader(
-                    "📎 Attach photo / video",
-                    type=["jpg", "jpeg", "png", "mp4", "mov", "webp"],
-                    key=f"up_{selected_type}_{selected_id}",
-                    label_visibility="collapsed",
-                )
-
-            with send_col:
-                if st.button(
-                    "➤ Send",
-                    key=f"send_{selected_type}_{selected_id}",
-                    use_container_width=True,
-                ):
-                    if (
-                        selected_type == "room"
-                        and not is_approved(selected.get("my_status"))
-                    ):
-                        st.error("Only approved members can send.")
-
-                    else:
-                        attachment_path = None
-                        attachment_type = None
-                        attachment_name = None
-
-                        if uploaded_file is not None:
-                            attachment_path = upload(
-                                uploaded_file,
-                                "chatrooms"
-                                if selected_type == "room"
-                                else "direct-messages",
-                            )
-                            attachment_type = uploaded_file.type
-                            attachment_name = uploaded_file.name
-
-                        final_text = message_input.strip()
-                        reply_id = None
-
-                        if isinstance(reply_to, dict):
-                            reply_id = reply_to.get("id")
-
-                        if final_text or attachment_path:
-                            try:
-                                message_data = {
-                                    "sender_id": uid,
-                                    "message_text": final_text,
-                                    "attachment_path": attachment_path,
-                                    "attachment_type": attachment_type,
-                                    "attachment_name": attachment_name,
-                                }
-
-                                if selected_type == "room":
-                                    message_data.update({
-                                        "group_id": selected_id,
-                                        "status": "sent",
-                                        "reply_to_id": reply_id,
-                                    })
-
-                                    supabase.table(
-                                        "group_messages"
-                                    ).insert(message_data).execute()
-
-                                else:
-                                    message_data.update({
-                                        "conversation_id": selected_id,
-                                        "reply_to_id": reply_id,
-                                    })
-
-                                    supabase.table(
-                                        "direct_messages"
-                                    ).insert(message_data).execute()
-
-                                st.session_state["eco_reply_to"] = None
-                                st.rerun()
-
-                            except Exception as error:
-                                st.error(f"Send failed: {error}")
-
-    # ---------- MAIN SCREENS ----------
-    else:
-        nav = st.session_state["eco_nav"]
-
-        # ---------- CHATS ----------
-        if nav == "Chats":
-            st.markdown("### 💬 Chats")
-
-            st.text_input(
-                "Search @username",
-                key="search_chats_main",
-                placeholder="Search @username",
-            )
-
-            search_query = (
-                st.session_state.get("search_chats_main", "")
-                .lower()
-                .replace("@", "")
-            )
-
-            if st.button(
-                "➕ New Chat",
-                use_container_width=True,
-                key="new_dm_toggle",
-            ):
-                st.session_state["eco_show_new"] = (
-                    not st.session_state["eco_show_new"]
-                )
-                st.rerun()
-
-            if st.session_state.get("eco_show_new"):
-                new_query = st.text_input(
-                    "Find member",
-                    key="new_dm_search",
-                    placeholder="@roy or roy",
-                )
-
-                if new_query.strip():
-                    for profile in search_by_username(new_query):
-                        if str(profile.get("user_id")) == str(uid):
-                            continue
-
-                        if st.button(
-                            f"💬 {get_name(profile)} — "
-                            f"{profile.get('display_name') or ''}",
-                            key=f"ndm_{profile.get('user_id')}",
-                        ):
-                            open_dm(profile.get("user_id"))
-
-            forwarding = st.session_state.get("eco_forward")
-
-            if forwarding:
-                st.info(
-                    f"Forwarding: {esc(forwarding.get('text', '')[:60])} "
-                    "— choose a private chat below."
-                )
-
-            if not dm_list:
-                st.info(
-                    "No private chats yet. Tap ➕ New Chat to start one."
-                )
-
-            st.markdown('<div class="inbox-wrap">', unsafe_allow_html=True)
-
-            for conversation in dm_list:
-                if (
-                    search_query
-                    and search_query not in conversation.get(
-                        "name", ""
-                    ).lower().replace("@", "")
-                ):
-                    continue
-
-                if st.button(
-                    inbox_label(conversation),
-                    key=f"open_dm_{conversation['id']}",
-                    use_container_width=True,
-                ):
-                    mark_read(conversation)
-                    st.session_state["eco_sel"] = conversation["id"]
-                    st.session_state["eco_sel_type"] = "dm"
-                    st.rerun()
-
-                if forwarding and st.button(
-                    f"➡️ Forward to {conversation.get('name')}",
-                    key=f"fwd_dm_{conversation['id']}",
-                ):
-                    try:
-                        forward_data = {
-                            "conversation_id": conversation["id"],
-                            "sender_id": uid,
-                            "message_text": (
-                                f"Forwarded: {forwarding['text']}"
-                                if forwarding.get("text")
-                                else "Forwarded attachment"
-                            ),
-                            "attachment_path": forwarding.get("attachment_path"),
-                            "attachment_name": forwarding.get("attachment_name"),
-                            "attachment_type": forwarding.get("attachment_type"),
-                        }
-
-                        supabase.table("direct_messages").insert(
-                            forward_data
-                        ).execute()
-
-                        st.session_state["eco_forward"] = None
-                        st.session_state["eco_notice"] = "Forwarded!"
-                        st.rerun()
-
-                    except Exception as error:
-                        st.error(f"Forward failed: {error}")
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        # ---------- CHAT ROOMS ----------
-        elif nav == "Chat Rooms":
-            st.markdown("### 👥 Chat Rooms")
-
-            action1, action2 = st.columns(2)
-
-            with action1:
-                if st.button(
-                    "➕ Create Room",
-                    use_container_width=True,
-                    key="create_room_toggle",
-                ):
-                    st.session_state["eco_show_create_room"] = (
-                        not st.session_state["eco_show_create_room"]
-                    )
-                    st.session_state["eco_show_new"] = False
-                    st.rerun()
-
-            with action2:
-                if st.button(
-                    "🔗 Join via Code",
-                    use_container_width=True,
-                    key="join_toggle",
-                ):
-                    st.session_state["eco_show_new"] = (
-                        not st.session_state["eco_show_new"]
-                    )
-                    st.session_state["eco_show_create_room"] = False
-                    st.rerun()
-
-            if st.session_state.get("eco_show_create_room"):
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-
-                room_name = st.text_input(
-                    "Room Name",
-                    key="new_room_name2",
-                    placeholder="e.g. Harare Clean-Up Team",
-                )
-
-                room_description = st.text_input(
-                    "Description",
-                    key="new_room_desc2",
-                )
-
-                if st.button(
-                    "✅ Create Chat Room",
-                    use_container_width=True,
-                    key="create_room_do",
-                ):
-                    if not room_name.strip():
-                        st.error("Enter name.")
-                    else:
-                        code = uuid.uuid4().hex[:8].upper()
-
-                        try:
-                            created = (
-                                supabase.table("community_groups")
-                                .insert({
-                                    "name": room_name.strip(),
-                                    "description": room_description,
-                                    "created_by": uid,
-                                    "invite_code": code,
-                                })
-                                .execute()
-                            )
-
-                            group_id = created.data[0].get("id")
-
-                            supabase.table("group_memberships").insert({
-                                "group_id": group_id,
-                                "user_id": uid,
-                                "membership_role": "admin",
-                                "status": "approved",
-                            }).execute()
-
-                            st.session_state["eco_last_created"] = {
-                                "name": room_name.strip(),
-                                "code": code,
-                            }
-
-                            st.session_state["eco_notice"] = (
-                                f"Room created! Code: {code}"
-                            )
-                            st.session_state["eco_show_create_room"] = False
-                            st.rerun()
-
-                        except Exception as error:
-                            st.error(f"Create failed: {error}")
-
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            if st.session_state.get("eco_show_new"):
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-
-                code_input = st.text_input(
-                    "Invite Code / Link",
-                    key="join_code_main",
-                    placeholder="ABC12345 or ?room=ABC12345",
-                )
-
-                if st.button(
-                    "Request to Join",
-                    key="join_room_main",
-                    use_container_width=True,
-                ):
-                    clean = code_input.strip().upper()
-
-                    if "ROOM=" in clean:
-                        clean = (
-                            clean.split("ROOM=")[-1]
-                            .split("&")[0]
-                            .split("/")[0]
-                            .strip()
-                        )
-                    else:
-                        clean = clean.split("/")[-1].strip()
-
-                    if clean:
-                        try:
-                            room_result = (
-                                supabase.table("community_groups")
-                                .select("*")
-                                .eq("invite_code", clean)
-                                .single()
-                                .execute()
-                            )
-
-                            room_data = room_result.data
-
-                            if room_data:
-                                existing_membership = (
-                                    supabase.table("group_memberships")
-                                    .select("*")
-                                    .eq("group_id", room_data.get("id"))
-                                    .eq("user_id", uid)
-                                    .execute()
-                                    .data or []
-                                )
-
-                                if existing_membership:
-                                    st.info(
-                                        "You already have a membership or "
-                                        "join request for this Chat Room."
-                                    )
-                                else:
-                                    supabase.table(
-                                        "group_memberships"
-                                    ).insert({
-                                        "group_id": room_data.get("id"),
-                                        "user_id": uid,
-                                        "membership_role": "member",
-                                        "status": "pending",
-                                    }).execute()
-
-                                    st.session_state["eco_notice"] = (
-                                        "Join request sent — pending approval"
-                                    )
-                                    st.session_state["eco_show_new"] = False
-                                    st.rerun()
-
-                            else:
-                                st.error("Code not found.")
-
-                        except Exception as error:
-                            st.error(f"Join failed: {error}")
-
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            if st.session_state.get("eco_last_created"):
-                last_created = st.session_state["eco_last_created"]
-
-                st.markdown(
-                    '<div class="notice-box">✅ Created: '
-                    f'<b>{esc(last_created["name"])}</b> — Code: '
-                    f'<b>{esc(last_created["code"])}</b></div>',
-                    unsafe_allow_html=True,
-                )
-
-                app_url = get_app_url()
-                if app_url:
-                    st.code(f"{app_url}/?room={last_created['code']}")
-
-            forwarding = st.session_state.get("eco_forward")
-
-            if forwarding:
-                st.info(
-                    f"Forwarding: {esc(forwarding.get('text', '')[:60])} "
-                    "— choose a Chat Room below."
-                )
-
-            if not room_list:
-                st.info("No rooms yet. Create one or join via code.")
-
-            st.markdown('<div class="inbox-wrap">', unsafe_allow_html=True)
-
-            for conversation in room_list:
-                if st.button(
-                    inbox_label(conversation),
-                    key=f"open_room_{conversation['id']}",
-                    use_container_width=True,
-                ):
-                    mark_read(conversation)
-                    st.session_state["eco_sel"] = conversation["id"]
-                    st.session_state["eco_sel_type"] = "room"
-                    st.rerun()
-
-                if forwarding and st.button(
-                    f"➡️ Forward to {conversation.get('name')}",
-                    key=f"fwd_room_{conversation['id']}",
-                ):
-                    try:
-                        forward_data = {
-                            "group_id": conversation["id"],
-                            "sender_id": uid,
-                            "message_text": forwarding.get("text") or "",
-                            "status": "sent",
-                            "attachment_path": forwarding.get("attachment_path"),
-                            "attachment_name": forwarding.get("attachment_name"),
-                            "attachment_type": forwarding.get("attachment_type"),
-                        }
-
-                        if (
-                            forwarding.get("source_type") == "room"
-                            and forwarding.get("source_message_id")
-                        ):
-                            forward_data["forwarded_from"] = (
-                                forwarding.get("source_message_id")
-                            )
-
-                        supabase.table("group_messages").insert(
-                            forward_data
-                        ).execute()
-
-                        st.session_state["eco_forward"] = None
-                        st.session_state["eco_notice"] = "Forwarded!"
-                        st.rerun()
-
-                    except Exception as error:
-                        st.error(f"Forward failed: {error}")
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        # ---------- UPDATES ----------
-        elif nav == "Updates":
-            st.markdown("### 📸 Updates")
-
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-
+        st.markdown("### Your profile")
+
+        if st.button(
+            "👤 View and edit my profile",
+            key="eco_new_my_profile",
+            use_container_width=True,
+        ):
+            st.session_state["eco_new_profile"] = uid
+            st.rerun()
+
+    # --------------------------------------------------
+    # STORIES
+    # --------------------------------------------------
+    elif selected_nav == "Stories":
+        st.markdown("### 📸 Stories")
+
+        with st.expander("➕ Share a Story", expanded=False):
             story_file = st.file_uploader(
-                "Add Update — photo / video",
-                type=["jpg", "jpeg", "png", "mp4", "mov", "webp"],
-                key="story_file_main",
+                "Choose a photo or video",
+                type=["jpg", "jpeg", "png", "webp", "mp4", "mov"],
+                key="eco_new_story_upload",
             )
 
             story_caption = st.text_input(
-                "Caption (optional)",
-                key="story_cap_main",
+                "Add a caption",
+                key="eco_new_story_caption",
             )
 
             if st.button(
-                "➕ Post Update",
-                key="post_story_main",
+                "Post Story",
+                key="eco_new_post_story",
                 use_container_width=True,
             ):
-                if story_file is None:
-                    st.error("Pick a photo or video first.")
+                if not story_file:
+                    st.warning("Choose a photo or video first.")
                 else:
-                    path = upload(story_file, "stories")
+                    media_path = upload_media(story_file, "stories")
 
-                    if path:
+                    if media_path:
                         try:
                             supabase.table("stories").insert({
                                 "user_id": uid,
-                                "media_url": path,
+                                "media_url": media_path,
                                 "media_type": (
                                     "video"
-                                    if str(story_file.type).startswith("video")
+                                    if story_file.type.startswith("video")
                                     else "image"
                                 ),
-                                "caption": story_caption,
+                                "caption": story_caption.strip(),
                                 "expires_at": (
                                     datetime.now(timezone.utc)
                                     + timedelta(hours=24)
                                 ).isoformat(),
                             }).execute()
 
-                            st.session_state["eco_notice"] = "Story posted!"
+                            st.success("Your Story has been posted.")
                             st.rerun()
 
                         except Exception as error:
-                            st.error(f"Post failed: {error}")
+                            st.error(f"Could not post Story: {error}")
 
-            st.markdown("</div>", unsafe_allow_html=True)
+        try:
+            stories = (
+                supabase.table("stories")
+                .select("*")
+                .order("created_at", desc=True)
+                .limit(100)
+                .execute()
+                .data or []
+            )
+        except Exception as error:
+            stories = []
+            st.error(f"Could not load Stories: {error}")
 
+        now = datetime.now(timezone.utc)
+        active_stories = []
+
+        for story in stories:
             try:
-                all_stories = (
-                    supabase.table("stories")
-                    .select("*")
-                    .order("created_at", desc=True)
-                    .limit(50)
-                    .execute()
-                    .data or []
+                expiry = datetime.fromisoformat(
+                    str(story.get("expires_at")).replace("Z", "+00:00")
                 )
+                if expiry >= now:
+                    active_stories.append(story)
             except Exception:
-                all_stories = []
+                continue
 
-            now_utc = datetime.now(timezone.utc)
-            valid_stories = []
+        story_users = []
+        for story in active_stories:
+            story_user = story.get("user_id")
+            if story_user not in story_users:
+                story_users.append(story_user)
 
-            for story in all_stories:
-                try:
-                    expiry = datetime.fromisoformat(
-                        str(story.get("expires_at")).replace("Z", "+00:00")
-                    )
-                    if expiry >= now_utc:
-                        valid_stories.append(story)
-                except Exception:
-                    continue
+        if not story_users:
+            st.info("No active Stories yet. Share the first one!")
 
-            # One story circle per member, arranged horizontally
-            unique_users = []
-            story_circles = []
+        for story_user in story_users:
+            profile = get_profile(story_user)
+            user_stories = [
+                item for item in active_stories
+                if str(item.get("user_id")) == str(story_user)
+            ]
 
-            for story in valid_stories:
-                if story.get("user_id") not in unique_users:
-                    unique_users.append(story.get("user_id"))
-                    story_circles.append(story)
+            col1, col2, col3 = st.columns([1, 3, 2])
 
-            if not story_circles:
-                st.info("No active stories. Stories expire after 24 hours.")
+            with col1:
+                show_avatar(profile, 50)
 
-            else:
-                story_columns = st.columns(min(4, len(story_circles)))
+            with col2:
+                st.write(f"**{display_name(profile)}**")
+                st.caption(f"{len(user_stories)} active Story/Stories")
 
-                for index, story in enumerate(story_circles):
-                    profile = get_profile(story.get("user_id"))
-                    column = story_columns[index % len(story_columns)]
-
-                    with column:
-                        # FIX: resolve avatar path; fall back to initials
-                        if not show_avatar(profile, 60):
-                            st.markdown(
-                                f"**{esc(get_name(profile)[:2].upper())}**"
-                            )
-
-                        st.caption(get_name(profile))
-
-                        if st.button(
-                            "View",
-                            key=f"view_story_{story.get('user_id')}",
-                            use_container_width=True,
-                        ):
-                            st.session_state["eco_story_user"] = (
-                                story.get("user_id")
-                            )
-                            st.rerun()
-
-            # Story viewer
-            if st.session_state.get("eco_story_user"):
-                story_user = st.session_state["eco_story_user"]
-                story_profile = get_profile(story_user)
-
-                st.divider()
-                st.markdown(
-                    f"#### 📸 {esc(get_name(story_profile))}'s Updates"
-                )
-
+            with col3:
                 if st.button(
-                    "✕ Close Viewer",
-                    key="close_story_viewer",
+                    "View Stories",
+                    key=f"eco_new_view_stories_{story_user}",
+                    use_container_width=True,
                 ):
-                    st.session_state["eco_story_user"] = None
+                    st.session_state["eco_new_story_user"] = story_user
                     st.rerun()
 
-                user_stories = [
-                    story for story in valid_stories
-                    if str(story.get("user_id")) == str(story_user)
-                ]
+            st.divider()
 
-                for story in user_stories:
-                    if str(story_user) != str(uid):
-                        try:
-                            existing_view = (
-                                supabase.table("story_views")
-                                .select("id")
-                                .eq("story_id", story.get("id"))
-                                .eq("viewer_id", uid)
-                                .execute()
-                                .data or []
-                            )
+        # Story viewer
+        story_user = st.session_state.get("eco_new_story_user")
 
-                            if not existing_view:
-                                supabase.table("story_views").insert({
-                                    "story_id": story.get("id"),
-                                    "viewer_id": uid,
-                                }).execute()
+        if story_user:
+            st.markdown("### Story viewer")
 
-                        except Exception:
-                            pass
+            if st.button(
+                "← Close Stories",
+                key="eco_new_close_stories",
+            ):
+                st.session_state["eco_new_story_user"] = None
+                st.rerun()
 
-                    if story.get("caption"):
-                        st.write(esc(story.get("caption")))
+            story_profile = get_profile(story_user)
+            st.write(f"**{display_name(story_profile)}**")
 
-                    media_url = storage_url(story.get("media_url"))
+            selected_stories = [
+                item for item in active_stories
+                if str(item.get("user_id")) == str(story_user)
+            ]
 
-                    if media_url:
-                        try:
-                            if story.get("media_type") == "video":
-                                st.video(media_url)
-                            else:
-                                st.image(media_url, width=320)
-                        except Exception:
-                            st.caption("Media unavailable")
+            for story in selected_stories:
+                if story.get("caption"):
+                    st.write(story["caption"])
 
-                    if str(story_user) == str(uid):
-                        try:
-                            views = (
-                                supabase.table("story_views")
-                                .select("*")
-                                .eq("story_id", story.get("id"))
-                                .execute()
-                                .data or []
-                            )
+                media_url = storage_url(story.get("media_url"))
 
-                            st.caption(f"👁️ {len(views)} views")
+                if media_url:
+                    try:
+                        if story.get("media_type") == "video":
+                            st.video(media_url)
+                        else:
+                            st.image(media_url, use_container_width=True)
+                    except Exception:
+                        st.caption("Story media could not be displayed.")
 
-                            for view in views:
-                                viewer = get_profile(view.get("viewer_id"))
-                                st.write(
-                                    f"👁️ {esc(get_name(viewer))}"
-                                )
-
-                        except Exception:
-                            st.caption("Views unavailable")
-                    else:
-                        st.caption("👁️ Views visible only to owner")
-
-                    st.divider()
-
-        # ---------- PROFILE ----------
-        elif nav == "Profile":
-            my_profile = get_profile(uid)
-
-            st.markdown(
-                '<div class="card" style="text-align:center;">',
-                unsafe_allow_html=True,
-            )
-
-            # FIX: this was the line that crashed the app
-            show_avatar(my_profile, 110)
-
-            st.markdown(
-                f"### {esc(get_name(my_profile))}",
-                unsafe_allow_html=True,
-            )
-
-            st.write(f"**{esc(my_profile.get('display_name') or '')}**")
-            st.write(esc(my_profile.get("bio") or "No bio yet"))
-
-            st.write(
-                f"📍 {esc(my_profile.get('location') or '—')} • "
-                f"{esc(my_profile.get('country_of_origin') or '')}"
-            )
-
-            if my_profile.get("interests"):
-                st.write(f"✨ Interests: {esc(my_profile.get('interests'))}")
-
-            show_social_handles(my_profile)
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            st.markdown("**Find Member**")
-
-            profile_query = st.text_input(
-                "Search @username",
-                key="profile_search",
-                placeholder="@roy",
-            )
-
-            if profile_query.strip():
-                for profile in search_by_username(profile_query):
-                    if str(profile.get("user_id")) == str(uid):
-                        continue
-
-                    if st.button(
-                        f"👤 {get_name(profile)} — View Profile",
-                        key=f"prof_{profile.get('user_id')}",
-                    ):
-                        st.session_state["eco_profile_view"] = (
-                            profile.get("user_id")
+                if str(story_user) != str(uid):
+                    try:
+                        already_viewed = (
+                            supabase.table("story_views")
+                            .select("id")
+                            .eq("story_id", story.get("id"))
+                            .eq("viewer_id", uid)
+                            .execute()
+                            .data or []
                         )
-                        st.rerun()
 
-    # ---------- BOTTOM NAV ----------
-    st.markdown('<div class="bottom-bar"></div>', unsafe_allow_html=True)
+                        if not already_viewed:
+                            supabase.table("story_views").insert({
+                                "story_id": story.get("id"),
+                                "viewer_id": uid,
+                            }).execute()
+                    except Exception:
+                        pass
 
-    nav1, nav2, nav3, nav4 = st.columns(4)
-
-    with nav1:
-        if st.button(
-            "💬\nChats",
-            key="nav_chats",
-            use_container_width=True,
-        ):
-            go("Chats")
-
-    with nav2:
-        if st.button(
-            "📸\nUpdates",
-            key="nav_updates",
-            use_container_width=True,
-        ):
-            go("Updates")
-
-    with nav3:
-        if st.button(
-            "👥\nChat Rooms",
-            key="nav_rooms",
-            use_container_width=True,
-        ):
-            go("Chat Rooms")
-
-    with nav4:
-        if st.button(
-            "👤\nProfile",
-            key="nav_profile",
-            use_container_width=True,
-        ):
-            go("Profile")
+                st.divider()
