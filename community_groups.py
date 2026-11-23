@@ -8,11 +8,11 @@ from datetime import datetime, timedelta, timezone
 def render_community_groups_page(*args, **kwargs):
     supabase = (
         kwargs.get("supabase")
-        or (args[0] if len(args) >= 1 else st.session_state.get("supabase_client"))
+        or (args[0] if args else st.session_state.get("supabase_client"))
     )
     uid = (
         kwargs.get("user_id")
-        or (args[1] if len(args) >= 2 else None)
+        or (args[1] if len(args) > 1 else None)
         or st.session_state.get("uid")
         or st.session_state.get("user_id")
     )
@@ -31,7 +31,7 @@ def render_community_groups_page(*args, **kwargs):
     BUCKET = "community-media"
 
     # --------------------------------------------------
-    # STATE
+    # SESSION STATE
     # --------------------------------------------------
     defaults = {
         "eco_new_nav": "Chats",
@@ -40,7 +40,8 @@ def render_community_groups_page(*args, **kwargs):
         "eco_new_profile": None,
         "eco_new_notice": None,
         "eco_new_story_user": None,
-        "eco_new_search": "",
+        "eco_new_delete_chat": None,
+        "eco_new_delete_story": None,
     }
 
     for key, value in defaults.items():
@@ -48,52 +49,61 @@ def render_community_groups_page(*args, **kwargs):
             st.session_state[key] = value
 
     # --------------------------------------------------
-    # STYLING
+    # DESIGN
     # --------------------------------------------------
     st.markdown("""
     <style>
     .block-container {
-        max-width: 650px !important;
+        max-width: 720px !important;
         padding-top: 1rem !important;
         padding-bottom: 5rem !important;
     }
     .community-heading {
-        background: #075E54;
+        background: linear-gradient(120deg, #075E54, #087F70);
         color: white;
-        padding: 20px;
-        border-radius: 16px;
-        margin: 10px 0 16px 0;
+        padding: 23px;
+        border-radius: 18px;
+        margin: 10px 0 18px 0;
     }
     .community-heading h1 {
         color: white !important;
-        font-size: 27px;
+        font-size: 29px;
         margin: 0;
+        font-weight: 750;
     }
     .community-heading p {
         color: #D9FDD3;
         margin: 5px 0 0 0;
         font-size: 14px;
     }
-    .community-card {
-        background: white;
-        padding: 14px;
-        border-radius: 14px;
-        border: 1px solid #e7e7e7;
-        margin: 8px 0;
+    .section-heading {
+        font-size: 23px;
+        font-weight: 750;
+        margin: 4px 0 2px 0;
+    }
+    .section-subtitle {
+        color: #75818a;
+        font-size: 13px;
+        margin-bottom: 15px;
+    }
+    .chat-card {
+        padding: 12px 4px;
+        border-bottom: 1px solid rgba(128,128,128,.2);
     }
     .message-mine {
         background: #D9FDD3;
-        padding: 11px;
-        border-radius: 13px 13px 0 13px;
-        margin: 8px 0 8px 35px;
+        color: #173b2c;
+        padding: 11px 13px;
+        border-radius: 14px 14px 3px 14px;
+        margin: 8px 0 8px 38px;
         overflow-wrap: anywhere;
     }
     .message-other {
-        background: white;
-        padding: 11px;
-        border-radius: 13px 13px 13px 0;
-        border: 1px solid #eeeeee;
-        margin: 8px 35px 8px 0;
+        background: #f0f2f3;
+        color: #17212b;
+        padding: 11px 13px;
+        border-radius: 14px 14px 14px 3px;
+        margin: 8px 38px 8px 0;
         overflow-wrap: anywhere;
     }
     .message-time {
@@ -102,15 +112,20 @@ def render_community_groups_page(*args, **kwargs):
         text-align: right;
         margin-top: 5px;
     }
-    .community-muted {
-        color: #667781;
-        font-size: 12px;
+    .story-caption {
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(128,128,128,.10);
+        margin: 8px 0;
+    }
+    div.stButton > button {
+        border-radius: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
 
     # --------------------------------------------------
-    # HELPERS
+    # GENERAL HELPERS
     # --------------------------------------------------
     def esc(value):
         return html.escape(str(value or ""), quote=True)
@@ -147,58 +162,55 @@ def render_community_groups_page(*args, **kwargs):
             )
             if isinstance(result, dict):
                 return result.get("signedURL") or result.get("signedUrl") or ""
-            return ""
         except Exception:
             try:
                 return supabase.storage.from_(BUCKET).get_public_url(str(path))
             except Exception:
-                return ""
+                pass
+        return ""
 
     def upload_media(file, folder):
         if file is None:
             return None
-
         try:
             extension = (
                 file.name.rsplit(".", 1)[-1].lower()
                 if "." in file.name else "jpg"
             )
-            path = (
-                f"{uid}/{folder}/"
-                f"{uuid.uuid4().hex}.{extension}"
-            )
-
+            path = f"{uid}/{folder}/{uuid.uuid4().hex}.{extension}"
             supabase.storage.from_(BUCKET).upload(
                 path,
                 file.getvalue(),
                 {"content-type": file.type},
             )
             return path
-
         except Exception as error:
             st.error(f"Upload failed: {error}")
             return None
 
-    def show_avatar(profile, width=65):
-        path = profile.get("avatar_url")
-        url = storage_url(path)
-
+    def show_avatar(profile, width=55):
+        url = storage_url(profile.get("avatar_url"))
         if url:
             try:
                 st.image(url, width=width)
                 return
             except Exception:
                 pass
+        name = display_name(profile).replace("@", "")
+        st.markdown(f"**{name[:2].upper() or 'U'}**")
 
-        name = display_name(profile)
-        initials = name.replace("@", "")[:2].upper() or "U"
-        st.markdown(f"**{initials}**")
+    def format_time(value):
+        try:
+            return datetime.fromisoformat(
+                str(value).replace("Z", "+00:00")
+            ).astimezone().strftime("%d %b · %H:%M")
+        except Exception:
+            return ""
 
     def search_members(query, limit=25):
         query = (query or "").strip().replace("@", "")
         if not query:
             return []
-
         try:
             result = (
                 supabase.table("member_profiles")
@@ -208,7 +220,6 @@ def render_community_groups_page(*args, **kwargs):
                 .execute()
             )
             profiles = result.data or []
-
             profiles.sort(
                 key=lambda p: (
                     not (p.get("username") or "").lower().startswith(
@@ -218,74 +229,106 @@ def render_community_groups_page(*args, **kwargs):
                 )
             )
             return profiles
-
         except Exception:
             return []
 
+    # --------------------------------------------------
+    # CHAT HELPERS
+    # --------------------------------------------------
     def get_other_user(conversation):
         if str(conversation.get("user_one_id")) == str(uid):
             return conversation.get("user_two_id")
         return conversation.get("user_one_id")
 
+    def get_conversation(other_user_id):
+        """Find an existing private conversation or create one."""
+        existing = (
+            supabase.table("direct_conversations")
+            .select("*")
+            .or_(
+                f"and(user_one_id.eq.{uid},user_two_id.eq.{other_user_id}),"
+                f"and(user_one_id.eq.{other_user_id},user_two_id.eq.{uid})"
+            )
+            .execute()
+            .data or []
+        )
+
+        if existing:
+            existing.sort(
+                key=lambda item: item.get("created_at") or "",
+                reverse=True,
+            )
+            return existing[0]["id"]
+
+        created = (
+            supabase.table("direct_conversations")
+            .insert({
+                "user_one_id": uid,
+                "user_two_id": other_user_id,
+            })
+            .execute()
+        )
+        return created.data[0]["id"]
+
     def open_chat(other_user_id):
         if not other_user_id or str(other_user_id) == str(uid):
             return
-
         try:
-            existing = (
-                supabase.table("direct_conversations")
-                .select("*")
-                .or_(
-                    f"and(user_one_id.eq.{uid},user_two_id.eq.{other_user_id}),"
-                    f"and(user_one_id.eq.{other_user_id},user_two_id.eq.{uid})"
-                )
-                .execute()
-                .data or []
-            )
+            conversation_id = get_conversation(other_user_id)
 
-            if existing:
-                conversation_id = existing[0]["id"]
-            else:
-                created = (
-                    supabase.table("direct_conversations")
-                    .insert({
-                        "user_one_id": uid,
-                        "user_two_id": other_user_id,
-                    })
-                    .execute()
-                )
-                conversation_id = created.data[0]["id"]
+            # Remove this user's hidden status when they start chatting again.
+            supabase.table("hidden_conversations").delete().eq(
+                "user_id", uid
+            ).eq("conversation_id", conversation_id).execute()
 
             st.session_state["eco_new_chat_id"] = conversation_id
             st.session_state["eco_new_chat_user"] = other_user_id
             st.session_state["eco_new_profile"] = None
             st.session_state["eco_new_nav"] = "Chats"
             st.rerun()
-
         except Exception as error:
             st.error(f"Could not open chat: {error}")
 
-    def back_to_chats():
-        st.session_state["eco_new_chat_id"] = None
-        st.session_state["eco_new_chat_user"] = None
-        st.session_state["eco_new_profile"] = None
-        st.rerun()
+    def get_hidden_conversation_ids():
+        result = (
+            supabase.table("hidden_conversations")
+            .select("conversation_id")
+            .eq("user_id", uid)
+            .execute()
+        )
+        return {
+            str(row.get("conversation_id"))
+            for row in (result.data or [])
+        }
 
-    def format_time(value):
-        try:
-            return datetime.fromisoformat(
-                str(value).replace("Z", "+00:00")
-            ).astimezone().strftime("%d %b, %H:%M")
-        except Exception:
-            return ""
+    def hide_conversation(other_user_id):
+        """Hide all duplicate conversations with this person for this user."""
+        conversations = (
+            supabase.table("direct_conversations")
+            .select("id,user_one_id,user_two_id")
+            .or_(
+                f"and(user_one_id.eq.{uid},user_two_id.eq.{other_user_id}),"
+                f"and(user_one_id.eq.{other_user_id},user_two_id.eq.{uid})"
+            )
+            .execute()
+            .data or []
+        )
+
+        for conversation in conversations:
+            supabase.table("hidden_conversations").upsert(
+                {
+                    "user_id": uid,
+                    "conversation_id": conversation["id"],
+                },
+                on_conflict="user_id,conversation_id",
+            ).execute()
 
     # --------------------------------------------------
-    # TOP-LEVEL NAVIGATION
+    # TOP HEADER
     # --------------------------------------------------
     st.button(
         "← Back to Dashboard",
         key="eco_new_back_dashboard",
-        use_container_width=False,
         on_click=lambda: st.session_state.update({
             kwargs.get("dashboard_state_key", "page"):
                 kwargs.get("dashboard_page", "Dashboard"),
@@ -294,9 +337,6 @@ def render_community_groups_page(*args, **kwargs):
             "eco_new_profile": None,
         }),
     )
-
-    # If your main app uses a different dashboard state variable,
-    # pass dashboard_state_key and dashboard_page when calling this function.
 
     st.markdown("""
     <div class="community-heading">
@@ -318,7 +358,7 @@ def render_community_groups_page(*args, **kwargs):
         profile = get_profile(profile_target)
 
         st.button(
-            "← Back to Community",
+            "← Back",
             key="eco_new_profile_back",
             on_click=lambda: st.session_state.update({
                 "eco_new_profile": None
@@ -326,7 +366,6 @@ def render_community_groups_page(*args, **kwargs):
         )
 
         st.divider()
-
         col1, col2 = st.columns([1, 3])
 
         with col1:
@@ -336,20 +375,14 @@ def render_community_groups_page(*args, **kwargs):
             st.subheader(display_name(profile))
             st.caption(profile.get("display_name") or "Community member")
 
-            if profile.get("username"):
-                st.caption("@" + profile["username"])
-
         st.divider()
         st.markdown("### About")
-
         st.write(profile.get("bio") or "No About information has been added yet.")
 
         if profile.get("location"):
             st.write(f"📍 Location: {profile['location']}")
-
         if profile.get("country_of_origin"):
             st.write(f"🌍 Country: {profile['country_of_origin']}")
-
         if profile.get("interests"):
             st.write(f"✨ Interests: {profile['interests']}")
 
@@ -372,10 +405,8 @@ def render_community_groups_page(*args, **kwargs):
                 use_container_width=True,
             ):
                 open_chat(profile_target)
-
         else:
             st.caption("This is your profile.")
-
             st.divider()
             st.markdown("### Edit your profile")
 
@@ -384,48 +415,38 @@ def render_community_groups_page(*args, **kwargs):
                 type=["jpg", "jpeg", "png", "webp"],
                 key="eco_new_avatar_upload",
             )
-
             display_name_input = st.text_input(
                 "Display name",
                 value=profile.get("display_name") or "",
                 key="eco_new_display_name",
             )
-
             bio_input = st.text_area(
                 "About",
                 value=profile.get("bio") or "",
                 key="eco_new_bio",
             )
-
             location_input = st.text_input(
                 "Location",
                 value=profile.get("location") or "",
                 key="eco_new_location",
             )
-
             interests_input = st.text_input(
                 "Interests",
                 value=profile.get("interests") or "",
                 key="eco_new_interests",
             )
 
-            if st.button(
-                "Save Profile",
-                key="eco_new_save_profile",
-                use_container_width=True,
-            ):
+            if st.button("Save Profile", key="eco_new_save_profile"):
                 update_data = {
                     "display_name": display_name_input.strip(),
                     "bio": bio_input.strip(),
                     "location": location_input.strip(),
                     "interests": interests_input.strip(),
                 }
-
                 if avatar_file:
                     avatar_path = upload_media(avatar_file, "avatars")
                     if avatar_path:
                         update_data["avatar_url"] = avatar_path
-
                 try:
                     (
                         supabase.table("member_profiles")
@@ -437,11 +458,10 @@ def render_community_groups_page(*args, **kwargs):
                     st.rerun()
                 except Exception as error:
                     st.error(f"Could not update profile: {error}")
-
         return
 
     # --------------------------------------------------
-    # INDIVIDUAL CHAT SCREEN
+    # OPEN CHAT SCREEN
     # --------------------------------------------------
     selected_chat = st.session_state.get("eco_new_chat_id")
 
@@ -450,26 +470,64 @@ def render_community_groups_page(*args, **kwargs):
         other_profile = get_profile(other_id)
 
         st.button(
-            "← Back to Chats",
+            "← EcoLoop Connect",
             key="eco_new_chat_back",
-            on_click=back_to_chats,
+            on_click=lambda: st.session_state.update({
+                "eco_new_chat_id": None,
+                "eco_new_chat_user": None,
+                "eco_new_delete_chat": None,
+            }),
         )
 
         col1, col2 = st.columns([1, 4])
-
         with col1:
             show_avatar(other_profile, 55)
-
         with col2:
             st.markdown(f"**{esc(display_name(other_profile))}**")
-            if st.button(
-                "View Profile",
-                key="eco_new_chat_view_profile",
-            ):
+            if st.button("View Profile", key="eco_new_chat_view_profile"):
                 st.session_state["eco_new_profile"] = other_id
                 st.rerun()
 
         st.divider()
+
+        if st.button("🗑️ Delete Chat", key="eco_new_delete_chat_button"):
+            st.session_state["eco_new_delete_chat"] = selected_chat
+            st.rerun()
+
+        if st.session_state.get("eco_new_delete_chat") == selected_chat:
+            st.warning(
+                "This hides the chat from your account only. "
+                "The other person keeps their conversation."
+            )
+            yes_col, no_col = st.columns(2)
+
+            with yes_col:
+                if st.button(
+                    "Confirm Delete",
+                    key="eco_new_confirm_delete_chat",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    try:
+                        hide_conversation(other_id)
+                        st.session_state["eco_new_chat_id"] = None
+                        st.session_state["eco_new_chat_user"] = None
+                        st.session_state["eco_new_delete_chat"] = None
+                        st.session_state["eco_new_notice"] = (
+                            "Chat removed from your list."
+                        )
+                        st.rerun()
+                    except Exception as error:
+                        st.error(f"Could not delete chat: {error}")
+
+            with no_col:
+                if st.button(
+                    "Cancel",
+                    key="eco_new_cancel_delete_chat",
+                    use_container_width=True,
+                ):
+                    st.session_state["eco_new_delete_chat"] = None
+                    st.rerun()
 
         try:
             messages = (
@@ -488,19 +546,8 @@ def render_community_groups_page(*args, **kwargs):
             mine = str(message.get("sender_id")) == str(uid)
             css_class = "message-mine" if mine else "message-other"
 
-            sender_profile = (
-                get_profile(message.get("sender_id"))
-                if not mine else {}
-            )
-
-            sender_label = (
-                f'<div><b>{esc(display_name(sender_profile))}</b></div>'
-                if not mine else ""
-            )
-
             st.markdown(
                 f'<div class="{css_class}">'
-                f'{sender_label}'
                 f'{esc(message.get("message_text") or "")}'
                 f'<div class="message-time">'
                 f'{format_time(message.get("created_at"))}'
@@ -543,11 +590,9 @@ def render_community_groups_page(*args, **kwargs):
             use_container_width=True,
         ):
             attachment_path = None
-
             if attachment_file:
                 attachment_path = upload_media(
-                    attachment_file,
-                    "direct-messages",
+                    attachment_file, "direct-messages"
                 )
 
             if message_text.strip() or attachment_path:
@@ -564,22 +609,19 @@ def render_community_groups_page(*args, **kwargs):
                             attachment_file.name if attachment_file else None
                         ),
                     }).execute()
-
                     st.rerun()
-
                 except Exception as error:
                     st.error(f"Message could not be sent: {error}")
             else:
                 st.warning("Write a message or attach a file.")
-
         return
 
     # --------------------------------------------------
-    # COMMUNITY NAVIGATION
+    # MAIN NAVIGATION
     # --------------------------------------------------
     selected_nav = st.radio(
         "Community sections",
-        ["Chats", "Stories"],
+        ["EcoLoop Connect", "Stories"],
         horizontal=True,
         key="eco_new_nav",
         label_visibility="collapsed",
@@ -588,26 +630,30 @@ def render_community_groups_page(*args, **kwargs):
     st.divider()
 
     # --------------------------------------------------
-    # CHATS
+    # ECOLOOP CONNECT
     # --------------------------------------------------
-    if selected_nav == "Chats":
-        st.markdown("### 💬 Chats")
+    if selected_nav == "EcoLoop Connect":
+        st.markdown(
+            '<div class="section-heading">EcoLoop Connect</div>'
+            '<div class="section-subtitle">'
+            'Your private space to connect with the EcoLoop community.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
         search = st.text_input(
-            "Search members by username",
-            placeholder="Search using @username...",
+            "Find people",
+            placeholder="Search by username...",
             key="eco_new_member_search",
         )
 
         if search.strip():
             results = search_members(search)
-
             if not results:
                 st.info("No matching members found.")
 
             for profile in results:
                 member_id = profile.get("user_id")
-
                 if str(member_id) == str(uid):
                     continue
 
@@ -615,28 +661,24 @@ def render_community_groups_page(*args, **kwargs):
 
                 with col1:
                     show_avatar(profile, 45)
-
                 with col2:
                     st.write(f"**{display_name(profile)}**")
                     st.caption(profile.get("display_name") or "Community member")
-
                 with col3:
                     if st.button(
-                        "View Profile",
+                        "Profile",
                         key=f"eco_new_search_profile_{member_id}",
                     ):
                         st.session_state["eco_new_profile"] = member_id
                         st.rerun()
-
                     if st.button(
                         "Message",
                         key=f"eco_new_search_message_{member_id}",
                     ):
                         open_chat(member_id)
-
                 st.divider()
 
-        st.markdown("### Your conversations")
+        st.markdown("### Recent conversations")
 
         try:
             conversations = (
@@ -646,15 +688,23 @@ def render_community_groups_page(*args, **kwargs):
                 .execute()
                 .data or []
             )
+            hidden_ids = get_hidden_conversation_ids()
         except Exception as error:
             conversations = []
-            st.error(f"Could not load chats: {error}")
+            hidden_ids = set()
+            st.error(f"Could not load conversations: {error}")
 
-        conversation_items = []
+        # One visible conversation per other user.
+        grouped = {}
 
         for conversation in conversations:
+            conversation_id = str(conversation.get("id"))
+            if conversation_id in hidden_ids:
+                continue
+
             other_id = get_other_user(conversation)
-            profile = get_profile(other_id)
+            if not other_id:
+                continue
 
             try:
                 latest = (
@@ -670,35 +720,50 @@ def render_community_groups_page(*args, **kwargs):
                 latest = []
 
             last_message = latest[0] if latest else {}
-            preview = (
-                last_message.get("message_text")
-                or ("📷 Attachment" if last_message.get("attachment_path") else "No messages yet")
+            activity = (
+                last_message.get("created_at")
+                or conversation.get("created_at")
+                or ""
             )
 
-            conversation_items.append({
+            item = {
                 "id": conversation.get("id"),
                 "other_id": other_id,
-                "profile": profile,
-                "preview": preview,
-                "created_at": last_message.get("created_at") or "",
-            })
+                "profile": get_profile(other_id),
+                "preview": (
+                    last_message.get("message_text")
+                    or (
+                        "📎 Attachment"
+                        if last_message.get("attachment_path")
+                        else "Start a conversation"
+                    )
+                ),
+                "activity": activity,
+            }
 
-        conversation_items.sort(
-            key=lambda item: item.get("created_at") or "",
+            key = str(other_id)
+            previous = grouped.get(key)
+
+            if previous is None or activity > previous["activity"]:
+                grouped[key] = item
+
+        chat_items = list(grouped.values())
+        chat_items.sort(
+            key=lambda item: item["activity"],
             reverse=True,
         )
 
-        if not conversation_items:
+        if not chat_items:
             st.info(
-                "You haven't started any conversations yet. "
-                "Search for a username above to find someone and start chatting."
+                "Your conversations will appear here. "
+                "Search for a username above to start connecting."
             )
 
-        for item in conversation_items:
+        for item in chat_items:
             col1, col2, col3 = st.columns([1, 3, 2])
 
             with col1:
-                show_avatar(item["profile"], 48)
+                show_avatar(item["profile"], 50)
 
             with col2:
                 st.write(f"**{display_name(item['profile'])}**")
@@ -706,7 +771,7 @@ def render_community_groups_page(*args, **kwargs):
 
             with col3:
                 if st.button(
-                    "Open Chat",
+                    "Open",
                     key=f"eco_new_open_{item['id']}",
                     use_container_width=True,
                 ):
@@ -715,17 +780,52 @@ def render_community_groups_page(*args, **kwargs):
                     st.rerun()
 
                 if st.button(
-                    "Profile",
-                    key=f"eco_new_open_profile_{item['id']}",
+                    "Delete",
+                    key=f"eco_new_hide_{item['id']}",
                     use_container_width=True,
                 ):
-                    st.session_state["eco_new_profile"] = item["other_id"]
+                    st.session_state["eco_new_delete_chat"] = item["id"]
+                    st.session_state["eco_new_delete_chat_user"] = item["other_id"]
                     st.rerun()
+
+            if st.session_state.get("eco_new_delete_chat") == item["id"]:
+                st.warning(
+                    f"Hide your conversation with "
+                    f"{display_name(item['profile'])}?"
+                )
+                yes_col, no_col = st.columns(2)
+
+                with yes_col:
+                    if st.button(
+                        "Confirm",
+                        key=f"eco_new_confirm_list_delete_{item['id']}",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        try:
+                            hide_conversation(item["other_id"])
+                            st.session_state["eco_new_delete_chat"] = None
+                            st.session_state["eco_new_delete_chat_user"] = None
+                            st.session_state["eco_new_notice"] = (
+                                "Chat removed from your list."
+                            )
+                            st.rerun()
+                        except Exception as error:
+                            st.error(f"Could not hide chat: {error}")
+
+                with no_col:
+                    if st.button(
+                        "Cancel",
+                        key=f"eco_new_cancel_list_delete_{item['id']}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["eco_new_delete_chat"] = None
+                        st.session_state["eco_new_delete_chat_user"] = None
+                        st.rerun()
 
             st.divider()
 
         st.markdown("### Your profile")
-
         if st.button(
             "👤 View and edit my profile",
             key="eco_new_my_profile",
@@ -738,9 +838,15 @@ def render_community_groups_page(*args, **kwargs):
     # STORIES
     # --------------------------------------------------
     elif selected_nav == "Stories":
-        st.markdown("### 📸 Stories")
+        st.markdown(
+            '<div class="section-heading">Stories</div>'
+            '<div class="section-subtitle">'
+            'Share moments with the community. Stories disappear after 24 hours.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
-        with st.expander("➕ Share a Story", expanded=False):
+        with st.expander("＋ Share a Story", expanded=False):
             story_file = st.file_uploader(
                 "Choose a photo or video",
                 type=["jpg", "jpeg", "png", "webp", "mp4", "mov"],
@@ -761,7 +867,6 @@ def render_community_groups_page(*args, **kwargs):
                     st.warning("Choose a photo or video first.")
                 else:
                     media_path = upload_media(story_file, "stories")
-
                     if media_path:
                         try:
                             supabase.table("stories").insert({
@@ -778,13 +883,12 @@ def render_community_groups_page(*args, **kwargs):
                                     + timedelta(hours=24)
                                 ).isoformat(),
                             }).execute()
-
                             st.success("Your Story has been posted.")
                             st.rerun()
-
                         except Exception as error:
                             st.error(f"Could not post Story: {error}")
 
+        # Load active stories.
         try:
             stories = (
                 supabase.table("stories")
@@ -811,20 +915,21 @@ def render_community_groups_page(*args, **kwargs):
             except Exception:
                 continue
 
+        # Group active stories by owner.
         story_users = []
         for story in active_stories:
-            story_user = story.get("user_id")
-            if story_user not in story_users:
-                story_users.append(story_user)
+            owner = str(story.get("user_id"))
+            if owner not in story_users:
+                story_users.append(owner)
 
         if not story_users:
             st.info("No active Stories yet. Share the first one!")
 
-        for story_user in story_users:
-            profile = get_profile(story_user)
-            user_stories = [
-                item for item in active_stories
-                if str(item.get("user_id")) == str(story_user)
+        for story_owner in story_users:
+            profile = get_profile(story_owner)
+            owner_stories = [
+                story for story in active_stories
+                if str(story.get("user_id")) == story_owner
             ]
 
             col1, col2, col3 = st.columns([1, 3, 2])
@@ -834,27 +939,32 @@ def render_community_groups_page(*args, **kwargs):
 
             with col2:
                 st.write(f"**{display_name(profile)}**")
-                st.caption(f"{len(user_stories)} active Story/Stories")
+                st.caption(
+                    f"{len(owner_stories)} active "
+                    f"Story/Stories"
+                )
 
             with col3:
                 if st.button(
-                    "View Stories",
-                    key=f"eco_new_view_stories_{story_user}",
+                    "View",
+                    key=f"eco_new_view_stories_{story_owner}",
                     use_container_width=True,
                 ):
-                    st.session_state["eco_new_story_user"] = story_user
+                    st.session_state["eco_new_story_user"] = story_owner
                     st.rerun()
 
             st.divider()
 
-        # Story viewer
+        # --------------------------------------------------
+        # STORY VIEWER
+        # --------------------------------------------------
         story_user = st.session_state.get("eco_new_story_user")
 
         if story_user:
             st.markdown("### Story viewer")
 
             if st.button(
-                "← Close Stories",
+                "← Back to Stories",
                 key="eco_new_close_stories",
             ):
                 st.session_state["eco_new_story_user"] = None
@@ -864,13 +974,23 @@ def render_community_groups_page(*args, **kwargs):
             st.write(f"**{display_name(story_profile)}**")
 
             selected_stories = [
-                item for item in active_stories
-                if str(item.get("user_id")) == str(story_user)
+                story for story in active_stories
+                if str(story.get("user_id")) == str(story_user)
             ]
 
+            if not selected_stories:
+                st.info("This user's active Stories have expired or been deleted.")
+
             for story in selected_stories:
+                story_id = story.get("id")
+                is_owner = str(story_user) == str(uid)
+
                 if story.get("caption"):
-                    st.write(story["caption"])
+                    st.markdown(
+                        f'<div class="story-caption">'
+                        f'{esc(story.get("caption"))}</div>',
+                        unsafe_allow_html=True,
+                    )
 
                 media_url = storage_url(story.get("media_url"))
 
@@ -883,12 +1003,17 @@ def render_community_groups_page(*args, **kwargs):
                     except Exception:
                         st.caption("Story media could not be displayed.")
 
-                if str(story_user) != str(uid):
+                st.caption(
+                    f"Posted {format_time(story.get('created_at'))}"
+                )
+
+                # Record views by other users.
+                if not is_owner:
                     try:
                         already_viewed = (
                             supabase.table("story_views")
                             .select("id")
-                            .eq("story_id", story.get("id"))
+                            .eq("story_id", story_id)
                             .eq("viewer_id", uid)
                             .execute()
                             .data or []
@@ -896,10 +1021,143 @@ def render_community_groups_page(*args, **kwargs):
 
                         if not already_viewed:
                             supabase.table("story_views").insert({
-                                "story_id": story.get("id"),
+                                "story_id": story_id,
                                 "viewer_id": uid,
                             }).execute()
                     except Exception:
                         pass
+
+                # Story owner can see viewers and delete their story.
+                if is_owner:
+                    try:
+                        views = (
+                            supabase.table("story_views")
+                            .select("viewer_id")
+                            .eq("story_id", story_id)
+                            .execute()
+                            .data or []
+                        )
+
+                        viewer_ids = list(dict.fromkeys(
+                            row.get("viewer_id")
+                            for row in views
+                            if row.get("viewer_id")
+                        ))
+
+                        with st.expander(
+                            f"👁️ Viewed by {len(viewer_ids)} people"
+                        ):
+                            if not viewer_ids:
+                                st.caption("No views yet.")
+                            for viewer_id in viewer_ids:
+                                viewer_profile = get_profile(viewer_id)
+                                st.write(display_name(viewer_profile))
+                    except Exception as error:
+                        st.caption(f"Could not load viewers: {error}")
+
+                    if st.button(
+                        "🗑️ Delete this Story",
+                        key=f"eco_new_delete_story_{story_id}",
+                    ):
+                        st.session_state["eco_new_delete_story"] = story_id
+                        st.rerun()
+
+                    if st.session_state.get("eco_new_delete_story") == story_id:
+                        st.warning("Are you sure you want to delete this Story?")
+                        yes_col, no_col = st.columns(2)
+
+                        with yes_col:
+                            if st.button(
+                                "Confirm Delete",
+                                key=f"eco_new_confirm_story_{story_id}",
+                                type="primary",
+                                use_container_width=True,
+                            ):
+                                try:
+                                    (
+                                        supabase.table("stories")
+                                        .delete()
+                                        .eq("id", story_id)
+                                        .eq("user_id", uid)
+                                        .execute()
+                                    )
+                                    st.session_state["eco_new_delete_story"] = None
+                                    st.session_state["eco_new_notice"] = (
+                                        "Your Story has been deleted."
+                                    )
+                                    st.rerun()
+                                except Exception as error:
+                                    st.error(f"Could not delete Story: {error}")
+
+                        with no_col:
+                            if st.button(
+                                "Cancel",
+                                key=f"eco_new_cancel_story_{story_id}",
+                                use_container_width=True,
+                            ):
+                                st.session_state["eco_new_delete_story"] = None
+                                st.rerun()
+
+                # Other viewers can reply privately to the story owner.
+                else:
+                    st.markdown("#### Reply privately")
+
+                    reply_text = st.text_input(
+                        "Your reply",
+                        placeholder="Send a private reply...",
+                        key=f"eco_new_story_reply_{story_id}",
+                        label_visibility="collapsed",
+                    )
+
+                    if st.button(
+                        "Send Reply",
+                        key=f"eco_new_send_story_reply_{story_id}",
+                        use_container_width=True,
+                    ):
+                        if not reply_text.strip():
+                            st.warning("Write a reply first.")
+                        else:
+                            try:
+                                conversation_id = get_conversation(story_user)
+
+                                # Reopen this chat for the sender if previously hidden.
+                                (
+                                    supabase.table("hidden_conversations")
+                                    .delete()
+                                    .eq("user_id", uid)
+                                    .eq("conversation_id", conversation_id)
+                                    .execute()
+                                )
+
+                                story_reference = (
+                                    story.get("caption")
+                                    or "A photo or video Story"
+                                )
+
+                                private_message = (
+                                    f"↩️ Story reply: {story_reference}\n\n"
+                                    f"{reply_text.strip()}"
+                                )
+
+                                supabase.table("direct_messages").insert({
+                                    "conversation_id": conversation_id,
+                                    "sender_id": uid,
+                                    "message_text": private_message,
+                                    "attachment_path": None,
+                                    "attachment_type": None,
+                                    "attachment_name": None,
+                                }).execute()
+
+                                st.session_state["eco_new_chat_id"] = conversation_id
+                                st.session_state["eco_new_chat_user"] = story_user
+                                st.session_state["eco_new_story_user"] = None
+                                st.session_state["eco_new_nav"] = "EcoLoop Connect"
+                                st.session_state["eco_new_notice"] = (
+                                    "Your private Story reply has been sent."
+                                )
+                                st.rerun()
+
+                            except Exception as error:
+                                st.error(f"Could not send Story reply: {error}")
 
                 st.divider()
