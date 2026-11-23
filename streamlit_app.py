@@ -3766,7 +3766,7 @@ def _ecoloop_my_profile_override(supabase, user_id):
 
 
 # ============================================================
-# ACCOUNT PROFILE INTEGRATION
+# ACCOUNT PROFILE OVERRIDE - SHARED PROFILE MODULE
 # ============================================================
 
 try:
@@ -3777,20 +3777,21 @@ except Exception:
 
 def render_account_profiles(supabase, page="profile", **kwargs):
 
-    # Keep the existing Account/profile functionality
+    if page == "profile":
+        try:
+            current_user = supabase.auth.get_user().user
+            uid = str(current_user.id) if current_user else None
+
+            if uid:
+                render_profile_page(supabase, uid)
+                return
+
+        except Exception as e:
+            st.error(f"Profile could not load: {e}")
+            return
+
     if _orig_account_profiles is not None:
         try:
             _orig_account_profiles(supabase, page=page, **kwargs)
         except TypeError:
             _orig_account_profiles(supabase, page)
-
-    # Display profile using the shared profile module
-    try:
-        current_user = supabase.auth.get_user().user
-        uid = str(current_user.id) if current_user else None
-
-        if uid:
-            _ecoloop_my_profile_override(supabase, uid)
-
-    except Exception as e:
-        st.error(f"Profile could not be loaded: {e}")
