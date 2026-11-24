@@ -1,4 +1,3 @@
-
 import streamlit as st
 from datetime import datetime, timezone
 import uuid
@@ -7,20 +6,6 @@ import uuid
 # ============================================================
 # ECOLOOP NODE — ADMIN STUDIO
 # ============================================================
-# Roles:
-#   super_admin  = Primary Super Admin
-#   super_user   = Additional Super User
-#   admin        = Administrator / Coordinator
-#   user         = Ordinary Member
-#
-# Database tables and security policies will be created
-# separately in Supabase.
-# ============================================================
-
-
-# ------------------------------------------------------------
-# CONFIGURATION
-# ------------------------------------------------------------
 
 APP_NAME = "EcoLoop Node"
 
@@ -52,15 +37,24 @@ METRIC_TABLES = {
     "Quiz Questions": "quiz_questions"
 }
 
-# ------------------------------------------------------------
-# GENERAL HELPERS
-# ------------------------------------------------------------
+NGIH_PILLARS = [
+    "Governance & Civic Education",
+    "Climate Action & Environment",
+    "Business & Entrepreneurship",
+    "Technology, Innovation, Media & Arts"
+]
 
-def _safe_execute(query):
+
+# ============================================================
+# GENERAL HELPERS
+# ============================================================
+
+def _safe_execute(query, show_error=True):
     try:
         return query.execute()
     except Exception as exc:
-        st.error(f"Database operation failed: {exc}")
+        if show_error:
+            st.error(f"Database operation failed: {exc}")
         return None
 
 
@@ -72,11 +66,6 @@ def _record_audit(
     target_id=None,
     details=None
 ):
-    """
-    Records important administrative activity.
-    The matching audit table will be created in Supabase.
-    """
-
     if not actor_id:
         return
 
@@ -90,7 +79,8 @@ def _record_audit(
     }
 
     _safe_execute(
-        supabase.table("admin_audit_logs").insert(record)
+        supabase.table("admin_audit_logs").insert(record),
+        show_error=False
     )
 
 
@@ -121,10 +111,7 @@ def _is_primary_super_admin(user_id):
 
 
 def _can_manage_roles(role):
-    return role in [
-        ROLE_SUPER_ADMIN,
-        ROLE_SUPER_USER
-    ]
+    return role in [ROLE_SUPER_ADMIN, ROLE_SUPER_USER]
 
 
 def _can_manage_super_users(role, user_id):
@@ -135,10 +122,7 @@ def _can_manage_super_users(role, user_id):
 
 
 def _can_manage_admins(role):
-    return role in [
-        ROLE_SUPER_ADMIN,
-        ROLE_SUPER_USER
-    ]
+    return role in [ROLE_SUPER_ADMIN, ROLE_SUPER_USER]
 
 
 def _can_manage_content(role):
@@ -157,9 +141,9 @@ def _can_manage_stations(role):
     ]
 
 
-# ------------------------------------------------------------
+# ============================================================
 # DATA RETRIEVAL
-# ------------------------------------------------------------
+# ============================================================
 
 def _get_platform_metrics(supabase):
 
@@ -215,13 +199,14 @@ def _get_pending_content(supabase, table_name):
 
         return response.data or []
 
-    except Exception:
+    except Exception as exc:
+        st.error(f"Could not retrieve pending content: {exc}")
         return []
 
 
-# ------------------------------------------------------------
+# ============================================================
 # MEMBER ROLE MANAGEMENT
-# ------------------------------------------------------------
+# ============================================================
 
 def _change_member_role(
     supabase,
@@ -239,12 +224,10 @@ def _change_member_role(
 
     target_role = target.get("role", ROLE_MEMBER)
 
-    # Protect the primary Super Admin.
     if _is_primary_super_admin(target_id):
         st.error("The Primary Super Admin account is protected.")
         return
 
-    # Nobody can appoint another Primary Super Admin.
     if new_role == ROLE_SUPER_ADMIN:
         st.error(
             "The Primary Super Admin role cannot be assigned "
@@ -252,32 +235,6 @@ def _change_member_role(
         )
         return
 
-    # Only the Primary Super Admin manages Super Users.
-    if target_role == ROLE_SUPER_USER or new_role == ROLE_SUPER_USER:
-
-        if not _can_manage_super_users(actor_role, actor_id):
-            st.error(
-                "Only the Primary Super Admin can appoint "
-                "or revoke Super Users."
-            )
-            return
-
-    # Super Users can appoint or revoke Administrators.
-    if target_role == ROLE_ADMIN or new_role == ROLE_ADMIN:
-
-        if not _can_manage_admins(actor_role):
-            st.error(
-                "You do not have permission to manage "
-                "Administrators / Coordinators."
-            )
-            return
-
-    # Administrators cannot manage account roles.
-    if actor_role == ROLE_ADMIN:
-        st.error("Administrators cannot change member roles.")
-        return
-
-    # Validate available role values.
     if new_role not in [
         ROLE_SUPER_USER,
         ROLE_ADMIN,
@@ -286,26 +243,48 @@ def _change_member_role(
         st.error("Invalid role selected.")
         return
 
+    if (
+        target_role == ROLE_SUPER_USER
+        or new_role == ROLE_SUPER_USER
+    ):
+        if not _can_manage_super_users(actor_role, actor_id):
+            st.error(
+                "Only the Primary Super Admin can appoint "
+                "or revoke Super Users."
+            )
+            return
+
+    if (
+        target_role == ROLE_ADMIN
+        or new_role == ROLE_ADMIN
+    ):
+        if not _can_manage_admins(actor_role):
+            st.error(
+                "You do not have permission to manage "
+                "Administrators / Coordinators."
+            )
+            return
+
+    if actor_role == ROLE_ADMIN:
+        st.error("Administrators cannot change member roles.")
+        return
+
+    # IMPORTANT:
+    # Do not update profiles.role directly.
+    # The database protects this column.
+    # Use the existing SECURITY DEFINER RPC instead.
+
     result = _safe_execute(
-        supabase.table("profiles")
-        .update({"role": new_role})
-        .eq("id", target_id)
-    )
-
-    if result is not None:
-
-        _record_audit(
-            supabase,
-            actor_id,
-            "member_role_changed",
-            "profiles",
-            target_id,
+        supabase.rpc(
+            "manage_member_role",
             {
-                "previous_role": target_role,
+                "target_id": str(target_id),
                 "new_role": new_role
             }
         )
+    )
 
+    if result is not None:
         st.success(
             f"Member role updated to {ROLE_LABELS[new_role]}."
         )
@@ -359,8 +338,6 @@ def _render_role_management(
 
     for member in filtered:
 
-        member_id = member.get("id")
-
         name = (
             member.get("full_name")
             or member.get("username")
@@ -368,10 +345,15 @@ def _render_role_management(
         )
 
         role = member.get("role", ROLE_MEMBER)
+        member_id = member.get("id")
 
-        member_options[
-            f"{name} — {ROLE_LABELS.get(role, role)}"
-        ] = member
+        label = (
+            f"{name} — "
+            f"{ROLE_LABELS.get(role, role)} — "
+            f"{str(member_id)[:8]}"
+        )
+
+        member_options[label] = member
 
     selected_label = st.selectbox(
         "Select an account",
@@ -382,9 +364,7 @@ def _render_role_management(
 
     st.divider()
 
-    st.write(
-        f"**Name:** {_get_name(selected)}"
-    )
+    st.write(f"**Name:** {_get_name(selected)}")
 
     st.write(
         f"**Username:** {selected.get('username', 'Not available')}"
@@ -402,7 +382,6 @@ def _render_role_management(
     )
 
     if _is_primary_super_admin(selected.get("id")):
-
         st.success("Protected Primary Super Admin account.")
         return
 
@@ -431,15 +410,10 @@ def _render_role_management(
     else:
         return
 
-    role_labels = {
-        role: ROLE_LABELS[role]
-        for role in available_roles
-    }
-
     new_role = st.selectbox(
         "Assign account role",
         available_roles,
-        format_func=lambda role: role_labels[role],
+        format_func=lambda role: ROLE_LABELS[role],
         key="admin_studio_new_role"
     )
 
@@ -452,7 +426,6 @@ def _render_role_management(
         if new_role == current_role:
             st.info("This account already has that role.")
         else:
-
             _change_member_role(
                 supabase,
                 actor_id,
@@ -462,9 +435,9 @@ def _render_role_management(
             )
 
 
-# ------------------------------------------------------------
+# ============================================================
 # LEARNING MATERIAL MANAGEMENT
-# ------------------------------------------------------------
+# ============================================================
 
 def _render_learning_materials(
     supabase,
@@ -492,33 +465,36 @@ def _render_learning_materials(
 
         if not materials:
             st.info("There are no pending reading materials.")
+
         else:
 
-            for material in materials:
+            for index, material in enumerate(materials):
 
-                with st.expander(
-                    material.get("title", "Untitled Material")
-                ):
+                material_id = material.get("id")
+                title = material.get("title", "Untitled Material")
+
+                with st.expander(title):
+
+                    st.write(material.get("description", ""))
 
                     st.write(
-                        material.get("description", "")
+                        f"Category: "
+                        f"{material.get('category', 'Uncategorised')}"
                     )
 
                     st.write(
-                        f"Category: {material.get('category', 'Uncategorised')}"
+                        f"Submitted by: "
+                        f"{material.get('uploaded_by', 'Unknown')}"
                     )
 
                     st.write(
-                        f"Submitted by: {material.get('uploaded_by', 'Unknown')}"
-                    )
-
-                    st.write(
-                        f"File: {material.get('file_url', 'Not available')}"
+                        f"File: "
+                        f"{material.get('file_url', 'Not available')}"
                     )
 
                     review_note = st.text_input(
                         "Review note",
-                        key=f"material_note_{material.get('id')}"
+                        key=f"material_note_{material_id}_{index}"
                     )
 
                     col1, col2 = st.columns(2)
@@ -527,7 +503,7 @@ def _render_learning_materials(
 
                         if st.button(
                             "Approve",
-                            key=f"approve_material_{material.get('id')}"
+                            key=f"approve_material_{material_id}_{index}"
                         ):
 
                             result = _safe_execute(
@@ -537,7 +513,7 @@ def _render_learning_materials(
                                     "reviewed_by": actor_id,
                                     "review_note": review_note
                                 })
-                                .eq("id", material.get("id"))
+                                .eq("id", material_id)
                             )
 
                             if result is not None:
@@ -547,7 +523,7 @@ def _render_learning_materials(
                                     actor_id,
                                     "reading_material_approved",
                                     "reading_resources",
-                                    material.get("id")
+                                    material_id
                                 )
 
                                 st.success("Material approved.")
@@ -557,13 +533,14 @@ def _render_learning_materials(
 
                         if st.button(
                             "Reject",
-                            key=f"reject_material_{material.get('id')}"
+                            key=f"reject_material_{material_id}_{index}"
                         ):
 
                             if not review_note.strip():
                                 st.warning(
                                     "Please provide a reason for rejection."
                                 )
+
                             else:
 
                                 result = _safe_execute(
@@ -573,7 +550,7 @@ def _render_learning_materials(
                                         "reviewed_by": actor_id,
                                         "review_note": review_note
                                     })
-                                    .eq("id", material.get("id"))
+                                    .eq("id", material_id)
                                 )
 
                                 if result is not None:
@@ -583,7 +560,7 @@ def _render_learning_materials(
                                         actor_id,
                                         "reading_material_rejected",
                                         "reading_resources",
-                                        material.get("id"),
+                                        material_id,
                                         {"reason": review_note}
                                     )
 
@@ -594,25 +571,18 @@ def _render_learning_materials(
 
         st.write(
             "Administrators and senior administrators can "
-            "contribute learning materials directly."
+            "contribute learning materials."
         )
 
         with st.form("admin_add_reading_material"):
 
             title = st.text_input("Material title")
 
-            description = st.text_area(
-                "Description"
-            )
+            description = st.text_area("Description")
 
             category = st.selectbox(
                 "Learning category",
-                [
-                    "Governance & Civic Education",
-                    "Climate Action & Environment",
-                    "Business & Entrepreneurship",
-                    "Technology, Innovation, Media & Arts"
-                ]
+                NGIH_PILLARS
             )
 
             uploaded_file = st.file_uploader(
@@ -635,65 +605,97 @@ def _render_learning_materials(
 
                 else:
 
+                    file_name = (
+                        f"reading-materials/"
+                        f"{uuid.uuid4().hex}_{uploaded_file.name}"
+                    )
+
+                    # Keep storage upload errors separate from
+                    # reading_resources database errors.
                     try:
 
-                        file_name = (
-                            f"reading-materials/"
-                            f"{uuid.uuid4().hex}_{uploaded_file.name}"
+                        supabase.storage.from_(
+                            "learning-resources"
+                        ).upload(
+                            file_name,
+                            uploaded_file.getvalue(),
+                            {
+                                "content-type": (
+                                    uploaded_file.type
+                                    or "application/octet-stream"
+                                )
+                            }
                         )
-
-                        upload_result = (
-                            supabase.storage
-                            .from_("learning-resources")
-                            .upload(
-                                file_name,
-                                uploaded_file.getvalue(),
-                                {
-                                    "content-type": uploaded_file.type
-                                }
-                            )
-                        )
-
-                        file_url = (
-                            supabase.storage
-                            .from_("learning-resources")
-                            .get_public_url(file_name)
-                        )
-
-                        result = _safe_execute(
-                            supabase.table("reading_resources")
-                            .insert({
-                                "title": title,
-                                "description": description,
-                                "category": category,
-                                "file_url": file_url,
-                                "uploaded_by": actor_id,
-                                "status": "pending"
-                            })
-                        )
-
-                        if result is not None:
-
-                            _record_audit(
-                                supabase,
-                                actor_id,
-                                "reading_material_submitted",
-                                "reading_resources"
-                            )
-
-                            st.success(
-                                "Reading material submitted for review."
-                            )
 
                     except Exception as exc:
+
                         st.error(
-                            f"Upload failed: {exc}"
+                            "Storage upload failed. "
+                            "The file could not be uploaded. "
+                            f"Details: {exc}"
                         )
 
+                        st.info(
+                            "The Storage permission issue must be "
+                            "corrected in Supabase. This code does "
+                            "not bypass your Storage security policies."
+                        )
 
-# ------------------------------------------------------------
+                    else:
+
+                        try:
+
+                            file_url = (
+                                supabase.storage
+                                .from_("learning-resources")
+                                .get_public_url(file_name)
+                            )
+
+                            if isinstance(file_url, dict):
+                                file_url = (
+                                    file_url.get("publicUrl")
+                                    or file_url.get("publicURL")
+                                    or ""
+                                )
+
+                            result = _safe_execute(
+                                supabase.table("reading_resources")
+                                .insert({
+                                    "title": title.strip(),
+                                    "description": description.strip(),
+                                    "category": category,
+                                    "file_url": file_url,
+                                    "uploaded_by": actor_id,
+                                    "status": "pending"
+                                })
+                            )
+
+                            if result is not None:
+
+                                _record_audit(
+                                    supabase,
+                                    actor_id,
+                                    "reading_material_submitted",
+                                    "reading_resources"
+                                )
+
+                                st.success(
+                                    "Reading material submitted for review."
+                                )
+
+                                st.rerun()
+
+                        except Exception as exc:
+
+                            st.error(
+                                "The file uploaded, but its reading "
+                                f"material record could not be saved: {exc}"
+                            )
+
+
+# ============================================================
 # QUIZ MANAGEMENT
-# ------------------------------------------------------------
+# ============================================================
 
 def _render_quiz_management(
     supabase,
@@ -708,32 +710,52 @@ def _render_quiz_management(
         return
 
     tab_create, tab_pending = st.tabs([
-        "Create Quiz Question",
-        "Pending Questions"
+        "Submit Quiz Question",
+        "Pending Quiz Submissions"
     ])
+
+    # --------------------------------------------------------
+    # SUBMIT A QUESTION THROUGH THE EXISTING SUBMISSION SYSTEM
+    # --------------------------------------------------------
 
     with tab_create:
 
+        st.caption(
+            "Questions submitted here enter the existing quiz "
+            "review process. They are not inserted directly into "
+            "the published quiz question bank."
+        )
+
         with st.form("admin_create_quiz_question"):
 
-            question = st.text_area("Question")
+            quiz_title = st.text_input(
+                "Quiz title",
+                value="NGIH Community Quiz"
+            )
+
+            description = st.text_area(
+                "Quiz description",
+                value="Community learning question submitted for review."
+            )
 
             pillar = st.selectbox(
                 "NGIH Pillar",
-                [
-                    "Governance & Civic Education",
-                    "Climate Action & Environment",
-                    "Business & Entrepreneurship",
-                    "Technology, Innovation, Media & Arts"
-                ]
+                NGIH_PILLARS
             )
+
+            difficulty = st.selectbox(
+                "Difficulty",
+                ["Easy", "Medium", "Hard"]
+            )
+
+            question = st.text_area("Question")
 
             option_a = st.text_input("Option A")
             option_b = st.text_input("Option B")
             option_c = st.text_input("Option C")
             option_d = st.text_input("Option D")
 
-            correct_answer = st.selectbox(
+            correct_option = st.selectbox(
                 "Correct Answer",
                 ["A", "B", "C", "D"]
             )
@@ -749,7 +771,10 @@ def _render_quiz_management(
 
             if submitted:
 
-                if not question.strip():
+                if not quiz_title.strip():
+                    st.error("Enter a quiz title.")
+
+                elif not question.strip():
                     st.error("Enter a question.")
 
                 elif not all([
@@ -762,20 +787,31 @@ def _render_quiz_management(
 
                 else:
 
+                    question_data = {
+                        "question_text": question.strip(),
+                        "option_a": option_a.strip(),
+                        "option_b": option_b.strip(),
+                        "option_c": option_c.strip(),
+                        "option_d": option_d.strip(),
+                        "correct_option": correct_option,
+                        "explanation": explanation.strip(),
+                        "question_order": 1,
+                        "points": 1
+                    }
+
+                    submission_data = {
+                        "user_id": actor_id,
+                        "title": quiz_title.strip(),
+                        "description": description.strip(),
+                        "category": pillar,
+                        "difficulty": difficulty.lower(),
+                        "questions": [question_data],
+                        "status": "pending"
+                    }
+
                     result = _safe_execute(
-                        supabase.table("quiz_questions")
-                        .insert({
-                            "question": question,
-                            "pillar": pillar,
-                            "option_a": option_a,
-                            "option_b": option_b,
-                            "option_c": option_c,
-                            "option_d": option_d,
-                            "correct_answer": correct_answer,
-                            "explanation": explanation,
-                            "created_by": actor_id,
-                            "status": "pending"
-                        })
+                        supabase.table("quiz_submissions")
+                        .insert(submission_data)
                     )
 
                     if result is not None:
@@ -784,48 +820,113 @@ def _render_quiz_management(
                             supabase,
                             actor_id,
                             "quiz_question_submitted",
-                            "quiz_questions"
+                            "quiz_submissions"
                         )
 
                         st.success(
                             "Quiz question submitted for review."
                         )
 
+                        st.rerun()
+
+    # --------------------------------------------------------
+    # REVIEW PENDING SUBMISSIONS
+    # --------------------------------------------------------
+
     with tab_pending:
 
-        questions = _get_pending_content(
+        if actor_role != ROLE_SUPER_ADMIN:
+            st.info(
+                "Quiz submission review and publication are "
+                "reserved for the Primary Super Admin."
+            )
+            return
+
+        if not _is_primary_super_admin(actor_id):
+            st.error(
+                "Only the configured Primary Super Admin can "
+                "review and publish quiz submissions."
+            )
+            return
+
+        submissions = _get_pending_content(
             supabase,
-            "quiz_questions"
+            "quiz_submissions"
         )
 
-        if not questions:
-            st.info("There are no pending quiz questions.")
+        if not submissions:
+            st.info("There are no pending quiz submissions.")
 
         else:
 
-            for item in questions:
+            for index, item in enumerate(submissions):
+
+                submission_id = item.get("id")
 
                 with st.expander(
-                    item.get("question", "Untitled Question")
+                    item.get("title", "Untitled Quiz Submission")
                 ):
 
                     st.write(
-                        f"Pillar: {item.get('pillar', 'Not specified')}"
+                        f"**Description:** "
+                        f"{item.get('description', '')}"
                     )
-
-                    for option in ["a", "b", "c", "d"]:
-                        st.write(
-                            f"{option.upper()}: "
-                            f"{item.get('option_' + option, '')}"
-                        )
 
                     st.write(
-                        f"Correct answer: {item.get('correct_answer', '')}"
+                        f"**Pillar:** "
+                        f"{item.get('category', 'Not specified')}"
                     )
 
-                    note = st.text_input(
+                    st.write(
+                        f"**Difficulty:** "
+                        f"{item.get('difficulty', 'Not specified')}"
+                    )
+
+                    st.write(
+                        f"**Submitted by:** "
+                        f"{item.get('user_id', 'Unknown')}"
+                    )
+
+                    questions = item.get("questions") or []
+
+                    if not isinstance(questions, list):
+                        questions = []
+
+                    if not questions:
+                        st.warning(
+                            "This submission does not contain "
+                            "a readable question list."
+                        )
+
+                    for question_index, question_item in enumerate(questions):
+
+                        st.divider()
+
+                        st.write(
+                            f"**Question {question_index + 1}:** "
+                            f"{question_item.get('question_text', '')}"
+                        )
+
+                        for option in ["a", "b", "c", "d"]:
+
+                            st.write(
+                                f"{option.upper()}: "
+                                f"{question_item.get('option_' + option, '')}"
+                            )
+
+                        st.write(
+                            f"**Correct option:** "
+                            f"{question_item.get('correct_option', '')}"
+                        )
+
+                        st.write(
+                            f"**Explanation:** "
+                            f"{question_item.get('explanation', '')}"
+                        )
+
+                    note = st.text_area(
                         "Review note",
-                        key=f"quiz_note_{item.get('id')}"
+                        key=f"quiz_review_note_{submission_id}_{index}"
                     )
 
                     col1, col2 = st.columns(2)
@@ -833,18 +934,18 @@ def _render_quiz_management(
                     with col1:
 
                         if st.button(
-                            "Approve Question",
-                            key=f"approve_quiz_{item.get('id')}"
+                            "Approve and Publish",
+                            key=f"publish_quiz_{submission_id}_{index}",
+                            type="primary"
                         ):
 
                             result = _safe_execute(
-                                supabase.table("quiz_questions")
-                                .update({
-                                    "status": "approved",
-                                    "reviewed_by": actor_id,
-                                    "review_note": note
-                                })
-                                .eq("id", item.get("id"))
+                                supabase.rpc(
+                                    "publish_quiz_submission",
+                                    {
+                                        "p_submission_id": submission_id
+                                    }
+                                )
                             )
 
                             if result is not None:
@@ -852,35 +953,45 @@ def _render_quiz_management(
                                 _record_audit(
                                     supabase,
                                     actor_id,
-                                    "quiz_question_approved",
-                                    "quiz_questions",
-                                    item.get("id")
+                                    "quiz_submission_published",
+                                    "quiz_submissions",
+                                    submission_id
                                 )
 
-                                st.success("Question approved.")
+                                st.success(
+                                    "Quiz submission published successfully."
+                                )
+
                                 st.rerun()
 
                     with col2:
 
                         if st.button(
-                            "Reject Question",
-                            key=f"reject_quiz_{item.get('id')}"
+                            "Reject Submission",
+                            key=f"reject_quiz_{submission_id}_{index}"
                         ):
 
                             if not note.strip():
                                 st.warning(
-                                    "Provide a rejection reason."
+                                    "Provide a reason for rejection."
                                 )
+
                             else:
 
                                 result = _safe_execute(
-                                    supabase.table("quiz_questions")
+                                    supabase.table("quiz_submissions")
                                     .update({
                                         "status": "rejected",
+                                        "admin_feedback": note.strip(),
                                         "reviewed_by": actor_id,
-                                        "review_note": note
+                                        "reviewed_at": (
+                                            datetime.now(timezone.utc).isoformat()
+                                        ),
+                                        "updated_at": (
+                                            datetime.now(timezone.utc).isoformat()
+                                        )
                                     })
-                                    .eq("id", item.get("id"))
+                                    .eq("id", submission_id)
                                 )
 
                                 if result is not None:
@@ -888,19 +999,22 @@ def _render_quiz_management(
                                     _record_audit(
                                         supabase,
                                         actor_id,
-                                        "quiz_question_rejected",
-                                        "quiz_questions",
-                                        item.get("id"),
-                                        {"reason": note}
+                                        "quiz_submission_rejected",
+                                        "quiz_submissions",
+                                        submission_id,
+                                        {"reason": note.strip()}
                                     )
 
-                                    st.success("Question rejected.")
+                                    st.success(
+                                        "Quiz submission rejected."
+                                    )
+
                                     st.rerun()
 
 
-# ------------------------------------------------------------
+# ============================================================
 # ECOLOOP NODE STATION MANAGEMENT
-# ------------------------------------------------------------
+# ============================================================
 
 def _render_station_management(
     supabase,
@@ -919,6 +1033,10 @@ def _render_station_management(
         "Existing Stations"
     ])
 
+    # --------------------------------------------------------
+    # ADD STATION
+    # --------------------------------------------------------
+
     with tab_add:
 
         with st.form("admin_add_station"):
@@ -936,12 +1054,6 @@ def _render_station_management(
                 "Station Location"
             )
 
-            capacity = st.number_input(
-                "Station Capacity",
-                min_value=1.0,
-                value=50.0
-            )
-
             submitted = st.form_submit_button(
                 "Add EcoLoop Node Station",
                 use_container_width=True
@@ -949,21 +1061,27 @@ def _render_station_management(
 
             if submitted:
 
-                if not station_code.strip() or not station_name.strip():
-                    st.error("Station code and name are required.")
+                if (
+                    not station_code.strip()
+                    or not station_name.strip()
+                ):
+                    st.error(
+                        "Station code and name are required."
+                    )
 
                 else:
 
+                    station_data = {
+                        "station_code": station_code.strip().upper(),
+                        "station_name": station_name.strip(),
+                        "location": location.strip(),
+                        "is_active": True,
+                        "created_by": actor_id
+                    }
+
                     result = _safe_execute(
                         supabase.table("collection_stations")
-                        .insert({
-                            "station_code": station_code.upper(),
-                            "station_name": station_name,
-                            "location": location,
-                            "capacity": capacity,
-                            "is_active": True,
-                            "created_by": actor_id
-                        })
+                        .insert(station_data)
                     )
 
                     if result is not None:
@@ -973,11 +1091,15 @@ def _render_station_management(
                             actor_id,
                             "station_added",
                             "collection_stations",
-                            station_code
+                            station_code.strip().upper()
                         )
 
                         st.success("Station added successfully.")
                         st.rerun()
+
+    # --------------------------------------------------------
+    # VIEW AND DEACTIVATE STATIONS
+    # --------------------------------------------------------
 
     with tab_view:
 
@@ -993,34 +1115,34 @@ def _render_station_management(
             stations = response.data or []
 
         except Exception as exc:
+
             st.error(f"Could not load stations: {exc}")
             stations = []
 
         if not stations:
             st.info("No stations found.")
 
-        for station in stations:
+        for station_index, station in enumerate(stations):
 
             station_id = station.get("id")
 
-            with st.expander(
-                station.get("station_name", "Unnamed Station")
-            ):
+            station_name = station.get(
+                "station_name",
+                "Unnamed Station"
+            )
+
+            with st.expander(station_name):
 
                 st.write(
-                    f"Code: {station.get('station_code', '')}"
+                    f"**Code:** {station.get('station_code', '')}"
                 )
 
                 st.write(
-                    f"Location: {station.get('location', '')}"
+                    f"**Location:** {station.get('location', '')}"
                 )
 
                 st.write(
-                    f"Capacity: {station.get('capacity', '')}"
-                )
-
-                st.write(
-                    "Status: "
+                    "**Status:** "
                     + (
                         "Active"
                         if station.get("is_active")
@@ -1028,14 +1150,22 @@ def _render_station_management(
                     )
                 )
 
-                # Only the Primary Super Admin can revoke a station.
+                # Only the Primary Super Admin can deactivate stations.
                 if _can_manage_super_users(actor_role, actor_id):
 
                     if station.get("is_active"):
 
-                        if st.button(
+                        if not station_id:
+                            st.warning(
+                                "This station has no valid database ID."
+                            )
+
+                        elif st.button(
                             "Deactivate Station",
-                            key=f"deactivate_station_{station_id}"
+                            key=(
+                                f"deactivate_station_"
+                                f"{station_id}_{station_index}"
+                            )
                         ):
 
                             result = _safe_execute(
@@ -1058,9 +1188,9 @@ def _render_station_management(
                                 st.rerun()
 
 
-# ------------------------------------------------------------
+# ============================================================
 # ADMINISTRATIVE ACTIVITY
-# ------------------------------------------------------------
+# ============================================================
 
 def _render_audit_logs(supabase, actor_role):
 
@@ -1071,7 +1201,9 @@ def _render_audit_logs(supabase, actor_role):
         ROLE_SUPER_USER,
         ROLE_ADMIN
     ]:
-        st.warning("You cannot access administrative activity.")
+        st.warning(
+            "You cannot access administrative activity."
+        )
         return
 
     try:
@@ -1087,11 +1219,16 @@ def _render_audit_logs(supabase, actor_role):
         logs = response.data or []
 
     except Exception as exc:
-        st.error(f"Could not retrieve activity records: {exc}")
+
+        st.error(
+            f"Could not retrieve activity records: {exc}"
+        )
         return
 
     if not logs:
-        st.info("No administrative activity has been recorded.")
+        st.info(
+            "No administrative activity has been recorded."
+        )
         return
 
     for log in logs:
@@ -1116,9 +1253,9 @@ def _render_audit_logs(supabase, actor_role):
             st.divider()
 
 
-# ------------------------------------------------------------
+# ============================================================
 # PLATFORM OVERVIEW
-# ------------------------------------------------------------
+# ============================================================
 
 def _render_overview(supabase, actor_role):
 
@@ -1133,12 +1270,14 @@ def _render_overview(supabase, actor_role):
         col1, col2 = st.columns(2)
 
         with col1:
+
             label, value = items[index]
             st.metric(label, value)
 
         if index + 1 < len(items):
 
             with col2:
+
                 label, value = items[index + 1]
                 st.metric(label, value)
 
@@ -1147,7 +1286,8 @@ def _render_overview(supabase, actor_role):
     st.subheader("Administrative Authority")
 
     st.write(
-        f"Your account role: **{ROLE_LABELS.get(actor_role, actor_role)}**"
+        f"Your account role: "
+        f"**{ROLE_LABELS.get(actor_role, actor_role)}**"
     )
 
     st.caption(
@@ -1156,9 +1296,9 @@ def _render_overview(supabase, actor_role):
     )
 
 
-# ------------------------------------------------------------
+# ============================================================
 # MAIN ADMIN STUDIO PAGE
-# ------------------------------------------------------------
+# ============================================================
 
 def admin_studio_page(
     supabase,
@@ -1182,7 +1322,7 @@ def admin_studio_page(
         )
         return
 
-    # The primary Super Admin ID must be configured.
+    # Verify the configured Primary Super Admin account.
     if actor_role == ROLE_SUPER_ADMIN:
 
         if not _is_primary_super_admin(current_user_id):
@@ -1214,7 +1354,6 @@ def admin_studio_page(
         "Administrative Activity"
     ]
 
-    # Administrators cannot appoint or revoke account roles.
     if actor_role == ROLE_ADMIN:
         pages.remove("Member Role Management")
 
@@ -1271,5 +1410,4 @@ def admin_studio_page(
         _render_audit_logs(
             supabase,
             actor_role
-        )
-
+    )
