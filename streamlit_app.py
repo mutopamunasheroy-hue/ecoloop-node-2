@@ -16,6 +16,8 @@ from eco_quizzes import render_eco_quizzes
 from action_gallery import render_action_gallery
 from account_profiles import render_account_profiles
 from profile import render_profile_page, get_member_profile, render_member_profile, render_profile_card
+from admin_studio import render_admin_studio
+
 # =====================================================
 # ECOLOOP NODE — APP CONFIGURATION
 # =====================================================
