@@ -36,9 +36,9 @@ ROLE_LABELS = {
     ROLE_MEMBER: "Ordinary Member"
 }
 
-PRIMARY_SUPER_ADMIN_ID = st.secrets.get(
-    "PRIMARY_SUPER_ADMIN_ID", ""
-)
+PRIMARY_SUPER_ADMIN_ID = str(
+    st.secrets.get("PRIMARY_SUPER_ADMIN_ID", "")
+).strip()
 
 METRIC_TABLES = {
     "Registered Members": "profiles",
@@ -51,7 +51,6 @@ METRIC_TABLES = {
     "Reading Materials": "reading_resources",
     "Quiz Questions": "quiz_questions"
 }
-
 
 # ------------------------------------------------------------
 # GENERAL HELPERS
