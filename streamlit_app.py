@@ -3405,73 +3405,10 @@ def verify_contributions_page():
 
 def admin_studio_page():
 
-    section_heading(
-        "Admin Studio",
-        "A central overview of EcoLoop Node activity and operations."
-    )
-
-    if not is_admin():
-        st.error("Access denied. Administrator permissions are required.")
-        return
-
-    st.subheader("📊 Platform Overview")
-
-    tables = {
-        "Registered Members": "profiles",
-        "Collection Stations": "collection_stations",
-        "Waste Contributions": "waste_contributions",
-        "Community Groups": "community_groups",
-        "Environmental Actions": "environmental_actions",
-        "Environmental Challenges": "community_challenges",
-        "Collection Records": "collection_records"
-    }
-
-    metrics = {}
-
-    for label, table_name in tables.items():
-
-        try:
-            response = (
-                supabase.table(table_name)
-                .select("*", count="exact")
-                .limit(0)
-                .execute()
-            )
-
-            metrics[label] = response.count or 0
-
-        except Exception:
-            metrics[label] = "Unavailable"
-
-    metric_items = list(metrics.items())
-
-    for index in range(0, len(metric_items), 2):
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            label, value = metric_items[index]
-            st.metric(label, value)
-
-        if index + 1 < len(metric_items):
-
-            with col2:
-                label, value = metric_items[index + 1]
-                st.metric(label, value)
-
-    st.divider()
-
-    st.subheader("⚙️ Administration")
-
-    st.info(
-        "Use the Verify Contributions page to review pending waste "
-        "submissions. Other administrative operations remain subject "
-        "to the permissions configured in Supabase."
-    )
-
-    st.caption(
-        "This dashboard displays available database counts. "
-        "It does not modify user accounts or database security settings."
+    render_admin_studio_module(
+        supabase,
+        st.session_state.get("user_id"),
+        st.session_state.get("profile") or {}
     )
 
 # =====================================================
